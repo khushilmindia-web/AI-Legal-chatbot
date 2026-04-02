@@ -8,56 +8,92 @@
 </head>
 <body class="auth-body">
     <main class="auth-shell">
-        <section class="auth-hero">
-            <span class="auth-kicker">AI Legal India</span>
-            <h1>Sign in to your legal assistant workspace</h1>
-            <p>Store your account, profile, and chat history in one place, then continue your legal guidance flow securely.</p>
+        <section class="auth-hero auth-panel">
+            <div class="auth-hero-copy">
+                <span class="auth-kicker">Lawyer AI Workspace</span>
+                <h1>Secure legal guidance with saved history and protected access.</h1>
+                <p>Sign in once, continue across sessions, and keep your chats, profile, and legal context in one clean workspace.</p>
+            </div>
+
+            <div class="auth-hero-grid">
+                <article class="auth-feature-card">
+                    <h2>Protected by default</h2>
+                    <p>`index.html` now requires authentication before the chat workspace loads.</p>
+                </article>
+                <article class="auth-feature-card">
+                    <h2>Google and email login</h2>
+                    <p>Use your Google account or a regular password flow, then stay signed in across reloads.</p>
+                </article>
+                <article class="auth-feature-card">
+                    <h2>Per-user chat history</h2>
+                    <p>Your sessions, messages, and UI state stay scoped to your account instead of leaking globally.</p>
+                </article>
+            </div>
         </section>
 
-        <section class="auth-card">
-            <div class="auth-tabs">
+        <section class="auth-card auth-panel">
+            <div class="auth-card-head">
+                <p class="eyebrow">Secure Access</p>
+                <h2>Continue to Lawyer AI</h2>
+                <p class="auth-card-subtitle">Use the same backend session for login, Google OAuth, protected routes, and logout.</p>
+            </div>
+
+            <div class="auth-tabs" role="tablist" aria-label="Authentication mode">
                 <button id="loginTab" class="auth-tab active" type="button">Login</button>
                 <button id="signupTab" class="auth-tab" type="button">Sign Up</button>
             </div>
 
             <form id="loginForm" class="auth-form" method="post">
-                <label>Email</label>
-                <input id="loginEmail" type="email" placeholder="you@example.com" required>
-                <label>Password</label>
-                <input id="loginPassword" type="password" placeholder="Enter your password" required>
-                <button type="submit">Login</button>
-            
-            <button id="googleLoginBtn" class="auth-tab google-btn" type="button">Continue with Google</button>
-                            <a href="#" id="forgotPasswordLink" class="forgot-password-link">Forgot Password?</a>
-                            </form>
+                <label>
+                    Email
+                    <input id="loginEmail" type="email" placeholder="you@example.com" autocomplete="email" required>
+                </label>
+                <label>
+                    Password
+                    <input id="loginPassword" type="password" placeholder="Enter your password" autocomplete="current-password" required>
+                </label>
+                <button class="auth-submit" type="submit">Login</button>
+                <button id="googleLoginBtn" class="google-btn" type="button">Continue with Google</button>
+                <a href="#" id="forgotPasswordLink" class="forgot-password-link">Forgot Password?</a>
+            </form>
 
 
             <form id="signupForm" class="auth-form hidden" method="post">
-                <label>Full Name</label>
-                <input id="signupName" type="text" placeholder="Your full name" required>
-                <label>Email</label>
-                <input id="signupEmail" type="email" placeholder="you@example.com" required>
-                <label>Password</label>
-                <input id="signupPassword" type="password" placeholder="At least 8 characters" required>
-                <label>State / UT</label>
-                <select id="signupState">
-                    <option value="">Select State / UT</option>
-                </select>
-                <button type="submit">Create Account</button>
+                <label>
+                    Full Name
+                    <input id="signupName" type="text" placeholder="Your full name" autocomplete="name" required>
+                </label>
+                <label>
+                    Email
+                    <input id="signupEmail" type="email" placeholder="you@example.com" autocomplete="email" required>
+                </label>
+                <label>
+                    Password
+                    <input id="signupPassword" type="password" placeholder="At least 8 characters" autocomplete="new-password" required>
+                </label>
+                <label>
+                    State / UT
+                    <select id="signupState">
+                        <option value="">Select State / UT</option>
+                    </select>
+                </label>
+                <button class="auth-submit" type="submit">Create Account</button>
             </form>
 
-            <div id="authMessage" class="auth-message"></div>
+            <div id="authMessage" class="auth-message" role="status" aria-live="polite"></div>
+            <p class="auth-footnote">Sessions persist securely across reloads until you log out.</p>
         </section>
 
-        <!-- Password Reset Modal -->
-        <div id="passwordResetModal" class="modal">
+        <div id="passwordResetModal" class="modal" aria-hidden="true">
             <div class="modal-content">
                 <span class="close">&times;</span>
                 <h2>Reset Password</h2>
                 <form id="passwordResetForm" class="auth-form">
-                    <label>Email</label>
-                    <input id="resetEmail" type="email" placeholder="Enter your email" required>
-                    <button type="submit">Send Reset Link</button>
+                    <label>
+                        Email
+                        <input id="resetEmail" type="email" placeholder="Enter your email" required>
+                    </label>
+                    <button class="auth-submit" type="submit">Send Reset Link</button>
                 </form>
                 <div id="resetMessage" class="auth-message"></div>
             </div>

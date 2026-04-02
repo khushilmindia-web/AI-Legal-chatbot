@@ -27,6 +27,8 @@ class ChatService:
     async def handle_chat(
         self,
         request: ChatRequest,
+        user_id: int,
+        fallback_state: str | None = None,
         uploaded_texts: list[str] | None = None,
         extraction_warnings: list[str] | None = None,
     ) -> ChatUploadResponse:
@@ -36,17 +38,20 @@ class ChatService:
 
         chat_id = request.chat_id
         if chat_id is None:
-            session = self.store.create_session(self._generate_title(message))
+            session = self.store.create_session(self._generate_title(message), user_id=user_id)
             chat_id = session["id"]
+        elif self.store.get_session(chat_id, user_id=user_id) is None:
+            raise ValueError("Chat session not found")
 
-        history = self.store.get_messages(chat_id)
+        history = self.store.get_messages(chat_id, user_id=user_id)
         domain = self._detect_domain(message)
+        resolved_state = request.state or fallback_state or self.settings.default_state
         immediate_help = self._should_help_first(message, domain)
-        follow_up_question = None if immediate_help else self._choose_follow_up(request, domain, message)
+        follow_up_question = None if immediate_help else self._choose_follow_up(request, domain, message, resolved_state)
         retrieval_chunks = self.retrieval.get_context(
             query=message,
             uploaded_texts=uploaded_texts or [],
-            state=request.state or self.settings.default_state,
+            state=resolved_state,
             domain=domain,
         )
         citations = [chunk.source for chunk in retrieval_chunks[:3]]
@@ -56,6 +61,7 @@ class ChatService:
         prompt = self._build_prompt(
             request=request,
             domain=domain,
+            resolved_state=resolved_state,
             grounded_context=grounded_context,
             follow_up_question=follow_up_question,
             immediate_help=immediate_help,
@@ -75,12 +81,12 @@ class ChatService:
                 citations=citations,
                 authorities=self._default_authorities(domain),
                 documents_to_keep=self._default_documents(domain),
-                likely_forum=self._default_forum(domain, request.state, request.district),
+                likely_forum=self._default_forum(domain, resolved_state, request.district),
                 caution="The answer could not be completed due to a model or network issue.",
                 warnings=["Temporary LLM failure handled safely."],
             )
 
-        self.store.add_message(chat_id, "user", message, metadata={"domain": domain})
+        self.store.add_message(chat_id, "user", message, metadata={"domain": domain}, user_id=user_id)
         self.store.add_message(
             chat_id,
             "assistant",
@@ -95,9 +101,12 @@ class ChatService:
                 "caution": internal.caution,
                 "warnings": internal.warnings,
             },
+            user_id=user_id,
         )
 
-        session = next(item for item in self.store.list_sessions() if item["id"] == chat_id)
+        session = self.store.get_session(chat_id, user_id=user_id)
+        if session is None:
+            raise ValueError("Chat session not found")
         return ChatUploadResponse(
             chat_id=chat_id,
             title=session["title"],
@@ -143,7 +152,7 @@ class ChatService:
             return True
         return any(term in normalized for term in ["my ", "i ", "received", "got", "landlord", "police", "notice"])
 
-    def _choose_follow_up(self, request: ChatRequest, domain: str, message: str) -> str | None:
+    def _choose_follow_up(self, request: ChatRequest, domain: str, message: str, resolved_state: str | None) -> str | None:
         normalized = message.lower()
         if domain == "cyber" and not any(term in normalized for term in ["bank", "upi", "wallet", "app", "account"]):
             return "Which bank, app, or payment platform was involved?"
@@ -151,9 +160,9 @@ class ChatService:
             return "Has a police complaint or FIR already been filed?"
         if domain == "property" and not request.district:
             return "Which district is the property located in?"
-        if domain in {"property", "constitutional"} and not request.state:
+        if domain in {"property", "constitutional"} and not resolved_state:
             return "Please confirm the State where this issue happened or where you may need to take legal action."
-        if domain == "consumer" and not request.state:
+        if domain == "consumer" and not resolved_state:
             return "Please confirm the State where the seller, service provider, or transaction is connected."
         if domain == "general" and len(message.split()) < 8:
             return "Please share one more key fact so I can guide you properly, such as the issue type or what exactly happened."
@@ -163,6 +172,7 @@ class ChatService:
         self,
         request: ChatRequest,
         domain: str,
+        resolved_state: str,
         grounded_context: str,
         follow_up_question: str | None,
         immediate_help: bool,
@@ -171,7 +181,7 @@ class ChatService:
         guidance = {
             "message": request.message,
             "domain": domain,
-            "state": request.state or self.settings.default_state,
+            "state": resolved_state,
             "district": request.district,
             "case_stage": request.case_stage,
             "is_own_matter": request.is_own_matter,

@@ -36,6 +36,13 @@ class Settings(BaseSettings):
         alias="CORS_ALLOW_ORIGINS",
     )
     openai_vector_store_id: str = Field(default="", alias="OPENAI_VECTOR_STORE_ID")
+    google_client_id: str = Field(default="", alias="GOOGLE_CLIENT_ID")
+    google_client_secret: str = Field(default="", alias="GOOGLE_CLIENT_SECRET")
+    google_redirect_uri: str = Field(default="", alias="GOOGLE_REDIRECT_URI")
+    auth_cookie_name: str = Field(default="legal_auth_token", alias="AUTH_COOKIE_NAME")
+    auth_session_duration_days: int = Field(default=14, alias="AUTH_SESSION_DURATION_DAYS")
+    frontend_auth_path: str = Field(default="/frontend/auth.html", alias="FRONTEND_AUTH_PATH")
+    frontend_app_path: str = Field(default="/frontend/index.html", alias="FRONTEND_APP_PATH")
 
     @field_validator("debug", mode="before")
     @classmethod
@@ -62,7 +69,10 @@ class Settings(BaseSettings):
 
     @property
     def frontend_dir(self) -> Path:
-        return FRONTEND_DIR
+        if FRONTEND_DIR.exists():
+            return FRONTEND_DIR
+        alternate = ROOT_DIR / "Frontend"
+        return alternate
 
     @property
     def knowledge_dir(self) -> Path:

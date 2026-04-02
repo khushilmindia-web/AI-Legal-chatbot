@@ -12,7 +12,7 @@ from backend.app.services.openai_service import OpenAIResponsesService
 
 
 @pytest.fixture()
-def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+def anonymous_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     knowledge_dir = tmp_path / "knowledge"
     knowledge_dir.mkdir(parents=True, exist_ok=True)
     (knowledge_dir / "cyber_fraud_basics.txt").write_text(
@@ -43,3 +43,18 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setattr(OpenAIResponsesService, "generate_json", fake_generate_json)
     app = create_app()
     return TestClient(app)
+
+
+@pytest.fixture()
+def client(anonymous_client: TestClient) -> TestClient:
+    response = anonymous_client.post(
+        "/auth/signup",
+        json={
+            "full_name": "Test User",
+            "email": "test@example.com",
+            "password": "password123",
+            "state": "Gujarat",
+        },
+    )
+    assert response.status_code == 200
+    return anonymous_client

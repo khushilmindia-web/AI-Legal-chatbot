@@ -456,6 +456,301 @@ textarea {
     cursor: not-allowed;
 }
 
+.hidden {
+    display: none !important;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.user-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.88);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+}
+
+.user-card-copy {
+    display: grid;
+    gap: 2px;
+    min-width: 180px;
+}
+
+.user-card-copy strong,
+.user-card-copy span {
+    font-family: "Segoe UI", sans-serif;
+}
+
+.user-card-copy strong {
+    font-size: 14px;
+}
+
+.user-card-copy span {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.auth-body {
+    display: grid;
+    place-items: center;
+    padding: 28px;
+    background:
+        radial-gradient(circle at top right, rgba(31, 77, 139, 0.18), transparent 24%),
+        radial-gradient(circle at bottom left, rgba(130, 101, 63, 0.14), transparent 30%),
+        linear-gradient(180deg, #faf5eb 0%, #efe6d8 100%);
+}
+
+.auth-shell {
+    width: min(1180px, 100%);
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(360px, 460px);
+    gap: 24px;
+    align-items: stretch;
+}
+
+.auth-panel {
+    border: 1px solid rgba(130, 101, 63, 0.18);
+    border-radius: 30px;
+    background: rgba(255, 253, 248, 0.86);
+    backdrop-filter: blur(14px);
+    box-shadow: var(--shadow);
+}
+
+.auth-hero {
+    padding: 36px;
+    display: grid;
+    gap: 28px;
+    align-content: space-between;
+}
+
+.auth-hero-copy h1 {
+    margin: 8px 0 14px;
+    font-size: clamp(34px, 5vw, 56px);
+    line-height: 1.02;
+}
+
+.auth-hero-copy p {
+    margin: 0;
+    max-width: 620px;
+    font-family: "Segoe UI", sans-serif;
+    font-size: 16px;
+    line-height: 1.65;
+    color: #4d463d;
+}
+
+.auth-kicker {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: rgba(31, 77, 139, 0.08);
+    color: var(--brand);
+    font-family: "Segoe UI", sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.auth-hero-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.auth-feature-card {
+    padding: 18px;
+    border-radius: 22px;
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(130, 101, 63, 0.16);
+}
+
+.auth-feature-card h2 {
+    margin: 0 0 10px;
+    font-size: 18px;
+}
+
+.auth-feature-card p {
+    margin: 0;
+    font-family: "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    color: #4d463d;
+}
+
+.auth-card {
+    padding: 30px;
+    display: grid;
+    gap: 18px;
+}
+
+.auth-card-head h2 {
+    margin: 4px 0 10px;
+    font-size: 32px;
+}
+
+.auth-card-subtitle {
+    margin: 0;
+    font-family: "Segoe UI", sans-serif;
+    color: var(--muted);
+    line-height: 1.6;
+}
+
+.auth-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    padding: 6px;
+    border-radius: 18px;
+    background: rgba(130, 101, 63, 0.08);
+}
+
+.auth-tab {
+    border: none;
+    border-radius: 14px;
+    padding: 12px 16px;
+    background: transparent;
+    color: var(--muted);
+    font-family: "Segoe UI", sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.auth-tab.active {
+    background: #ffffff;
+    color: var(--brand);
+    box-shadow: 0 10px 30px rgba(47, 36, 24, 0.08);
+}
+
+.auth-form {
+    display: grid;
+    gap: 14px;
+}
+
+.auth-form label {
+    display: grid;
+    gap: 8px;
+    font-family: "Segoe UI", sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: #4d463d;
+}
+
+.auth-submit,
+.google-btn {
+    border: none;
+    border-radius: 16px;
+    padding: 14px 16px;
+    font-family: "Segoe UI", sans-serif;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.18s ease, opacity 0.18s ease;
+}
+
+.auth-submit {
+    background: linear-gradient(180deg, #2a5a98 0%, #1f4d8b 100%);
+    color: #fff;
+}
+
+.google-btn {
+    background: #fff;
+    color: var(--text);
+    border: 1px solid rgba(130, 101, 63, 0.2);
+}
+
+.auth-submit:hover,
+.google-btn:hover {
+    transform: translateY(-1px);
+}
+
+.google-btn:disabled,
+.auth-submit:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.forgot-password-link,
+.auth-footnote {
+    font-family: "Segoe UI", sans-serif;
+    font-size: 13px;
+}
+
+.forgot-password-link {
+    color: var(--brand);
+    text-decoration: none;
+}
+
+.auth-footnote {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.5;
+}
+
+.auth-message {
+    display: none;
+    padding: 12px 14px;
+    border-radius: 16px;
+    font-family: "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    background: rgba(31, 77, 139, 0.08);
+    color: var(--brand);
+}
+
+.auth-message.visible {
+    display: block;
+}
+
+.auth-message.error {
+    background: var(--danger-bg);
+    color: var(--danger-text);
+}
+
+.modal {
+    position: fixed;
+    inset: 0;
+    display: none;
+    place-items: center;
+    padding: 24px;
+    background: rgba(29, 26, 22, 0.34);
+}
+
+.modal-content {
+    width: min(440px, 100%);
+    padding: 28px;
+    border-radius: 24px;
+    background: rgba(255, 253, 248, 0.96);
+    border: 1px solid rgba(130, 101, 63, 0.18);
+    box-shadow: var(--shadow);
+    position: relative;
+}
+
+.modal-content h2 {
+    margin: 0 0 18px;
+    font-size: 26px;
+}
+
+.close {
+    position: absolute;
+    top: 14px;
+    right: 16px;
+    font-size: 24px;
+    cursor: pointer;
+    color: var(--muted);
+}
+
 @media (max-width: 980px) {
     .shell {
         grid-template-columns: 1fr;
@@ -464,6 +759,14 @@ textarea {
     .sidebar {
         border-right: none;
         border-bottom: 1px solid var(--border);
+    }
+
+    .auth-shell {
+        grid-template-columns: 1fr;
+    }
+
+    .auth-hero-grid {
+        grid-template-columns: 1fr;
     }
 }
 
@@ -496,5 +799,25 @@ textarea {
         grid-template-columns: 1fr;
         flex-direction: column;
         align-items: flex-start;
+    }
+
+    .header-actions,
+    .user-card {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .auth-body {
+        padding: 16px;
+    }
+
+    .auth-hero,
+    .auth-card,
+    .modal-content {
+        padding: 22px;
+    }
+
+    .auth-card-head h2 {
+        font-size: 28px;
     }
 }

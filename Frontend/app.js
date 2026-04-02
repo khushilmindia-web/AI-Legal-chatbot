@@ -1,4 +1,9 @@
-const apiBase = window.location.origin;
+const apiBase = window.APP_CONFIG?.apiBaseUrl || window.location.origin;
+const frontendBase = window.APP_CONFIG?.frontendBaseUrl || `${apiBase}/frontend`;
+const TOKEN_KEY = 'legalAuthToken';
+const USER_KEY = 'legalAuthUser';
+const ME_URL = `${apiBase}/auth/me`;
+const LOGOUT_URL = `${apiBase}/auth/logout`;
 
 const state = {
   sessions: [],
@@ -6,6 +11,7 @@ const state = {
   draftMessages: [],
   liveMessages: [],
   isBusy: false,
+  currentUser: null,
 };
 
 const elements = {
@@ -28,6 +34,9 @@ const elements = {
   ownMatterInput: document.getElementById("ownMatterInput"),
   imageUrlsInput: document.getElementById("imageUrlsInput"),
   fileInput: document.getElementById("fileInput"),
+  currentUserName: document.getElementById("currentUserName"),
+  currentUserMeta: document.getElementById("currentUserMeta"),
+  logoutButton: document.getElementById("logoutButton"),
 };
 
 function formatTime(timestamp) {
@@ -67,13 +76,81 @@ function clearError() {
   elements.errorBanner.textContent = "";
 }
 
+function getAuthToken() {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+function setStoredUser(user) {
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+
+function clearSession() {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+  state.currentUser = null;
+}
+
+function redirectToAuth() {
+  window.location.href = `${frontendBase}/auth.html`;
+}
+
 async function requestJson(path, options = {}) {
-  const response = await fetch(`${apiBase}${path}`, options);
+  const token = getAuthToken();
+  const headers = {
+    ...(options.headers || {}),
+  };
+  if (!(options.body instanceof FormData) && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  const response = await fetch(`${apiBase}${path}`, {
+    ...options,
+    credentials: options.credentials || "include",
+    headers,
+  });
   const payload = await response.json().catch(() => ({}));
+  if (response.status === 401) {
+    clearSession();
+    redirectToAuth();
+    throw new Error("Authentication required");
+  }
   if (!response.ok) {
     throw new Error(payload.detail || payload.message || `Request failed with status ${response.status}`);
   }
   return payload;
+}
+
+async function fetchCurrentUser() {
+  return requestJson("/auth/me", {
+    method: "GET",
+    credentials: "include",
+  });
+}
+
+function renderUserCard(user) {
+  if (!elements.currentUserName || !elements.currentUserMeta) {
+    return;
+  }
+  const displayName = user?.full_name || "Secure workspace";
+  const meta = user?.state ? `${user.email} | ${user.state}` : (user?.email || "Signed in");
+  elements.currentUserName.textContent = displayName;
+  elements.currentUserMeta.textContent = meta;
+}
+
+async function ensureAuthenticated() {
+  try {
+    const user = await fetchCurrentUser();
+    state.currentUser = user;
+    setStoredUser(user);
+    renderUserCard(user);
+    return user;
+  } catch (error) {
+    clearSession();
+    redirectToAuth();
+    throw error;
+  }
 }
 
 function buildMatterDetails() {
@@ -199,14 +276,14 @@ function renderMessages() {
 }
 
 async function loadHistory() {
-  const payload = await requestJson("/chat/history");
+  const payload = await requestJson("/chat/history", { method: "GET", credentials: "include" });
   state.sessions = payload.items || [];
   renderHistory();
 }
 
 async function openChat(chatId) {
   clearError();
-  const payload = await requestJson(`/chat/${chatId}/messages`);
+  const payload = await requestJson(`/chat/${chatId}/messages`, { method: "GET", credentials: "include" });
   state.activeChatId = chatId;
   state.liveMessages = (payload.items || []).map((item) => ({
     role: item.role,
@@ -283,16 +360,16 @@ async function submitMessage(event) {
         formData.append("image_urls", imageUrls);
       }
       Array.from(elements.fileInput.files).forEach((file) => formData.append("files", file));
-      payload = await requestJson("/chat/upload", { method: "POST", body: formData });
+      payload = await requestJson("/chat/upload", { method: "POST", body: formData, credentials: "include" });
     } else {
       payload = await requestJson("/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message,
           chat_id: state.activeChatId,
           ...details,
         }),
+        credentials: "include",
       });
     }
 
@@ -339,9 +416,20 @@ async function clearHistory() {
     return;
   }
   clearError();
-  await requestJson("/chat/history", { method: "DELETE" });
+  await requestJson("/chat/history", { method: "DELETE", credentials: "include" });
   state.sessions = [];
   setBlankDraft();
+}
+
+async function logout() {
+  try {
+    await requestJson("/auth/logout", { method: "POST", credentials: "include" });
+  } catch (error) {
+    // Even if the backend session is already gone, finish local logout.
+  } finally {
+    clearSession();
+    redirectToAuth();
+  }
 }
 
 function bindEvents() {
@@ -360,6 +448,14 @@ function bindEvents() {
     elements.detailsToggle.setAttribute("aria-expanded", String(!expanded));
     elements.detailsPanel.hidden = expanded;
   });
+  if (elements.logoutButton) {
+    elements.logoutButton.addEventListener("click", () => {
+      logout().catch(() => {
+        clearSession();
+        redirectToAuth();
+      });
+    });
+  }
   elements.messageInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
@@ -370,6 +466,7 @@ function bindEvents() {
 
 async function boot() {
   bindEvents();
+  await ensureAuthenticated();
   setBlankDraft();
   await loadHistory();
 }

@@ -4,6 +4,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 
+from backend.app.api.auth_utils import require_current_user
 from backend.app.models.schemas import (
     ChatHistoryResponse,
     ChatMessageRecord,
@@ -24,9 +25,10 @@ def get_chat_service(request: Request) -> ChatService:
 
 @router.post("/chat", response_model=ChatUploadResponse)
 async def chat(request_body: ChatRequest, request: Request) -> ChatUploadResponse:
+    user = require_current_user(request)
     service = get_chat_service(request)
     try:
-        return await service.handle_chat(request_body)
+        return await service.handle_chat(request_body, user_id=user["id"], fallback_state=user.get("state"))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -43,6 +45,7 @@ async def chat_upload(
     image_urls: str | None = Form(default=None),
     files: list[UploadFile] = File(default_factory=list),
 ) -> ChatUploadResponse:
+    user = require_current_user(request)
     service = get_chat_service(request)
     image_url_list = [item.strip() for item in (image_urls or "").split(",") if item.strip()]
     extraction = await service.extractor.extract_uploads(files=files, image_urls=image_url_list)
@@ -55,13 +58,20 @@ async def chat_upload(
         chat_id=chat_id,
     )
     try:
-        return await service.handle_chat(payload, uploaded_texts=extraction.texts, extraction_warnings=extraction.warnings)
+        return await service.handle_chat(
+            payload,
+            user_id=user["id"],
+            fallback_state=user.get("state"),
+            uploaded_texts=extraction.texts,
+            extraction_warnings=extraction.warnings,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/chat/history", response_model=ChatHistoryResponse)
 def chat_history(request: Request) -> ChatHistoryResponse:
+    user = require_current_user(request)
     store = request.app.state.session_store
     items = [
         ChatSessionSummary(
@@ -71,14 +81,18 @@ def chat_history(request: Request) -> ChatHistoryResponse:
             updated_at=datetime.fromisoformat(item["updated_at"]),
             last_message_preview=item.get("last_message_preview"),
         )
-        for item in store.list_sessions()
+        for item in store.list_sessions(user["id"])
     ]
     return ChatHistoryResponse(items=items)
 
 
 @router.get("/chat/{chat_id}/messages", response_model=ChatMessagesResponse)
 def chat_messages(chat_id: int, request: Request) -> ChatMessagesResponse:
+    user = require_current_user(request)
     store = request.app.state.session_store
+    session = store.get_session(chat_id, user["id"])
+    if session is None:
+        raise HTTPException(status_code=404, detail="Chat session not found")
     items = [
         ChatMessageRecord(
             id=item["id"],
@@ -88,12 +102,13 @@ def chat_messages(chat_id: int, request: Request) -> ChatMessagesResponse:
             created_at=datetime.fromisoformat(item["created_at"]),
             metadata=item["metadata"],
         )
-        for item in store.get_messages(chat_id)
+        for item in store.get_messages(chat_id, user["id"])
     ]
     return ChatMessagesResponse(items=items)
 
 
 @router.delete("/chat/history")
 def clear_history(request: Request) -> dict[str, str]:
-    request.app.state.session_store.clear_history()
+    user = require_current_user(request)
+    request.app.state.session_store.clear_history(user["id"])
     return {"status": "ok"}

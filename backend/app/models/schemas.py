@@ -55,6 +55,43 @@ class ChatMessagesResponse(BaseModel):
     items: list[ChatMessageRecord]
 
 
+class AuthSignupRequest(BaseModel):
+    full_name: str
+    email: str
+    password: str
+    state: str | None = None
+
+
+class AuthLoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class AuthUser(BaseModel):
+    id: int
+    full_name: str
+    email: str
+    state: str | None = None
+    created_at: datetime
+
+
+class AuthResponse(BaseModel):
+    token: str
+    user: AuthUser
+
+
+class MessageResponse(BaseModel):
+    message: str
+
+
+class PasswordResetRequest(BaseModel):
+    email: str
+
+
+class GoogleAuthStatusResponse(BaseModel):
+    configured: bool
+
+
 class HealthResponse(BaseModel):
     status: str
 

@@ -2,96 +2,10 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="refresh" content="0; url=./Index.html">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lawyer AI</title>
-    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="shell">
-        <aside class="sidebar">
-            <div class="brand">
-                <div>
-                    <p class="eyebrow">Lawyer AI</p>
-                    <h1>Legal guidance for Indian users</h1>
-                </div>
-                <button id="clearHistoryButton" class="sidebar-action" type="button">Clear History</button>
-            </div>
-
-            <div class="history-section">
-                <div class="history-header">
-                    <h2>Chats</h2>
-                    <button id="newChatButton" class="sidebar-action secondary" type="button">New Chat</button>
-                </div>
-                <p id="emptyHistory" class="sidebar-empty">No chats yet. Your first message will create one.</p>
-                <div id="historyList" class="history-list"></div>
-            </div>
-        </aside>
-
-        <main class="chat-layout">
-            <header class="chat-header">
-                <div>
-                    <p class="eyebrow">Production-style MVP</p>
-                    <h2>Ask one legal question at a time</h2>
-                </div>
-                <div id="statusText" class="status-text">Ready</div>
-            </header>
-
-            <div id="errorBanner" class="error-banner" hidden></div>
-
-            <section id="chatThread" class="chat-thread" aria-live="polite"></section>
-
-            <div id="typingIndicator" class="typing-indicator" hidden>
-                <span></span>
-                <span></span>
-                <span></span>
-                <p>Lawyer AI is drafting a grounded reply.</p>
-            </div>
-
-            <form id="composerForm" class="composer" novalidate>
-                <div class="composer-toolbar">
-                    <button id="detailsToggle" class="details-toggle" type="button" aria-expanded="false">Optional matter details</button>
-                    <p class="composer-hint">Uploads are used only to ground the current chat.</p>
-                </div>
-
-                <div id="detailsPanel" class="details-panel" hidden>
-                    <label>
-                        State
-                        <input id="stateInput" type="text" placeholder="For example, Gujarat">
-                    </label>
-                    <label>
-                        District
-                        <input id="districtInput" type="text" placeholder="Optional district">
-                    </label>
-                    <label>
-                        Case stage
-                        <input id="caseStageInput" type="text" placeholder="Complaint filed, notice received, and so on">
-                    </label>
-                    <label>
-                        Own matter
-                        <select id="ownMatterInput">
-                            <option value="">Not specified</option>
-                            <option value="true">Yes</option>
-                            <option value="false">No</option>
-                        </select>
-                    </label>
-                    <label class="span-two">
-                        Image URLs
-                        <input id="imageUrlsInput" type="text" placeholder="Optional comma-separated image URLs">
-                    </label>
-                    <label class="span-two">
-                        Upload documents
-                        <input id="fileInput" type="file" multiple accept=".txt,.pdf,.png,.jpg,.jpeg">
-                    </label>
-                </div>
-
-                <div class="composer-main">
-                    <textarea id="messageInput" rows="1" placeholder="Describe the issue in simple language. Example: I clicked a fake UPI link and money got debited."></textarea>
-                    <button id="sendButton" class="send-button" type="submit">Send</button>
-                </div>
-            </form>
-        </main>
-    </div>
-
-    <script src="app.js"></script>
 </body>
 </html>
