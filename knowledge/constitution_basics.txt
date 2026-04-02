@@ -1,0 +1,13 @@
+Domain: constitution
+Title: Constitution Basics for Public Legal Guidance
+
+The Constitution of India is the foundational law of the country.
+
+Article 14 deals with equality before the law and equal protection of the laws.
+Article 19 deals with specified freedoms, subject to reasonable restrictions.
+Article 21 protects life and personal liberty except according to procedure established by law.
+Article 32 allows a person to approach the Supreme Court for enforcement of fundamental rights.
+Article 226 allows a person to approach the High Court for writ remedies.
+
+Guidance note:
+Constitutional remedies depend heavily on the exact government action, available evidence, urgency, and whether another statutory remedy exists.

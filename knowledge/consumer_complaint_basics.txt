@@ -1,0 +1,11 @@
+Domain: consumer
+Title: Consumer Complaint Basics
+
+When a buyer reports defective goods, service deficiency, refund refusal, or e-commerce dispute:
+
+1. Ask for invoice, order details, payment proof, emails, and complaint records.
+2. Advise the user to preserve written communication and complaint reference numbers.
+3. Explain that the District Consumer Commission may be relevant depending on the value and location of the dispute.
+
+Grounding note:
+The Consumer Protection Act, 2019 may be relevant, but exact advice depends on the product, service, location, and procedural history.

@@ -1,0 +1,11 @@
+Domain: criminal
+Title: FIR and Police Complaint Basics
+
+If the user asks how to file an FIR or report a cognizable offence:
+
+1. Ask what happened, when it happened, and whether immediate danger still exists.
+2. Tell the user to preserve key evidence and prepare a short chronology.
+3. Explain that the local police station may be the first practical forum, though exact procedure depends on facts and offence type.
+
+Grounding note:
+Do not invent sections or procedure. Explain that criminal process depends on the nature of the complaint and its current stage.

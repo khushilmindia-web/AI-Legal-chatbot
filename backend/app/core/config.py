@@ -1,0 +1,84 @@
+from __future__ import annotations
+
+from functools import lru_cache
+from pathlib import Path
+
+from dotenv import load_dotenv
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+ROOT_DIR = Path(__file__).resolve().parents[3]
+BACKEND_DIR = ROOT_DIR / "backend"
+FRONTEND_DIR = ROOT_DIR / "frontend"
+DATA_DIR = ROOT_DIR / "data"
+KNOWLEDGE_DIR = ROOT_DIR / "knowledge"
+TEMP_DIR = DATA_DIR / "temp_uploads"
+DB_PATH = DATA_DIR / "lawyer_ai.db"
+PROMPT_PATH = BACKEND_DIR / "app" / "core" / "prompts" / "lawyer_ai_system.md"
+
+load_dotenv(ROOT_DIR / ".env")
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
+    openai_model: str = Field(default="gpt-4.1-mini", alias="OPENAI_MODEL")
+    max_file_size_mb: int = Field(default=10, alias="MAX_FILE_SIZE_MB")
+    debug: bool = Field(default=False, alias="DEBUG")
+    default_state: str = Field(default="Gujarat", alias="DEFAULT_STATE")
+    retrieval_mode: str = Field(default="local_context", alias="RETRIEVAL_MODE")
+    openai_timeout_seconds: float = Field(default=45.0, alias="OPENAI_TIMEOUT_SECONDS")
+    openai_max_retries: int = Field(default=2, alias="OPENAI_MAX_RETRIES")
+    cors_origins_raw: str = Field(
+        default="http://127.0.0.1:8000,http://localhost:8000,http://127.0.0.1:5500,http://localhost:5500",
+        alias="CORS_ALLOW_ORIGINS",
+    )
+    openai_vector_store_id: str = Field(default="", alias="OPENAI_VECTOR_STORE_ID")
+
+    @field_validator("debug", mode="before")
+    @classmethod
+    def coerce_debug(cls, value):
+        if isinstance(value, bool):
+            return value
+        if value is None:
+            return False
+        normalized = str(value).strip().lower()
+        if normalized in {"1", "true", "yes", "on", "debug"}:
+            return True
+        if normalized in {"0", "false", "no", "off", "release", "prod", "production"}:
+            return False
+        return value
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [item.strip() for item in self.cors_origins_raw.split(",") if item.strip()]
+
+    @property
+    def database_url(self) -> str:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        return str(DB_PATH)
+
+    @property
+    def frontend_dir(self) -> Path:
+        return FRONTEND_DIR
+
+    @property
+    def knowledge_dir(self) -> Path:
+        KNOWLEDGE_DIR.mkdir(parents=True, exist_ok=True)
+        return KNOWLEDGE_DIR
+
+    @property
+    def temp_dir(self) -> Path:
+        TEMP_DIR.mkdir(parents=True, exist_ok=True)
+        return TEMP_DIR
+
+    @property
+    def prompt_path(self) -> Path:
+        return PROMPT_PATH
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    return Settings()

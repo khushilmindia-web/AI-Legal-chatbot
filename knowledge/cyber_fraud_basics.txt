@@ -1,0 +1,12 @@
+Domain: cyber
+Title: Immediate Practical Steps for UPI and OTP Fraud
+
+If a user reports that money was debited after clicking a fake link, sharing an OTP, or receiving a suspicious call or message:
+
+1. Advise the user to immediately contact the bank or payment app and block further transactions if possible.
+2. Advise the user to preserve screenshots, transaction IDs, debit alerts, call logs, complaint acknowledgements, and account statements.
+3. Explain that prompt action matters because fund tracing and escalation become harder with delay.
+4. The likely authorities may include the bank grievance channel, cyber cell, or local police station depending on the facts.
+
+Grounding note:
+Do not claim guaranteed recovery. Procedures may vary by bank and State.

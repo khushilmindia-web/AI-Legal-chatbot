@@ -1,0 +1,47 @@
+{
+  "entries": [
+    {
+      "title": "Constitution of India",
+      "target_type": "statute",
+      "source_file": "Constitution_of_India_raw.txt",
+      "output_name": "Constitution_of_India",
+      "source_url": "https://www.indiacode.nic.in/",
+      "jurisdiction": "India",
+      "citation": "Constitution of India",
+      "tags": ["constitution", "fundamental rights", "writ"]
+    },
+    {
+      "title": "Information Technology Act, 2000",
+      "target_type": "statute",
+      "source_file": "Information_Technology_Act_2000_raw.txt",
+      "output_name": "Information_Technology_Act_2000",
+      "source_url": "https://www.indiacode.nic.in/",
+      "jurisdiction": "India",
+      "citation": "Information Technology Act, 2000",
+      "tags": ["cyber", "technology", "electronic records"]
+    },
+    {
+      "title": "Sample Gujarat State Rule",
+      "target_type": "state_rule",
+      "source_file": "Gujarat_State_Rule_raw.txt",
+      "output_name": "Gujarat_State_Rule",
+      "source_url": "https://gujarat.gov.in/",
+      "jurisdiction": "State",
+      "state": "Gujarat",
+      "citation": "Gujarat State Rule",
+      "tags": ["state law", "gujarat"]
+    },
+    {
+      "title": "Sample Supreme Court Case",
+      "target_type": "case_law",
+      "source_file": "Sample_Supreme_Court_Case_raw.txt",
+      "output_name": "Sample_Supreme_Court_Case",
+      "source_url": "https://main.sci.gov.in/",
+      "jurisdiction": "India",
+      "court": "Supreme Court of India",
+      "year": "2024",
+      "citation": "Sample citation",
+      "tags": ["case law", "supreme court"]
+    }
+  ]
+}
