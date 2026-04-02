@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     openai_timeout_seconds: float = Field(default=45.0, alias="OPENAI_TIMEOUT_SECONDS")
     openai_max_retries: int = Field(default=2, alias="OPENAI_MAX_RETRIES")
     cors_origins_raw: str = Field(
-        default="http://127.0.0.1:8000,http://localhost:8000,http://127.0.0.1:5500,http://localhost:5500",
+        default="http://127.0.0.1:8000,http://localhost:8000",
         alias="CORS_ALLOW_ORIGINS",
     )
     openai_vector_store_id: str = Field(default="", alias="OPENAI_VECTOR_STORE_ID")
@@ -54,7 +54,7 @@ class Settings(BaseSettings):
         normalized = str(value).strip().lower()
         if normalized in {"1", "true", "yes", "on", "debug"}:
             return True
-        if normalized in {"0", "false", "no", "off", "release", "prod", "production"}:
+        if normalized in {"0", "false", "no", "off", "release", "prod", "production", "warn", "warning", "info", "error"}:
             return False
         return value
 

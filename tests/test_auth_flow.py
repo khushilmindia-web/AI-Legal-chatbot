@@ -13,6 +13,10 @@ def test_chat_routes_require_auth(anonymous_client):
 
 
 def test_signup_me_logout_and_protected_redirects(anonymous_client):
+    frontend_root_response = anonymous_client.get("/frontend", follow_redirects=False)
+    assert frontend_root_response.status_code == 307
+    assert frontend_root_response.headers["location"] == "/frontend/auth.html"
+
     signup_response = anonymous_client.post(
         "/auth/signup",
         json={
@@ -33,6 +37,10 @@ def test_signup_me_logout_and_protected_redirects(anonymous_client):
     root_response = anonymous_client.get("/", follow_redirects=False)
     assert root_response.status_code == 307
     assert root_response.headers["location"] == "/frontend/index.html"
+
+    legacy_index_response = anonymous_client.get("/frontend/Index.html", follow_redirects=False)
+    assert legacy_index_response.status_code == 307
+    assert legacy_index_response.headers["location"] == "/frontend/index.html"
 
     logout_response = anonymous_client.post("/auth/logout")
     assert logout_response.status_code == 200

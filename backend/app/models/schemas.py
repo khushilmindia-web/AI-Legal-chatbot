@@ -90,6 +90,8 @@ class PasswordResetRequest(BaseModel):
 
 class GoogleAuthStatusResponse(BaseModel):
     configured: bool
+    client_id_configured: bool = False
+    gis_script_required: bool = True
 
 
 class HealthResponse(BaseModel):

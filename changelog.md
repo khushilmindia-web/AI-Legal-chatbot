@@ -3,6 +3,10 @@
 ## 2026-04-02
 
 ### Added
+- Added explicit OpenAI quota-failure detection in `backend/app/services/openai_service.py` so insufficient quota is reported clearly instead of being retried like a transient network error.
+- Added a live localhost runtime on `127.0.0.1:5500` with FastAPI serving both frontend and backend on the same origin after clearing the conflicting local web-server port usage.
+- Added a one-origin `5500` runtime path across docs and startup helpers so FastAPI can serve both API routes and frontend assets from the same local origin.
+- Added a single-origin mounted chat workspace in `frontend/index.html` that now serves the active chat UI directly from FastAPI instead of the broken redirect stub.
 - Added Git automation helpers in `scripts/git_sync.ps1` and `scripts/update_changelog.ps1` to support repeatable local commit/push and changelog maintenance workflows.
 - Added runtime auth routes in `backend/app/api/routes/auth.py` for signup, login, logout, current-user lookup, password reset messaging, Google OAuth status, login, and callback.
 - Added shared auth helpers in `backend/app/api/auth_utils.py` for bearer-token parsing, cookie lookup, current-user enforcement, and auth cookie management.
@@ -11,6 +15,12 @@
 - Added auth regression coverage in `tests/test_auth_flow.py`.
 
 ### Changed
+- Changed local runtime configuration to prefer `http://127.0.0.1:5500` for FastAPI, Google OAuth redirect configuration, and same-origin CORS defaults in `.env`, `.env.example`, `backend/app/core/config.py`, `scripts/run_local.ps1`, `README.md`, and helper setup scripts.
+- Changed the active frontend to use relative same-origin auth and API paths in `frontend/config.js`, `frontend/auth.js`, and `frontend/app.js`, removing the old `:5500` and hardcoded `:8000` frontend assumptions.
+- Changed runtime CORS defaults and local env examples to prefer the FastAPI origin only, keeping frontend and backend on `127.0.0.1:8000`.
+- Normalized the active FastAPI-served frontend flow around `http://127.0.0.1:8000` by updating env defaults, startup helpers, Google OAuth setup guidance, and README run instructions.
+- Updated `backend/app/main.py` to redirect `/`, `/frontend`, and legacy `/frontend/Index.html` into the mounted same-origin frontend/auth flow instead of relying on mixed entrypoints.
+- Normalized the active frontend app entrypoint to lowercase `/frontend/index.html` so routing no longer depends on Windows-only case-insensitive file handling.
 - Updated repository automation so the local `main` branch is connected to `origin/main` and GitHub pushes use the working system SSH/Git configuration.
 - Integrated authentication into the active runtime app in `backend/app/main.py` instead of relying on the separate root `app.py` flow.
 - Updated `backend/app/services/session_store.py` to support users, auth sessions, Google account linking, and per-user chat ownership.
@@ -23,12 +33,19 @@
 - Updated `pytest.ini` to stop using the previously locked fixed temp directory.
 
 ### Verified
+- Verified direct OpenAI access is no longer blocked by the broken local proxy environment, and the current remaining failure is `429 insufficient_quota` from the configured API key.
+- Verified the full live one-port flow on `http://127.0.0.1:5500` for `/health`, `/frontend/auth.html`, protected `/frontend/index.html`, `/auth/google/status`, signup, `/auth/me`, `/chat`, `/chat/history`, `/chat/{chat_id}/messages`, and `/chat/history` delete.
+- Verified the active runtime files no longer contain hardcoded `8000` frontend/API assumptions, and the FastAPI app remains same-origin ready through mounted `/frontend` routes.
+- Verified the one-port FastAPI flow on `http://127.0.0.1:8000` for `/frontend/auth.html`, protected `/frontend/index.html`, signup, `/auth/me`, `/chat`, `/chat/history`, `/chat/{chat_id}/messages`, `/chat/history` delete, and `/auth/google/status`.
+- Verified with an in-process FastAPI smoke harness that auth, redirects, Google OAuth status, sessions, `/chat`, `/chat/history`, `/chat/{chat_id}/messages`, and delete-history all pass under the repo's current app configuration.
+- Verified the live machine still has a conflicting listener on `127.0.0.1:8000`; the active process there does not match this repo's route contract and returns `404` for `/health` and `405` for `DELETE /chat/history`.
 - Verified GitHub sync is working: the repository now pushes successfully to `git@github.com:khushilmindia-web/AI-Legal-chatbot.git` and `main` tracks `origin/main`.
 - Verified signup, login, `/auth/me`, protected root redirect, protected frontend access, per-user chat flow, history loading, logout, and mocked Google OAuth callback/session persistence using a direct FastAPI `TestClient` integration harness.
 
 ### Pending
 - Run the full `pytest` suite cleanly once the local Windows temp-directory permission issue no longer interferes with pytest cleanup.
 - Perform a live browser roundtrip against real Google OAuth credentials after deployment/runtime environment confirmation.
+- Clear the foreign `127.0.0.1:8000` listener on this workstation and rerun the live same-origin smoke test against the repo's own FastAPI process.
 
 ## 2026-04-01
 

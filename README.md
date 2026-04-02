@@ -38,7 +38,6 @@ backend/
   main.py
 frontend/
   index.html
-  Index.html
   style.css
   app.js
 knowledge/

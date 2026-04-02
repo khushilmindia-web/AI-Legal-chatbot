@@ -1,5 +1,5 @@
-const apiBase = window.APP_CONFIG?.apiBaseUrl || window.location.origin;
-const frontendBase = window.APP_CONFIG?.frontendBaseUrl || `${apiBase}/frontend`;
+const apiBase = window.APP_CONFIG?.apiBaseUrl ?? "";
+const frontendBase = window.APP_CONFIG?.frontendBaseUrl || "/frontend";
 const TOKEN_KEY = 'legalAuthToken';
 const USER_KEY = 'legalAuthUser';
 const ME_URL = `${apiBase}/auth/me`;

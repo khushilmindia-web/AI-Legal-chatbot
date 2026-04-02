@@ -4,7 +4,7 @@ const userInput = document.getElementById('userInput');
 const sendBtn = document.getElementById('sendBtn');
 const historyList = document.getElementById('historyList');
 
-const API_URL = 'http://127.0.0.1:8000/chat';
+const API_URL = '/chat';
 
 let currentChatMessages = [];
 let chatHistory = JSON.parse(localStorage.getItem('chatHistory')) || [];
@@ -223,7 +223,7 @@ async function sendMessage() {
         let errorMessage = 'Sorry, something went wrong. Please try again.';
     
         if (error.message.includes('Failed to fetch')) {
-            errorMessage = 'Cannot connect to FastAPI server on port 8000.';
+            errorMessage = 'Cannot connect to the Lawyer AI server.';
         }
 
         addMessage(errorMessage, 'bot');

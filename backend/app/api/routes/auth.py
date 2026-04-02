@@ -183,7 +183,12 @@ def password_reset(payload: PasswordResetRequest) -> MessageResponse:
 
 @router.get("/auth/google/status", response_model=GoogleAuthStatusResponse)
 def google_auth_status(request: Request) -> GoogleAuthStatusResponse:
-    return GoogleAuthStatusResponse(configured=google_auth_configured(request))
+    settings = request.app.state.settings
+    return GoogleAuthStatusResponse(
+        configured=google_auth_configured(request),
+        client_id_configured=bool(settings.google_client_id.strip()),
+        gis_script_required=True,
+    )
 
 
 @router.get("/auth/google/login")

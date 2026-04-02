@@ -43,7 +43,7 @@
                 <button id="signupTab" class="auth-tab" type="button">Sign Up</button>
             </div>
 
-            <form id="loginForm" class="auth-form" method="post">
+            <form id="loginForm" class="auth-form" method="post" action="javascript:void(0)" novalidate>
                 <label>
                     Email
                     <input id="loginEmail" type="email" placeholder="you@example.com" autocomplete="email" required>
@@ -58,7 +58,7 @@
             </form>
 
 
-            <form id="signupForm" class="auth-form hidden" method="post">
+            <form id="signupForm" class="auth-form hidden" method="post" action="javascript:void(0)" novalidate>
                 <label>
                     Full Name
                     <input id="signupName" type="text" placeholder="Your full name" autocomplete="name" required>
@@ -88,7 +88,7 @@
             <div class="modal-content">
                 <span class="close">&times;</span>
                 <h2>Reset Password</h2>
-                <form id="passwordResetForm" class="auth-form">
+                <form id="passwordResetForm" class="auth-form" method="post" action="javascript:void(0)" novalidate>
                     <label>
                         Email
                         <input id="resetEmail" type="email" placeholder="Enter your email" required>
@@ -100,6 +100,7 @@
         </div>
     </main>
 
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="config.js"></script>
     <script src="auth.js"></script>
 </body>

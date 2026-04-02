@@ -11,8 +11,8 @@ const passwordResetForm = document.getElementById('passwordResetForm');
 const resetMessage = document.getElementById('resetMessage');
 const closeModal = document.getElementsByClassName('close')[0];
 
-const BASE_API_URL = window.APP_CONFIG?.apiBaseUrl || 'http://127.0.0.1:8000';
-const FRONTEND_BASE_URL = window.APP_CONFIG?.frontendBaseUrl || `${BASE_API_URL}/frontend`;
+const BASE_API_URL = window.APP_CONFIG?.apiBaseUrl ?? '';
+const FRONTEND_BASE_URL = window.APP_CONFIG?.frontendBaseUrl || '/frontend';
 const APP_URL = `${FRONTEND_BASE_URL}/index.html`;
 const LOGIN_URL = `${BASE_API_URL}/auth/login`;
 const SIGNUP_URL = `${BASE_API_URL}/auth/signup`;
@@ -22,6 +22,11 @@ const PASSWORD_RESET_URL = `${BASE_API_URL}/auth/password-reset`;
 const ME_URL = `${BASE_API_URL}/auth/me`;
 const TOKEN_KEY = 'legalAuthToken';
 const USER_KEY = 'legalAuthUser';
+const GOOGLE_CONFIG = {
+    backendConfigured: false,
+    clientIdConfigured: false,
+    gisScriptLoaded: false
+};
 
 const STATES_AND_UTS = [
     'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
@@ -178,18 +183,38 @@ async function redirectIfAuthenticated() {
 }
 
 async function checkGoogleAuthStatus() {
+    GOOGLE_CONFIG.gisScriptLoaded = typeof window.google !== 'undefined';
     try {
         const response = await fetch(GOOGLE_STATUS_URL, { credentials: 'include' });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok || !data.configured) {
-            googleLoginBtn.disabled = true;
-            googleLoginBtn.textContent = data.configured === false ? 'Google Sign-in Unavailable' : 'Google Sign-in Offline';
-            googleLoginBtn.title = 'Google sign-in is not configured right now.';
+        if (!response.ok) {
+            googleLoginBtn.disabled = false;
+            googleLoginBtn.textContent = 'Continue with Google';
+            googleLoginBtn.title = 'Google sign-in status could not be verified, but you can still try the OAuth redirect.';
+            return;
         }
+
+        GOOGLE_CONFIG.backendConfigured = Boolean(data.configured);
+        GOOGLE_CONFIG.clientIdConfigured = Boolean(data.client_id_configured);
+
+        if (!data.configured) {
+            googleLoginBtn.disabled = true;
+            googleLoginBtn.textContent = 'Google Sign-in Unavailable';
+            googleLoginBtn.title = data.client_id_configured
+                ? 'Google sign-in is partially configured, but the backend OAuth setup is incomplete.'
+                : 'Google sign-in is not configured because the Google client ID is missing.';
+            return;
+        }
+
+        googleLoginBtn.disabled = false;
+        googleLoginBtn.textContent = 'Continue with Google';
+        googleLoginBtn.title = GOOGLE_CONFIG.gisScriptLoaded
+            ? 'Google OAuth is configured and ready.'
+            : 'Google Identity Services script is not loaded, so the page will use the backend OAuth redirect flow.';
     } catch (error) {
-        googleLoginBtn.disabled = true;
-        googleLoginBtn.textContent = 'Google Sign-in Offline';
-        googleLoginBtn.title = 'Google sign-in could not be reached.';
+        googleLoginBtn.disabled = false;
+        googleLoginBtn.textContent = 'Continue with Google';
+        googleLoginBtn.title = 'Google sign-in status could not be reached. The backend redirect flow is still available.';
     }
 }
 
@@ -235,7 +260,11 @@ async function handleOAuthCallback() {
     }
 }
 
-function startGoogleLogin() {
+function startGoogleLogin(event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
     if (googleLoginBtn.disabled) {
         showMessage('Google sign-in is not configured. Please use email/password login.', true);
         return;
@@ -245,6 +274,7 @@ function startGoogleLogin() {
 
 async function handleLogin(event) {
     event.preventDefault();
+    event.stopPropagation();
     const loginBtn = document.querySelector('#loginForm .auth-submit');
     const originalText = loginBtn.textContent;
     loginBtn.textContent = 'Logging in...';
@@ -267,6 +297,7 @@ async function handleLogin(event) {
 
 async function handleSignup(event) {
     event.preventDefault();
+    event.stopPropagation();
     const signupBtn = document.querySelector('#signupForm .auth-submit');
     const originalText = signupBtn.textContent;
     signupBtn.textContent = 'Creating account...';
@@ -305,6 +336,7 @@ function closePasswordResetModal() {
 
 async function handlePasswordReset(event) {
     event.preventDefault();
+    event.stopPropagation();
     const email = document.getElementById('resetEmail').value.trim();
 
     try {

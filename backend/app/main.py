@@ -36,7 +36,7 @@ def create_app() -> FastAPI:
         protected_paths = {
             settings.frontend_app_path.lower(),
             "/frontend/index.html",
-            "/frontend/Index.html".lower(),
+            "/frontend/index.html".lower(),
         }
         path = request.url.path
         lower_path = path.lower()
@@ -44,6 +44,13 @@ def create_app() -> FastAPI:
         if path == "/":
             destination = settings.frontend_app_path if get_optional_current_user(request) else settings.frontend_auth_path
             return RedirectResponse(url=destination)
+
+        if lower_path in {"/frontend", "/frontend/"}:
+            destination = settings.frontend_app_path if get_optional_current_user(request) else settings.frontend_auth_path
+            return RedirectResponse(url=destination)
+
+        if path == "/frontend/Index.html":
+            return RedirectResponse(url=settings.frontend_app_path)
 
         if lower_path in protected_paths and not get_optional_current_user(request):
             return RedirectResponse(url=settings.frontend_auth_path)

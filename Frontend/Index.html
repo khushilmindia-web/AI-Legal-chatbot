@@ -2,10 +2,109 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="refresh" content="0; url=./Index.html">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lawyer AI</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <div class="shell">
+        <aside class="sidebar">
+            <div class="brand">
+                <div>
+                    <p class="eyebrow">Lawyer AI</p>
+                    <h1>Legal Guidance</h1>
+                </div>
+                <button id="newChatButton" class="sidebar-action" type="button">New Chat</button>
+            </div>
+
+            <section class="history-section">
+                <div class="history-header">
+                    <div>
+                        <p class="eyebrow">Sessions</p>
+                        <h2>Chat History</h2>
+                    </div>
+                    <button id="clearHistoryButton" class="sidebar-action secondary" type="button">Clear History</button>
+                </div>
+                <p id="emptyHistory" class="sidebar-empty">No chats yet. Your first message will create one.</p>
+                <div id="historyList" class="history-list"></div>
+            </section>
+        </aside>
+
+        <main class="chat-layout">
+            <header class="chat-header">
+                <div>
+                    <p class="eyebrow">Indian Legal Guidance</p>
+                    <h2>Ask your legal question in simple language</h2>
+                </div>
+                <div class="header-actions">
+                    <div class="user-card">
+                        <div class="user-card-copy">
+                            <strong id="currentUserName">Secure workspace</strong>
+                            <span id="currentUserMeta">Signed in</span>
+                        </div>
+                    </div>
+                    <button id="logoutButton" class="sidebar-action secondary" type="button">Logout</button>
+                </div>
+            </header>
+
+            <p id="statusText" class="status-text">Ready</p>
+            <p id="errorBanner" class="error-banner" hidden></p>
+
+            <section id="chatThread" class="chat-thread" aria-live="polite"></section>
+
+            <div id="typingIndicator" class="typing-indicator" hidden>
+                <span></span>
+                <span></span>
+                <span></span>
+                <p>Lawyer AI is preparing a response...</p>
+            </div>
+
+            <section class="composer">
+                <div class="composer-toolbar">
+                    <button id="detailsToggle" class="details-toggle" type="button" aria-expanded="false">Optional case details</button>
+                    <p class="composer-hint">The assistant will help first and ask only one follow-up question if needed.</p>
+                </div>
+
+                <div id="detailsPanel" class="details-panel" hidden>
+                    <label>
+                        State
+                        <input id="stateInput" type="text" placeholder="Gujarat">
+                    </label>
+                    <label>
+                        District
+                        <input id="districtInput" type="text" placeholder="Ahmedabad">
+                    </label>
+                    <label>
+                        Case stage
+                        <input id="caseStageInput" type="text" placeholder="Pre-complaint, FIR filed, notice received">
+                    </label>
+                    <label>
+                        Own matter
+                        <select id="ownMatterInput">
+                            <option value="">Not specified</option>
+                            <option value="true">Yes</option>
+                            <option value="false">No</option>
+                        </select>
+                    </label>
+                    <label class="span-two">
+                        Image URLs
+                        <input id="imageUrlsInput" type="text" placeholder="Optional comma-separated image URLs">
+                    </label>
+                    <label class="span-two">
+                        Upload documents
+                        <input id="fileInput" type="file" multiple accept=".txt,.md,.pdf,.png,.jpg,.jpeg,.webp">
+                    </label>
+                </div>
+
+                <form id="composerForm" class="composer-main">
+                    <textarea id="messageInput" placeholder="Example: My account was debited after I clicked a fake UPI link and shared OTP. What should I do first?" required></textarea>
+                    <button id="sendButton" class="send-button" type="submit">Send</button>
+                </form>
+            </section>
+        </main>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="app.js"></script>
 </body>
 </html>

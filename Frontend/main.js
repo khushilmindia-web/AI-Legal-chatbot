@@ -9,8 +9,8 @@ const currentUserName = document.getElementById('currentUserName');
 const currentUserMeta = document.getElementById('currentUserMeta');
 const logoutBtn = document.getElementById('logoutBtn');
 
-const API_BASE_URL = window.APP_CONFIG?.apiBaseUrl || 'http://127.0.0.1:8000';
-const FRONTEND_BASE_URL = window.APP_CONFIG?.frontendBaseUrl || `${API_BASE_URL}/frontend`;
+const API_BASE_URL = window.APP_CONFIG?.apiBaseUrl ?? '';
+const FRONTEND_BASE_URL = window.APP_CONFIG?.frontendBaseUrl || '/frontend';
 const CHAT_URL = `${API_BASE_URL}/chat`;
 const HISTORY_URL = `${API_BASE_URL}/chat/history`;
 const CHAT_SESSION_URL = `${API_BASE_URL}/chat/session`;

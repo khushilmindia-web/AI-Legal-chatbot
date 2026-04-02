@@ -5,6 +5,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+import httpx
 from openai import APIConnectionError, APITimeoutError, InternalServerError, OpenAI, RateLimitError
 
 from backend.app.core.config import Settings
@@ -17,7 +18,13 @@ logger = get_logger("lawyer_ai.openai")
 class OpenAIResponsesService:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        self.client = OpenAI(api_key=settings.openai_api_key, timeout=settings.openai_timeout_seconds, max_retries=0)
+        # Ignore broken shell/system proxy env vars for OpenAI requests.
+        self.client = OpenAI(
+            api_key=settings.openai_api_key,
+            timeout=settings.openai_timeout_seconds,
+            max_retries=0,
+            http_client=httpx.Client(trust_env=False, timeout=settings.openai_timeout_seconds),
+        )
         self.system_prompt = self._load_system_prompt(settings.prompt_path)
 
     @staticmethod
@@ -57,6 +64,13 @@ class OpenAIResponsesService:
                 )
                 text = response.output_text.strip()
                 return self._parse_json(text)
+            except RateLimitError as exc:
+                last_error = exc
+                if self._is_quota_error(exc):
+                    logger.error("openai quota exceeded error=%s", exc)
+                    raise RuntimeError("OpenAI quota is exhausted for the configured API key.") from exc
+                logger.warning("transient model error attempt=%s error=%s", attempt + 1, exc)
+                time.sleep(min(2 ** attempt, 4))
             except (APITimeoutError, APIConnectionError, RateLimitError, InternalServerError) as exc:
                 last_error = exc
                 logger.warning("transient model error attempt=%s error=%s", attempt + 1, exc)
@@ -80,3 +94,17 @@ class OpenAIResponsesService:
         except json.JSONDecodeError:
             pass
         return {"answer": cleaned}
+
+    @staticmethod
+    def _is_quota_error(exc: RateLimitError) -> bool:
+        status_code = getattr(exc, "status_code", None)
+        if status_code != 429:
+            return False
+        body = getattr(exc, "body", None)
+        if isinstance(body, dict):
+            error = body.get("error") or {}
+            if error.get("code") == "insufficient_quota":
+                return True
+            if "quota" in str(error.get("message", "")).lower():
+                return True
+        return "insufficient_quota" in str(exc).lower()
