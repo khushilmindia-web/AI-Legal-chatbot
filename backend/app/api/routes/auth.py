@@ -21,8 +21,10 @@ from backend.app.models.schemas import (
     AuthUser,
     GoogleAuthStatusResponse,
     MessageResponse,
+    PasswordResetConfirmRequest,
     PasswordResetRequest,
 )
+from backend.app.services.mailer import MailDeliveryError, SmtpMailer
 
 
 router = APIRouter(tags=["auth"])
@@ -176,9 +178,39 @@ def logout(request: Request, response: Response) -> MessageResponse:
 
 
 @router.post("/auth/password-reset", response_model=MessageResponse)
-def password_reset(payload: PasswordResetRequest) -> MessageResponse:
-    _ = normalize_email(payload.email)
+def password_reset(payload: PasswordResetRequest, request: Request) -> MessageResponse:
+    settings = request.app.state.settings
+    if not settings.smtp_configured:
+        raise HTTPException(status_code=503, detail="Password reset email is not configured yet.")
+
+    email = normalize_email(payload.email)
+    user = request.app.state.session_store.get_user_by_email(email)
+    if user:
+        token = request.app.state.session_store.create_password_reset_token(
+            user_id=user["id"],
+            ttl_minutes=settings.password_reset_token_ttl_minutes,
+        )
+        reset_url = SmtpMailer(settings).build_password_reset_url(token)
+        try:
+            SmtpMailer(settings).send_password_reset_email(recipient_email=user["email"], reset_url=reset_url)
+        except MailDeliveryError as exc:
+            raise HTTPException(status_code=502, detail="Password reset email could not be sent.") from exc
+
     return MessageResponse(message="If an account with this email exists, a password reset link has been sent.")
+
+
+@router.post("/auth/password-reset/confirm", response_model=MessageResponse)
+def password_reset_confirm(payload: PasswordResetConfirmRequest, request: Request) -> MessageResponse:
+    token = payload.token.strip()
+    password = payload.password.strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="Reset token is required.")
+    if len(password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    user = request.app.state.session_store.reset_password_with_token(token=token, new_password=password)
+    if not user:
+        raise HTTPException(status_code=400, detail="Reset link is invalid or has expired.")
+    return MessageResponse(message="Your password has been reset. Please log in with your new password.")
 
 
 @router.get("/auth/google/status", response_model=GoogleAuthStatusResponse)

@@ -3,6 +3,7 @@ from __future__ import annotations
 from urllib.parse import parse_qs, urlparse
 
 from backend.app.api.routes import auth as auth_routes
+from backend.app.services.mailer import SmtpMailer
 
 
 def test_chat_routes_require_auth(anonymous_client):
@@ -90,3 +91,70 @@ def test_google_callback_sets_session_cookie(monkeypatch, anonymous_client):
     me_response = anonymous_client.get("/auth/me")
     assert me_response.status_code == 200
     assert me_response.json()["email"] == "google@example.com"
+
+
+def test_password_reset_requires_smtp_configuration(anonymous_client):
+    response = anonymous_client.post("/auth/password-reset", json={"email": "missing@example.com"})
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Password reset email is not configured yet."
+
+
+def test_password_reset_request_and_confirm_flow(monkeypatch, anonymous_client):
+    sent_messages: list[tuple[str, str]] = []
+
+    anonymous_client.app.state.settings.smtp_host = "smtp.gmail.com"
+    anonymous_client.app.state.settings.smtp_username = "sender@example.com"
+    anonymous_client.app.state.settings.smtp_password = "app-password"
+    anonymous_client.app.state.settings.smtp_from_email = "sender@example.com"
+    anonymous_client.app.state.settings.app_base_url = "http://testserver"
+
+    anonymous_client.post(
+        "/auth/signup",
+        json={
+            "full_name": "Reset User",
+            "email": "reset@example.com",
+            "password": "oldpassword123",
+            "state": "Gujarat",
+        },
+    )
+    anonymous_client.post("/auth/logout")
+
+    def fake_send_password_reset_email(self, recipient_email: str, reset_url: str) -> None:
+        sent_messages.append((recipient_email, reset_url))
+
+    monkeypatch.setattr(SmtpMailer, "send_password_reset_email", fake_send_password_reset_email)
+
+    request_response = anonymous_client.post("/auth/password-reset", json={"email": "reset@example.com"})
+    assert request_response.status_code == 200
+    assert sent_messages
+
+    recipient_email, reset_url = sent_messages[0]
+    assert recipient_email == "reset@example.com"
+    token = parse_qs(urlparse(reset_url).query)["reset_token"][0]
+
+    confirm_response = anonymous_client.post(
+        "/auth/password-reset/confirm",
+        json={"token": token, "password": "newpassword123"},
+    )
+    assert confirm_response.status_code == 200
+    assert confirm_response.json()["message"] == "Your password has been reset. Please log in with your new password."
+
+    reused_response = anonymous_client.post(
+        "/auth/password-reset/confirm",
+        json={"token": token, "password": "anotherpassword123"},
+    )
+    assert reused_response.status_code == 400
+    assert reused_response.json()["detail"] == "Reset link is invalid or has expired."
+
+    old_login = anonymous_client.post(
+        "/auth/login",
+        json={"email": "reset@example.com", "password": "oldpassword123"},
+    )
+    assert old_login.status_code == 401
+
+    new_login = anonymous_client.post(
+        "/auth/login",
+        json={"email": "reset@example.com", "password": "newpassword123"},
+    )
+    assert new_login.status_code == 200

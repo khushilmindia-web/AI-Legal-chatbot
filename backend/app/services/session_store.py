@@ -46,6 +46,10 @@ def verify_password(password: str, stored_hash: str) -> bool:
     return hmac.compare_digest(actual, expected)
 
 
+def hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
 def serialize_user(row: sqlite3.Row | None) -> dict[str, Any] | None:
     if row is None:
         return None
@@ -120,6 +124,16 @@ class SessionStore:
                     created_at TEXT NOT NULL,
                     FOREIGN KEY(chat_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
                 );
+
+                CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    token_hash TEXT NOT NULL UNIQUE,
+                    created_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    used_at TEXT,
+                    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+                );
                 """
             )
             if not column_exists(connection, "users", "auth_provider"):
@@ -133,6 +147,12 @@ class SessionStore:
             connection.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_auth_sessions_token ON auth_sessions(token)")
             connection.execute("CREATE INDEX IF NOT EXISTS idx_chat_sessions_user_id ON chat_sessions(user_id)")
             connection.execute("CREATE INDEX IF NOT EXISTS idx_chat_messages_chat_id ON chat_messages(chat_id)")
+            connection.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_password_reset_tokens_hash ON password_reset_tokens(token_hash)"
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user_id ON password_reset_tokens(user_id)"
+            )
             connection.commit()
 
     def create_user(self, full_name: str, email: str, password: str, state: str | None = None) -> dict[str, Any]:
@@ -252,6 +272,64 @@ class SessionStore:
         with closing(self._get_connection()) as connection:
             connection.execute("DELETE FROM auth_sessions WHERE token = ?", (token,))
             connection.commit()
+
+    def create_password_reset_token(self, user_id: int, ttl_minutes: int = 30) -> str:
+        token = secrets.token_urlsafe(32)
+        now = utc_now()
+        expires_at = (datetime.now(timezone.utc) + timedelta(minutes=ttl_minutes)).isoformat()
+        token_digest = hash_token(token)
+        with closing(self._get_connection()) as connection:
+            connection.execute("DELETE FROM password_reset_tokens WHERE user_id = ?", (user_id,))
+            connection.execute(
+                """
+                INSERT INTO password_reset_tokens (user_id, token_hash, created_at, expires_at, used_at)
+                VALUES (?, ?, ?, ?, NULL)
+                """,
+                (user_id, token_digest, now, expires_at),
+            )
+            connection.commit()
+        return token
+
+    def reset_password_with_token(self, token: str, new_password: str) -> dict[str, Any] | None:
+        token_digest = hash_token(token)
+        now = datetime.now(timezone.utc)
+        used_at = now.isoformat()
+        with closing(self._get_connection()) as connection:
+            row = connection.execute(
+                """
+                SELECT user_id, expires_at, used_at
+                FROM password_reset_tokens
+                WHERE token_hash = ?
+                """,
+                (token_digest,),
+            ).fetchone()
+            if row is None:
+                return None
+            if row["used_at"]:
+                return None
+            expires_at = datetime.fromisoformat(row["expires_at"])
+            if expires_at < now:
+                return None
+            connection.execute(
+                """
+                UPDATE users
+                SET password_hash = ?,
+                    auth_provider = CASE
+                        WHEN google_sub IS NULL THEN 'local'
+                        ELSE 'both'
+                    END
+                WHERE id = ?
+                """,
+                (hash_password(new_password), row["user_id"]),
+            )
+            connection.execute(
+                "UPDATE password_reset_tokens SET used_at = ? WHERE token_hash = ?",
+                (used_at, token_digest),
+            )
+            connection.execute("DELETE FROM auth_sessions WHERE user_id = ?", (row["user_id"],))
+            user_row = connection.execute("SELECT * FROM users WHERE id = ?", (row["user_id"],)).fetchone()
+            connection.commit()
+        return serialize_user(user_row)
 
     def create_session(self, title: str, user_id: int | None = None) -> dict[str, Any]:
         now = utc_now()

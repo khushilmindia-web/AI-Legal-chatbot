@@ -87,13 +87,24 @@
         <div id="passwordResetModal" class="modal" aria-hidden="true">
             <div class="modal-content">
                 <span class="close">&times;</span>
-                <h2>Reset Password</h2>
+                <h2 id="passwordResetTitle">Reset Password</h2>
                 <form id="passwordResetForm" class="auth-form" method="post" action="javascript:void(0)" novalidate>
                     <label>
                         Email
                         <input id="resetEmail" type="email" placeholder="Enter your email" required>
                     </label>
                     <button class="auth-submit" type="submit">Send Reset Link</button>
+                </form>
+                <form id="passwordResetConfirmForm" class="auth-form hidden" method="post" action="javascript:void(0)" novalidate>
+                    <label>
+                        New Password
+                        <input id="resetNewPassword" type="password" placeholder="Enter a new password" autocomplete="new-password" minlength="8" required>
+                    </label>
+                    <label>
+                        Confirm Password
+                        <input id="resetConfirmPassword" type="password" placeholder="Confirm your new password" autocomplete="new-password" minlength="8" required>
+                    </label>
+                    <button class="auth-submit" type="submit">Update Password</button>
                 </form>
                 <div id="resetMessage" class="auth-message"></div>
             </div>

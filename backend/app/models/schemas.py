@@ -88,6 +88,11 @@ class PasswordResetRequest(BaseModel):
     email: str
 
 
+class PasswordResetConfirmRequest(BaseModel):
+    token: str
+    password: str
+
+
 class GoogleAuthStatusResponse(BaseModel):
     configured: bool
     client_id_configured: bool = False

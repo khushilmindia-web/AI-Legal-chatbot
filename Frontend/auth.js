@@ -8,7 +8,9 @@ const googleLoginBtn = document.getElementById('googleLoginBtn');
 const forgotPasswordLink = document.getElementById('forgotPasswordLink');
 const passwordResetModal = document.getElementById('passwordResetModal');
 const passwordResetForm = document.getElementById('passwordResetForm');
+const passwordResetConfirmForm = document.getElementById('passwordResetConfirmForm');
 const resetMessage = document.getElementById('resetMessage');
+const passwordResetTitle = document.getElementById('passwordResetTitle');
 const closeModal = document.getElementsByClassName('close')[0];
 
 const BASE_API_URL = window.APP_CONFIG?.apiBaseUrl ?? '';
@@ -19,6 +21,7 @@ const SIGNUP_URL = `${BASE_API_URL}/auth/signup`;
 const GOOGLE_LOGIN_URL = `${BASE_API_URL}/auth/google/login`;
 const GOOGLE_STATUS_URL = `${BASE_API_URL}/auth/google/status`;
 const PASSWORD_RESET_URL = `${BASE_API_URL}/auth/password-reset`;
+const PASSWORD_RESET_CONFIRM_URL = `${BASE_API_URL}/auth/password-reset/confirm`;
 const ME_URL = `${BASE_API_URL}/auth/me`;
 const TOKEN_KEY = 'legalAuthToken';
 const USER_KEY = 'legalAuthUser';
@@ -42,8 +45,9 @@ window.addEventListener('load', async () => {
     populateStates();
     bindEvents();
     await checkGoogleAuthStatus();
+    initializePasswordResetMode();
     const handledLegacyCallback = await handleOAuthCallback();
-    if (!handledLegacyCallback) {
+    if (!handledLegacyCallback && !getResetTokenFromUrl()) {
         await redirectIfAuthenticated();
     }
 });
@@ -83,6 +87,7 @@ function bindEvents() {
     loginForm.addEventListener('submit', handleLogin);
     signupForm.addEventListener('submit', handleSignup);
     passwordResetForm.addEventListener('submit', handlePasswordReset);
+    passwordResetConfirmForm.addEventListener('submit', handlePasswordResetConfirm);
 
     window.addEventListener('click', (event) => {
         if (event.target === passwordResetModal) {
@@ -322,6 +327,7 @@ async function handleSignup(event) {
 
 function openPasswordResetModal(event) {
     event.preventDefault();
+    setPasswordResetMode(getResetTokenFromUrl() ? 'confirm' : 'request');
     passwordResetModal.style.display = 'grid';
     passwordResetModal.setAttribute('aria-hidden', 'false');
     resetMessage.textContent = '';
@@ -332,6 +338,37 @@ function closePasswordResetModal() {
     passwordResetModal.style.display = 'none';
     passwordResetModal.setAttribute('aria-hidden', 'true');
     passwordResetForm.reset();
+    passwordResetConfirmForm.reset();
+    if (!getResetTokenFromUrl()) {
+        setPasswordResetMode('request');
+    }
+}
+
+function getResetTokenFromUrl() {
+    return new URLSearchParams(window.location.search).get('reset_token');
+}
+
+function clearResetQueryParams() {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('reset_token');
+    window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
+}
+
+function setPasswordResetMode(mode) {
+    const isConfirmMode = mode === 'confirm';
+    passwordResetTitle.textContent = isConfirmMode ? 'Choose a New Password' : 'Reset Password';
+    passwordResetForm.classList.toggle('hidden', isConfirmMode);
+    passwordResetConfirmForm.classList.toggle('hidden', !isConfirmMode);
+}
+
+function initializePasswordResetMode() {
+    if (getResetTokenFromUrl()) {
+        setPasswordResetMode('confirm');
+        passwordResetModal.style.display = 'grid';
+        passwordResetModal.setAttribute('aria-hidden', 'false');
+    } else {
+        setPasswordResetMode('request');
+    }
 }
 
 async function handlePasswordReset(event) {
@@ -345,6 +382,42 @@ async function handlePasswordReset(event) {
         setTimeout(() => {
             closePasswordResetModal();
         }, 2200);
+    } catch (error) {
+        showResetMessage(error.message, true);
+    }
+}
+
+async function handlePasswordResetConfirm(event) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const token = getResetTokenFromUrl();
+    const password = document.getElementById('resetNewPassword').value;
+    const confirmPassword = document.getElementById('resetConfirmPassword').value;
+
+    if (!token) {
+        showResetMessage('Reset link is missing or invalid.', true);
+        return;
+    }
+    if (password.length < 8) {
+        showResetMessage('Password must be at least 8 characters.', true);
+        return;
+    }
+    if (password !== confirmPassword) {
+        showResetMessage('Passwords do not match.', true);
+        return;
+    }
+
+    try {
+        const data = await submitJson(PASSWORD_RESET_CONFIRM_URL, { token, password });
+        showResetMessage(data.message || 'Your password has been reset.');
+        clearResetQueryParams();
+        setTimeout(() => {
+            closePasswordResetModal();
+            setPasswordResetMode('request');
+            switchTab('login');
+            showMessage('Password updated. Please log in with your new password.');
+        }, 1500);
     } catch (error) {
         showResetMessage(error.message, true);
     }

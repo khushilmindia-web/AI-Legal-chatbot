@@ -43,6 +43,15 @@ class Settings(BaseSettings):
     auth_session_duration_days: int = Field(default=14, alias="AUTH_SESSION_DURATION_DAYS")
     frontend_auth_path: str = Field(default="/frontend/auth.html", alias="FRONTEND_AUTH_PATH")
     frontend_app_path: str = Field(default="/frontend/index.html", alias="FRONTEND_APP_PATH")
+    app_base_url: str = Field(default="http://127.0.0.1:8000", alias="APP_BASE_URL")
+    smtp_host: str = Field(default="", alias="SMTP_HOST")
+    smtp_port: int = Field(default=587, alias="SMTP_PORT")
+    smtp_username: str = Field(default="", alias="SMTP_USERNAME")
+    smtp_password: str = Field(default="", alias="SMTP_PASSWORD")
+    smtp_from_email: str = Field(default="", alias="SMTP_FROM_EMAIL")
+    smtp_from_name: str = Field(default="Lawyer AI", alias="SMTP_FROM_NAME")
+    smtp_use_tls: bool = Field(default=True, alias="SMTP_USE_TLS")
+    password_reset_token_ttl_minutes: int = Field(default=30, alias="PASSWORD_RESET_TOKEN_TTL_MINUTES")
 
     @field_validator("debug", mode="before")
     @classmethod
@@ -87,6 +96,16 @@ class Settings(BaseSettings):
     @property
     def prompt_path(self) -> Path:
         return PROMPT_PATH
+
+    @property
+    def smtp_configured(self) -> bool:
+        required = [
+            self.smtp_host.strip(),
+            self.smtp_username.strip(),
+            self.smtp_password.strip(),
+            self.smtp_from_email.strip(),
+        ]
+        return all(required)
 
 
 @lru_cache(maxsize=1)
