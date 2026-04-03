@@ -16,9 +16,9 @@
    - `data/CaseLaw`
 5. Restart the backend if it is not running.
 6. Run the ingestion endpoint:
-   - `http://127.0.0.1:8000/debug/ingest`
+   - `http://127.0.0.1:5000/debug/ingest`
 7. Verify vector stores:
-   - `http://127.0.0.1:8000/debug/status`
+   - `http://127.0.0.1:5000/debug/status`
 
 ## Current blocker
 This workspace currently does not contain real statute, state-rule, or case-law source files, so a meaningful ingestion run cannot be completed yet.

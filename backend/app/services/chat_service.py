@@ -54,15 +54,26 @@ class ChatService:
             state=resolved_state,
             domain=domain,
         )
-        citations = [chunk.source for chunk in retrieval_chunks[:3]]
+        citations = self._build_citations(retrieval_chunks)
         grounded_context = "\n\n".join(
             [f"Source: {chunk.source}\n{chunk.text[:1200]}" for chunk in retrieval_chunks[:4]]
         )
+        grounded_sources = [
+            {
+                "source": chunk.source,
+                "title": (chunk.metadata or {}).get("title", chunk.source),
+                "type": (chunk.metadata or {}).get("type", "unknown"),
+                "url": (chunk.metadata or {}).get("url"),
+                "docsource": (chunk.metadata or {}).get("docsource"),
+            }
+            for chunk in retrieval_chunks[:4]
+        ]
         prompt = self._build_prompt(
             request=request,
             domain=domain,
             resolved_state=resolved_state,
             grounded_context=grounded_context,
+            grounded_sources=grounded_sources,
             follow_up_question=follow_up_question,
             immediate_help=immediate_help,
             extraction_warnings=extraction_warnings or [],
@@ -174,6 +185,7 @@ class ChatService:
         domain: str,
         resolved_state: str,
         grounded_context: str,
+        grounded_sources: list[dict[str, str | None]],
         follow_up_question: str | None,
         immediate_help: bool,
         extraction_warnings: list[str],
@@ -188,6 +200,7 @@ class ChatService:
             "immediate_help": immediate_help,
             "follow_up_question": follow_up_question,
             "grounded_context": grounded_context,
+            "grounded_sources": grounded_sources,
             "extraction_warnings": extraction_warnings,
             "required_output": {
                 "answer": "string",
@@ -206,6 +219,24 @@ class ChatService:
             "Use only grounded context when citing law or authorities. If uncertain, say so clearly.\n\n"
             + json.dumps(guidance, ensure_ascii=False, indent=2)
         )
+
+    def _build_citations(self, retrieval_chunks: list) -> list[str]:
+        citations: list[str] = []
+        for chunk in retrieval_chunks[:5]:
+            metadata = chunk.metadata or {}
+            if metadata.get("type") == "indiankanoon":
+                title = metadata.get("title", chunk.source)
+                url = metadata.get("url")
+                docsource = metadata.get("docsource")
+                parts = [title]
+                if docsource:
+                    parts.append(docsource)
+                if url:
+                    parts.append(url)
+                citations.append(" | ".join(parts))
+            else:
+                citations.append(chunk.source)
+        return citations
 
     def _normalize_model_payload(
         self,

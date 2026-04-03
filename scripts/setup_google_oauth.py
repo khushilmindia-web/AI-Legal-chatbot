@@ -39,7 +39,7 @@ def main():
 
     print("\n5. 🌐 Add authorized redirect URIs:")
     print("   - Authorized redirect URIs: Add this URL:")
-    print("     http://127.0.0.1:8000/auth/google/callback")
+    print("     http://127.0.0.1:5000/auth/google/callback")
     print("   - Click 'Create'")
 
     input("\n   Press Enter when credentials are created...")

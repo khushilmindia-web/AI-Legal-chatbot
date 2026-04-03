@@ -17,4 +17,4 @@ Suggested workflow:
 4. Run:
    - `python -m backend.corpus_importer`
 5. Then run:
-   - `http://127.0.0.1:8000/debug/ingest`
+   - `http://127.0.0.1:5000/debug/ingest`

@@ -79,7 +79,7 @@ init_db()
 
 CORS_ALLOW_ORIGINS = os.environ.get(
     "CORS_ALLOW_ORIGINS",
-    "http://localhost:5500,http://127.0.0.1:5500,http://localhost:8000,http://127.0.0.1:8000",
+    "http://localhost:5000,http://127.0.0.1:5000",
 )
 
 def parse_cors_origins(value: str) -> list[str]:
@@ -91,7 +91,7 @@ allow_credentials = "*" not in origins
 # TODO: lock this down in production.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins or ["http://127.0.0.1:8000"],
+    allow_origins=origins or ["http://127.0.0.1:5000"],
     allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -209,9 +209,9 @@ def hash_text(text: str) -> str:
 GOOGLE_OAUTH_STATE_CACHE = TTLCache(maxsize=128, ttl=600)
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "").strip()
-GOOGLE_REDIRECT_URI = os.environ.get("GOOGLE_REDIRECT_URI", "http://127.0.0.1:8000/auth/google/callback").strip()
-FRONTEND_AUTH_URL = os.environ.get("FRONTEND_AUTH_URL", "http://127.0.0.1:8000/frontend/auth.html").strip()
-FRONTEND_APP_URL = os.environ.get("FRONTEND_APP_URL", "http://127.0.0.1:8000/frontend/Index.html").strip()
+GOOGLE_REDIRECT_URI = os.environ.get("GOOGLE_REDIRECT_URI", "http://127.0.0.1:5000/auth/google/callback").strip()
+FRONTEND_AUTH_URL = os.environ.get("FRONTEND_AUTH_URL", "http://127.0.0.1:5000/frontend/auth.html").strip()
+FRONTEND_APP_URL = os.environ.get("FRONTEND_APP_URL", "http://127.0.0.1:5000/frontend/index.html").strip()
 EXPOSE_RESET_TOKEN_IN_RESPONSE = os.environ.get("EXPOSE_RESET_TOKEN_IN_RESPONSE", "true").strip().lower() == "true"
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -3767,7 +3767,7 @@ if __name__ == "__main__":
     try:
         print("Starting server...")
         import uvicorn
-        uvicorn.run(app, host="0.0.0.0", port=8000)
+        uvicorn.run(app, host="0.0.0.0", port=5000)
     except Exception as e:
         print(f"Error starting server: {e}")
         import traceback

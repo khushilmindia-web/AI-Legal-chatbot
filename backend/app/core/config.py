@@ -4,7 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from dotenv import load_dotenv
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     openai_timeout_seconds: float = Field(default=45.0, alias="OPENAI_TIMEOUT_SECONDS")
     openai_max_retries: int = Field(default=2, alias="OPENAI_MAX_RETRIES")
     cors_origins_raw: str = Field(
-        default="http://127.0.0.1:8000,http://localhost:8000",
+        default="http://127.0.0.1:5000,http://localhost:5000",
         alias="CORS_ALLOW_ORIGINS",
     )
     openai_vector_store_id: str = Field(default="", alias="OPENAI_VECTOR_STORE_ID")
@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     auth_session_duration_days: int = Field(default=14, alias="AUTH_SESSION_DURATION_DAYS")
     frontend_auth_path: str = Field(default="/frontend/auth.html", alias="FRONTEND_AUTH_PATH")
     frontend_app_path: str = Field(default="/frontend/index.html", alias="FRONTEND_APP_PATH")
-    app_base_url: str = Field(default="http://127.0.0.1:8000", alias="APP_BASE_URL")
+    app_base_url: str = Field(default="http://127.0.0.1:5000", alias="APP_BASE_URL")
     smtp_host: str = Field(default="", alias="SMTP_HOST")
     smtp_port: int = Field(default=587, alias="SMTP_PORT")
     smtp_username: str = Field(default="", alias="SMTP_USERNAME")
@@ -52,6 +52,16 @@ class Settings(BaseSettings):
     smtp_from_name: str = Field(default="Lawyer AI", alias="SMTP_FROM_NAME")
     smtp_use_tls: bool = Field(default=True, alias="SMTP_USE_TLS")
     password_reset_token_ttl_minutes: int = Field(default=30, alias="PASSWORD_RESET_TOKEN_TTL_MINUTES")
+    indiankanoon_api_base_url: str = Field(
+        default="https://api.indiankanoon.org",
+        alias="INDIANKANOON_API_BASE_URL",
+    )
+    indiankanoon_api_token: str = Field(
+        default="",
+        alias="INDIANKANOON_API_TOKEN",
+        validation_alias=AliasChoices("INDIANKANOON_API_TOKEN", "INDIA_KANOON_API_TOKEN"),
+    )
+    indiankanoon_timeout_seconds: float = Field(default=20.0, alias="INDIANKANOON_TIMEOUT_SECONDS")
 
     @field_validator("debug", mode="before")
     @classmethod
@@ -106,6 +116,10 @@ class Settings(BaseSettings):
             self.smtp_from_email.strip(),
         ]
         return all(required)
+
+    @property
+    def indiankanoon_configured(self) -> bool:
+        return bool(self.indiankanoon_api_token.strip())
 
 
 @lru_cache(maxsize=1)

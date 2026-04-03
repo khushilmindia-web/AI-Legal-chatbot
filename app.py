@@ -48,10 +48,8 @@ from database import (
 init_db()
 
 origins = [
-    "http://localhost:5500",
-    "http://127.0.0.1:5500",
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
+    "http://localhost:5000",
+    "http://127.0.0.1:5000",
 ]
 
 # Development workaround for origin mismatch (avoids 405 on CORS preflight from different dev hosts)
@@ -151,9 +149,9 @@ def hash_text(text: str) -> str:
 GOOGLE_OAUTH_STATE_CACHE = TTLCache(maxsize=128, ttl=600)
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "").strip()
-GOOGLE_REDIRECT_URI = os.environ.get("GOOGLE_REDIRECT_URI", "http://127.0.0.1:8000/auth/google/callback").strip()
-FRONTEND_AUTH_URL = os.environ.get("FRONTEND_AUTH_URL", "http://127.0.0.1:8000/frontend/auth.html").strip()
-FRONTEND_APP_URL = os.environ.get("FRONTEND_APP_URL", "http://127.0.0.1:8000/frontend/Index.html").strip()
+GOOGLE_REDIRECT_URI = os.environ.get("GOOGLE_REDIRECT_URI", "http://127.0.0.1:5000/auth/google/callback").strip()
+FRONTEND_AUTH_URL = os.environ.get("FRONTEND_AUTH_URL", "http://127.0.0.1:5000/frontend/auth.html").strip()
+FRONTEND_APP_URL = os.environ.get("FRONTEND_APP_URL", "http://127.0.0.1:5000/frontend/Index.html").strip()
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"

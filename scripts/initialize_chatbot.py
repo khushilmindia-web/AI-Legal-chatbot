@@ -149,12 +149,12 @@ def main():
 
     logger.info("You can now:")
     logger.info("  - Run: python App.py")
-    logger.info("  - Access: http://127.0.0.1:8000 (API)")
+    logger.info("  - Access: http://127.0.0.1:5000 (API)")
     logger.info("  - Frontend directory: %s", FRONTEND_DIR)
 
     logger.info("\nDebug endpoints:")
-    logger.info("  - GET http://127.0.0.1:8000/debug/status (Check vector stores)")
-    logger.info("  - GET http://127.0.0.1:8000/debug/ingest (Manual re-ingestion)")
+    logger.info("  - GET http://127.0.0.1:5000/debug/status (Check vector stores)")
+    logger.info("  - GET http://127.0.0.1:5000/debug/ingest (Manual re-ingestion)")
     return True
 
 if __name__ == "__main__":

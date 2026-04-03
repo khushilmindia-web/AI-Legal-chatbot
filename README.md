@@ -84,12 +84,12 @@ Then edit `.env` and set `OPENAI_API_KEY`.
 Start the backend:
 
 ```powershell
-.\venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
+.\venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 5000 --reload
 ```
 
 Open the frontend in the browser:
 
-- `http://127.0.0.1:8000/frontend/index.html`
+- `http://127.0.0.1:5000/frontend/index.html`
 
 ## Environment Variables
 

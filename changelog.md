@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-04-03
+
+### Changed
+- Completed the local runtime migration to `http://127.0.0.1:5000` across the active FastAPI app, env defaults, startup helpers, README instructions, and remaining legacy fallback entrypoints.
+- Updated `backend/legacy_app_v1.py` so its fallback frontend URL now uses lowercase `/frontend/index.html` and its direct `uvicorn` launcher no longer points back to port `8000`.
+
+### Verified
+- Verified the active app responds successfully on `http://127.0.0.1:5000/health`.
+- Verified `http://127.0.0.1:5000/frontend/auth.html` loads successfully from the FastAPI-served frontend.
+- Verified unauthenticated access to `http://127.0.0.1:5000/frontend/index.html` is still protected and redirects before loading the app workspace.
+- Verified the active runtime/config files no longer contain remaining `5500`, `8000`, or `8001` project-port dependencies outside historical changelog notes and a non-port numeric text limit in `backend/app/services/file_extractor.py`.
+
+### Pending
+- Resolve the external auto-restarting listener on `127.0.0.1:8000`, which is still outside this repo and remains the reason earlier manual browser checks on `8000` were unreliable.
+
 ## 2026-04-02
 
 ### Added
