@@ -11,6 +11,9 @@
 - Verified `http://127.0.0.1:5000/frontend/auth.html` loads successfully from the FastAPI-served frontend.
 - Verified unauthenticated access to `http://127.0.0.1:5000/frontend/index.html` is still protected and redirects before loading the app workspace.
 - Verified the active runtime/config files no longer contain remaining `5500`, `8000`, or `8001` project-port dependencies outside historical changelog notes and a non-port numeric text limit in `backend/app/services/file_extractor.py`.
+- Verified the live `127.0.0.1:5000` auth flow end-to-end for signup, logout, login, and `/auth/me`.
+- Verified the live `127.0.0.1:5000` chat flow for `/chat`, `/chat/history`, and `/chat/{chat_id}/messages`.
+- Verified the live `127.0.0.1:5000` forgot-password flow for `/auth/password-reset`, persisted reset-token hashing in SQLite, `/auth/password-reset/confirm`, old-password rejection, and new-password login.
 
 ### Pending
 - Resolve the external auto-restarting listener on `127.0.0.1:8000`, which is still outside this repo and remains the reason earlier manual browser checks on `8000` were unreliable.

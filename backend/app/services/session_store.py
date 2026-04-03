@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
 import secrets
 import sqlite3
 import tempfile
@@ -10,9 +11,11 @@ from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote
 
 
 PASSWORD_HASH_ITERATIONS = 390000
+logger = logging.getLogger(__name__)
 
 
 def utc_now() -> str:
@@ -46,8 +49,19 @@ def verify_password(password: str, stored_hash: str) -> bool:
     return hmac.compare_digest(actual, expected)
 
 
+def normalize_token(token: str) -> str:
+    normalized = str(token or "").strip().strip("\"'")
+    for _ in range(2):
+        decoded = unquote(normalized)
+        if decoded == normalized:
+            break
+        normalized = decoded.strip().strip("\"'")
+    return normalized
+
+
 def hash_token(token: str) -> str:
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+    normalized = normalize_token(token)
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
 def serialize_user(row: sqlite3.Row | None) -> dict[str, Any] | None:
@@ -288,10 +302,18 @@ class SessionStore:
                 (user_id, token_digest, now, expires_at),
             )
             connection.commit()
+        logger.info(
+            "Created password reset token user_id=%s token_hash_prefix=%s expires_at=%s db_path=%s",
+            user_id,
+            token_digest[:12],
+            expires_at,
+            self.db_path,
+        )
         return token
 
     def reset_password_with_token(self, token: str, new_password: str) -> dict[str, Any] | None:
-        token_digest = hash_token(token)
+        normalized_token = normalize_token(token)
+        token_digest = hash_token(normalized_token)
         now = datetime.now(timezone.utc)
         used_at = now.isoformat()
         with closing(self._get_connection()) as connection:
@@ -304,11 +326,29 @@ class SessionStore:
                 (token_digest,),
             ).fetchone()
             if row is None:
+                logger.warning(
+                    "Password reset rejected: token not found token_hash_prefix=%s db_path=%s",
+                    token_digest[:12],
+                    self.db_path,
+                )
                 return None
             if row["used_at"]:
+                logger.warning(
+                    "Password reset rejected: token already used user_id=%s token_hash_prefix=%s used_at=%s",
+                    row["user_id"],
+                    token_digest[:12],
+                    row["used_at"],
+                )
                 return None
             expires_at = datetime.fromisoformat(row["expires_at"])
             if expires_at < now:
+                logger.warning(
+                    "Password reset rejected: token expired user_id=%s token_hash_prefix=%s expires_at=%s now=%s",
+                    row["user_id"],
+                    token_digest[:12],
+                    row["expires_at"],
+                    used_at,
+                )
                 return None
             connection.execute(
                 """
@@ -329,6 +369,11 @@ class SessionStore:
             connection.execute("DELETE FROM auth_sessions WHERE user_id = ?", (row["user_id"],))
             user_row = connection.execute("SELECT * FROM users WHERE id = ?", (row["user_id"],)).fetchone()
             connection.commit()
+        logger.info(
+            "Password reset succeeded user_id=%s token_hash_prefix=%s",
+            row["user_id"],
+            token_digest[:12],
+        )
         return serialize_user(user_row)
 
     def create_session(self, title: str, user_id: int | None = None) -> dict[str, Any]:

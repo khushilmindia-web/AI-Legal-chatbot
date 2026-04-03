@@ -237,6 +237,7 @@ async function handleOAuthCallback() {
         const errorMessages = {
             google_auth_not_configured: 'Google sign-in is not configured. Please use email/password login.',
             google_auth_timeout: 'Google sign-in timed out. Please try again.',
+            google_auth_config_invalid: 'Google sign-in is misconfigured. Check the Google client credentials and authorized redirect URI.',
             google_auth_request_failed: 'Network error during Google sign-in. Please try again.',
             google_auth_state_invalid: 'Google sign-in state expired. Please try again.',
             google_auth_incomplete: 'Google sign-in did not complete. Please try again.',

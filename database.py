@@ -5,15 +5,12 @@ import sqlite3
 from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-
 import bcrypt
-
 
 BASE_DIR = Path(__file__).resolve().parent
 DB_DIR = BASE_DIR / "db"
 DB_PATH = DB_DIR / "app.db"
 SESSION_DURATION_DAYS = 14
-
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import secrets
 import time
 from urllib.parse import urlencode
@@ -28,6 +29,7 @@ from backend.app.services.mailer import MailDeliveryError, SmtpMailer
 
 
 router = APIRouter(tags=["auth"])
+logger = logging.getLogger(__name__)
 
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -35,6 +37,12 @@ GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
 GOOGLE_SCOPES = "openid email profile"
 GOOGLE_STATE_TTL_SECONDS = 600
 GOOGLE_OAUTH_STATE_CACHE: dict[str, float] = {}
+
+
+def google_oauth_http_request(method: str, url: str, **kwargs):
+    with requests.Session() as session:
+        session.trust_env = False
+        return session.request(method=method, url=url, **kwargs)
 
 
 def normalize_email(email: str) -> str:
@@ -78,7 +86,8 @@ def cleanup_google_states() -> None:
 
 def exchange_google_code_for_tokens(request: Request, code: str) -> dict:
     settings = request.app.state.settings
-    response = requests.post(
+    response = google_oauth_http_request(
+        "POST",
         GOOGLE_TOKEN_URL,
         data={
             "code": code,
@@ -89,16 +98,30 @@ def exchange_google_code_for_tokens(request: Request, code: str) -> dict:
         },
         timeout=20,
     )
+    if not response.ok:
+        logger.warning(
+            "Google token exchange failed status=%s redirect_uri=%s body=%s",
+            response.status_code,
+            google_redirect_uri(request),
+            response.text[:500],
+        )
     response.raise_for_status()
     return response.json()
 
 
 def fetch_google_userinfo(access_token: str) -> dict:
-    response = requests.get(
+    response = google_oauth_http_request(
+        "GET",
         GOOGLE_USERINFO_URL,
         headers={"Authorization": f"Bearer {access_token}"},
         timeout=20,
     )
+    if not response.ok:
+        logger.warning(
+            "Google userinfo fetch failed status=%s body=%s",
+            response.status_code,
+            response.text[:500],
+        )
     response.raise_for_status()
     profile = response.json()
     if not profile.get("sub") or not profile.get("email"):
@@ -270,8 +293,14 @@ def google_callback(request: Request, code: str | None = None, state: str | None
         set_auth_cookie(redirect, request, app_token)
         return redirect
     except requests.Timeout:
+        logger.warning("Google OAuth callback timed out redirect_uri=%s", google_redirect_uri(request))
         return RedirectResponse(url=frontend_auth_url(request, error="google_auth_timeout"))
+    except requests.HTTPError as exc:
+        logger.warning("Google OAuth callback HTTP error: %s", exc)
+        return RedirectResponse(url=frontend_auth_url(request, error="google_auth_config_invalid"))
     except requests.RequestException:
+        logger.warning("Google OAuth callback request exception", exc_info=True)
         return RedirectResponse(url=frontend_auth_url(request, error="google_auth_request_failed"))
     except Exception:
+        logger.exception("Google OAuth callback failed unexpectedly")
         return RedirectResponse(url=frontend_auth_url(request, error="google_auth_failed"))
