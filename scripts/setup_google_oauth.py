@@ -79,7 +79,7 @@ def main():
 
         print("\n✅ Success! Google OAuth credentials updated in .env file")
         print("\n🔄 Restart your server:")
-        print("   python -m uvicorn App:app --reload")
+        print("   python -m uvicorn backend.main:app --host 127.0.0.1 --port 5000 --reload")
         print("\n🎉 Google sign-in should now work!")
 
     except Exception as e:

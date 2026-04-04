@@ -17,6 +17,7 @@ Use this file as the single source of truth for manual task entry and sequential
 11. If a task is blocked, attempt resolution for up to 3 minutes before marking it `Blocked`.
 12. Retry a `Blocked` task up to 3 times only.
 13. If still blocked after 3 attempts, leave it with a clear reason and do not retry unless conditions change.
+14. If any command runs for more than 3 minutes, stop it and move forward with the next safe step.
 
 ## Status Legend
 
@@ -36,5 +37,6 @@ Use this file as the single source of truth for manual task entry and sequential
 | 5 | Verify SMTP setup and confirm successful email delivery using test email | Completed | Current Gmail-backed SMTP config sent a reset email successfully through the backend mailer |
 | 6 | Validate "Forgot Password" button functionality in `index.html` including event binding and API trigger | Completed | Forgot-password UI is served from `Frontend/auth.html`; link, modal forms, event bindings, and API targets are present and live |
 | 7 | Test complete forgot-password workflow (frontend -> backend -> SMTP -> email delivery) | Completed | Verified signup, reset request, reset link/token capture, password reset confirm, old-password rejection, new-password login, and reused-token rejection |
-| 8 | Resolve the rogue local listener on `127.0.0.1:8000` so the browser cannot hit the wrong backend | Blocked | PID `9744` can be terminated but immediately respawns and reclaims `8000`; this appears to be an external auto-restarting process outside the repo |
-| 9 | Migrate the project frontend and backend to port `5000` and ensure all internal connections use only `127.0.0.1:5000` with no remaining dependency on any other project port | Completed | Active runtime, env defaults, startup scripts, README, and legacy fallback entrypoints now point to `127.0.0.1:5000`; live `/health`, `/frontend/auth.html`, and protected `/frontend/index.html` checks passed |
+| 8 | Migrate the project frontend and backend to port `5000` and ensure all internal connections use only `127.0.0.1:5000` with no remaining dependency on any other project port | Completed | Active runtime, env defaults, startup scripts, README, and legacy fallback entrypoints now point to `127.0.0.1:5000`; live `/health`, `/frontend/auth.html`, and protected `/frontend/index.html` checks passed |
+| 9 | Fix the port `5000` bind/startup issues, align all startup paths to `127.0.0.1:5000`, and verify health/frontend reachability | Completed | Added the 3-minute command timeout rule, cleaned stale repo background processes, updated root startup to `127.0.0.1:5000`, and verified `/health` plus `/frontend/auth.html` on the active `5000` instance |
+| 10 | Modify chatbot to fetch responses ONLY from India Kanoon API using token auth and disable/comment any LLM-based or other answer generation | Completed | Active `ChatService` now builds chat answers only from India Kanoon `/search/` results, returns the exact no-result fallback, preserves auth/history/upload flows, and was verified with a direct FastAPI `TestClient` smoke harness because pytest remains blocked by the repo's existing Windows temp-permission issue |

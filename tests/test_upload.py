@@ -16,7 +16,8 @@ def test_chat_upload_accepts_text_file(client):
     assert response.status_code == 200
     payload = response.json()
     assert payload["chat_id"] > 0
-    assert "general legal information" in payload["answer"].lower()
+    assert "India Kanoon search results:" in payload["answer"]
+    assert payload["warnings"]
 
 
 def test_file_extractor_reads_text_file(tmp_path):

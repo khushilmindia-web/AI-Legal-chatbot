@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-import json
 import re
 from datetime import datetime
+
+import requests
 
 from backend.app.core.config import Settings
 from backend.app.models.schemas import ChatRequest, ChatUploadResponse, InternalChatResult
 from backend.app.services.file_extractor import FileExtractionService
-from backend.app.services.openai_service import OpenAIResponsesService
-from backend.app.services.retrieval import RetrievalService
+from backend.app.services.indiankanoon_service import IndianKanoonService
 from backend.app.services.session_store import SessionStore
 from backend.app.utils.request_context import get_logger
 
@@ -20,9 +20,8 @@ class ChatService:
     def __init__(self, settings: Settings, store: SessionStore) -> None:
         self.settings = settings
         self.store = store
-        self.retrieval = RetrievalService(settings)
         self.extractor = FileExtractionService(settings)
-        self.openai = OpenAIResponsesService(settings)
+        self.indiankanoon = IndianKanoonService(settings)
 
     async def handle_chat(
         self,
@@ -43,59 +42,18 @@ class ChatService:
         elif self.store.get_session(chat_id, user_id=user_id) is None:
             raise ValueError("Chat session not found")
 
-        history = self.store.get_messages(chat_id, user_id=user_id)
         domain = self._detect_domain(message)
         resolved_state = request.state or fallback_state or self.settings.default_state
-        immediate_help = self._should_help_first(message, domain)
-        follow_up_question = None if immediate_help else self._choose_follow_up(request, domain, message, resolved_state)
-        retrieval_chunks = self.retrieval.get_context(
+        warnings = list(extraction_warnings or [])
+        if uploaded_texts:
+            warnings.append("Uploaded files were received but chat answers now use only India Kanoon API search results.")
+
+        search_results = self._search_indiankanoon_results(
             query=message,
-            uploaded_texts=uploaded_texts or [],
             state=resolved_state,
             domain=domain,
         )
-        citations = self._build_citations(retrieval_chunks)
-        grounded_context = "\n\n".join(
-            [f"Source: {chunk.source}\n{chunk.text[:1200]}" for chunk in retrieval_chunks[:4]]
-        )
-        grounded_sources = [
-            {
-                "source": chunk.source,
-                "title": (chunk.metadata or {}).get("title", chunk.source),
-                "type": (chunk.metadata or {}).get("type", "unknown"),
-                "url": (chunk.metadata or {}).get("url"),
-                "docsource": (chunk.metadata or {}).get("docsource"),
-            }
-            for chunk in retrieval_chunks[:4]
-        ]
-        prompt = self._build_prompt(
-            request=request,
-            domain=domain,
-            resolved_state=resolved_state,
-            grounded_context=grounded_context,
-            grounded_sources=grounded_sources,
-            follow_up_question=follow_up_question,
-            immediate_help=immediate_help,
-            extraction_warnings=extraction_warnings or [],
-        )
-
-        conversation = [{"role": item["role"], "content": item["content"]} for item in history[-8:]]
-        try:
-            model_payload = self.openai.generate_json(prompt, conversation=conversation)
-            internal = self._normalize_model_payload(model_payload, domain, citations, extraction_warnings or [])
-        except Exception as exc:
-            logger.error("model generation failed error=%s", exc)
-            internal = InternalChatResult(
-                answer="I could not generate a reliable legal guidance response just now. Please try again shortly. This is general legal information, not a substitute for professional legal representation.",
-                domain=domain,
-                follow_up_question=follow_up_question,
-                citations=citations,
-                authorities=self._default_authorities(domain),
-                documents_to_keep=self._default_documents(domain),
-                likely_forum=self._default_forum(domain, resolved_state, request.district),
-                caution="The answer could not be completed due to a model or network issue.",
-                warnings=["Temporary LLM failure handled safely."],
-            )
+        internal = self._build_indiankanoon_result(search_results, domain, warnings)
 
         self.store.add_message(chat_id, "user", message, metadata={"domain": domain}, user_id=user_id)
         self.store.add_message(
@@ -155,154 +113,101 @@ class ChatService:
                 return domain
         return "general"
 
-    def _should_help_first(self, message: str, domain: str) -> bool:
-        normalized = message.lower()
-        if domain == "cyber" and any(term in normalized for term in ["otp", "upi", "debited", "fake link", "bank account"]):
-            return True
-        if len(message.split()) >= 10:
-            return True
-        return any(term in normalized for term in ["my ", "i ", "received", "got", "landlord", "police", "notice"])
+    def _search_indiankanoon_results(self, query: str, state: str | None, domain: str) -> list[dict[str, str]]:
+        if not self.indiankanoon.configured:
+            logger.warning("indiankanoon token missing for chat query=%r", query[:80])
+            return []
+        try:
+            return self.indiankanoon.search_references(
+                query=query,
+                doctypes=self._resolve_doctypes(state=state, domain=domain),
+                max_results=3,
+            )
+        except (requests.RequestException, ValueError) as exc:
+            logger.warning("indiankanoon search failed query=%r error=%s", query[:80], exc)
+            return []
 
-    def _choose_follow_up(self, request: ChatRequest, domain: str, message: str, resolved_state: str | None) -> str | None:
-        normalized = message.lower()
-        if domain == "cyber" and not any(term in normalized for term in ["bank", "upi", "wallet", "app", "account"]):
-            return "Which bank, app, or payment platform was involved?"
-        if domain == "criminal" and not request.case_stage:
-            return "Has a police complaint or FIR already been filed?"
-        if domain == "property" and not request.district:
-            return "Which district is the property located in?"
-        if domain in {"property", "constitutional"} and not resolved_state:
-            return "Please confirm the State where this issue happened or where you may need to take legal action."
-        if domain == "consumer" and not resolved_state:
-            return "Please confirm the State where the seller, service provider, or transaction is connected."
-        if domain == "general" and len(message.split()) < 8:
-            return "Please share one more key fact so I can guide you properly, such as the issue type or what exactly happened."
-        return None
-
-    def _build_prompt(
+    def _build_indiankanoon_result(
         self,
-        request: ChatRequest,
+        search_results: list[dict[str, str]],
         domain: str,
-        resolved_state: str,
-        grounded_context: str,
-        grounded_sources: list[dict[str, str | None]],
-        follow_up_question: str | None,
-        immediate_help: bool,
-        extraction_warnings: list[str],
-    ) -> str:
-        guidance = {
-            "message": request.message,
-            "domain": domain,
-            "state": resolved_state,
-            "district": request.district,
-            "case_stage": request.case_stage,
-            "is_own_matter": request.is_own_matter,
-            "immediate_help": immediate_help,
-            "follow_up_question": follow_up_question,
-            "grounded_context": grounded_context,
-            "grounded_sources": grounded_sources,
-            "extraction_warnings": extraction_warnings,
-            "required_output": {
-                "answer": "string",
-                "follow_up_question": "string or null",
-                "authorities": ["string"],
-                "documents_to_keep": ["string"],
-                "likely_forum": "string",
-                "caution": "string",
-                "citations": ["string"],
-            },
-        }
-        return (
-            "Return valid JSON only.\n"
-            "If the user already described a concrete incident, help first and only ask one targeted follow-up if truly needed.\n"
-            "Keep the answer concise, practical, and simple.\n"
-            "Use only grounded context when citing law or authorities. If uncertain, say so clearly.\n\n"
-            + json.dumps(guidance, ensure_ascii=False, indent=2)
-        )
-
-    def _build_citations(self, retrieval_chunks: list) -> list[str]:
-        citations: list[str] = []
-        for chunk in retrieval_chunks[:5]:
-            metadata = chunk.metadata or {}
-            if metadata.get("type") == "indiankanoon":
-                title = metadata.get("title", chunk.source)
-                url = metadata.get("url")
-                docsource = metadata.get("docsource")
-                parts = [title]
-                if docsource:
-                    parts.append(docsource)
-                if url:
-                    parts.append(url)
-                citations.append(" | ".join(parts))
-            else:
-                citations.append(chunk.source)
-        return citations
-
-    def _normalize_model_payload(
-        self,
-        payload: dict,
-        domain: str,
-        citations: list[str],
         warnings: list[str],
     ) -> InternalChatResult:
-        answer = str(payload.get("answer") or "").strip()
-        if not answer:
-            answer = "I do not have enough grounded information to give a reliable answer yet. Please share one more key fact. This is general legal information, not a substitute for professional legal representation."
-        if "general legal information" not in answer.lower():
-            answer = answer.rstrip() + "\n\nThis is general legal information, not a substitute for professional legal representation."
+        if not search_results:
+            return InternalChatResult(
+                answer="No relevant legal data found on India Kanoon",
+                domain=domain,
+                follow_up_question=None,
+                citations=[],
+                authorities=[],
+                documents_to_keep=[],
+                likely_forum=None,
+                caution=None,
+                warnings=warnings,
+                raw_json={"results": []},
+            )
+
+        lines = ["India Kanoon search results:"]
+        citations: list[str] = []
+        authorities: list[str] = []
+        for index, item in enumerate(search_results, start=1):
+            title = item.get("title") or "Untitled"
+            headline = self._clean_search_snippet(item.get("headline") or "")
+            court = item.get("docsource") or "India Kanoon"
+            url = item.get("url") or ""
+            lines.append(f"{index}. {title}")
+            lines.append(f"Court: {court}")
+            if headline:
+                lines.append(f"Snippet: {headline}")
+            if url:
+                lines.append(f"Link: {url}")
+                citations.append(f"{title} | {court} | {url}")
+            else:
+                citations.append(f"{title} | {court}")
+            if court not in authorities:
+                authorities.append(court)
+
+        top_source = search_results[0].get("docsource") or None
         return InternalChatResult(
-            answer=answer,
+            answer="\n".join(lines),
             domain=domain,
-            follow_up_question=payload.get("follow_up_question"),
-            citations=[str(item) for item in (payload.get("citations") or citations or [])][:5],
-            authorities=[str(item) for item in (payload.get("authorities") or self._default_authorities(domain))][:5],
-            documents_to_keep=[str(item) for item in (payload.get("documents_to_keep") or self._default_documents(domain))][:5],
-            likely_forum=str(payload.get("likely_forum") or self._default_forum(domain, None, None)),
-            caution=str(payload.get("caution") or self._default_caution(domain)),
+            follow_up_question=None,
+            citations=citations[:5],
+            authorities=authorities[:5],
+            documents_to_keep=[],
+            likely_forum=top_source,
+            caution=None,
             warnings=warnings,
-            raw_json=payload,
+            raw_json={"results": search_results},
         )
 
-    def _default_authorities(self, domain: str) -> list[str]:
-        defaults = {
-            "cyber": ["Information Technology Act, 2000", "Bank and payment complaint channels, where applicable"],
-            "criminal": ["Bharatiya Nagarik Suraksha Sanhita, 2023", "Bharatiya Nyaya Sanhita, 2023"],
-            "consumer": ["Consumer Protection Act, 2019"],
-            "property": ["Transfer of Property Act, 1882", "State-specific rent or land records rules, where applicable"],
-            "constitutional": ["Constitution of India"],
-            "general": ["Applicable Indian law depends on the exact facts and State-specific context"],
-        }
-        return defaults.get(domain, defaults["general"])
+    @staticmethod
+    def _clean_search_snippet(text: str) -> str:
+        cleaned = re.sub(r"<[^>]+>", " ", text)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        return cleaned[:400]
 
-    def _default_documents(self, domain: str) -> list[str]:
-        defaults = {
-            "cyber": ["transaction IDs", "screenshots", "bank complaint acknowledgements", "SMS or OTP trail"],
-            "criminal": ["complaint copy", "FIR copy if any", "identity proof", "incident chronology"],
-            "consumer": ["invoice", "payment proof", "emails or complaint screenshots"],
-            "property": ["rent agreement or title papers", "notices", "payment or possession proof"],
-            "constitutional": ["order, notice, or government action record if available"],
-            "general": ["documents directly linked to the dispute", "dates, notices, and communication records"],
+    def _resolve_doctypes(self, state: str | None, domain: str | None) -> str:
+        state_map = {
+            "gujarat": "gujarat",
+            "delhi": "delhi,delhidc",
+            "maharashtra": "bombay",
+            "karnataka": "karnataka",
+            "kerala": "kerala",
+            "tamil nadu": "chennai",
+            "west bengal": "kolkata",
+            "uttar pradesh": "allahabad,lucknow",
+            "rajasthan": "rajasthan,jodhpur",
         }
-        return defaults.get(domain, defaults["general"])
-
-    def _default_forum(self, domain: str, state: str | None, district: str | None) -> str:
-        place = ", ".join([item for item in [district, state] if item]) or "your local jurisdiction"
-        defaults = {
-            "cyber": f"Cyber cell, bank grievance mechanism, or local police station in {place}",
-            "criminal": f"Local police station or Magistrate court in {place}",
-            "consumer": f"District Consumer Commission in {place}",
-            "property": f"Civil court, rent forum, or local revenue office in {place}",
-            "constitutional": f"High Court with jurisdiction over {place}",
-            "general": f"The right forum in {place} depends on the exact dispute and stage",
+        domain_defaults = {
+            "consumer": "consumer,judgments",
+            "constitutional": "judgments,laws",
+            "criminal": "judgments,laws",
+            "property": "judgments,laws",
+            "cyber": "judgments,laws",
+            "general": "judgments,laws",
         }
-        return defaults.get(domain, defaults["general"])
-
-    def _default_caution(self, domain: str) -> str:
-        cautions = {
-            "cyber": "Act quickly. Delays can make fund tracing and complaint escalation harder.",
-            "criminal": "Police and court procedure depends on the stage and exact allegations.",
-            "property": "Property and tenancy remedies are often strongly affected by State-specific law.",
-            "consumer": "Keep written proof and complaint records before taking the next procedural step.",
-            "general": "State-specific law and facts may change the legal position.",
-        }
-        return cautions.get(domain, cautions["general"])
+        state_key = (state or "").strip().lower()
+        if state_key in state_map:
+            return state_map[state_key]
+        return domain_defaults.get(domain or "general", "judgments,laws")

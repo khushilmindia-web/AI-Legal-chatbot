@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-04-04
+
+### Changed
+- Updated `backend/app/services/chat_service.py` so the active chat flow no longer uses OpenAI or local-knowledge answer generation and now returns chat responses strictly from India Kanoon search data.
+- Added `backend/app/services/indiankanoon_service.py` `search_references()` support so chat can call India Kanoon `/search/` directly and format titles, snippets, court/source labels, and document links into the existing response schema.
+- Updated the active chat/upload test fixtures in `tests/conftest.py`, `tests/test_chat.py`, `tests/test_chat_routing.py`, and `tests/test_upload.py` to reflect the India Kanoon-only behavior and lock in the exact fallback message `No relevant legal data found on India Kanoon`.
+
+### Verified
+- Verified with a direct FastAPI `TestClient` smoke harness that signup, authenticated `/chat`, `/chat/upload`, no-result fallback handling, and `/chat/history` all work with India Kanoon-only answer generation on the active runtime stack.
+
+### Pending
+- The repository's existing Windows temp-directory permission issue still blocks normal `pytest` cleanup, so full pytest verification remains deferred until that environment problem is cleared.
+
 ## 2026-04-03
 
 ### Changed

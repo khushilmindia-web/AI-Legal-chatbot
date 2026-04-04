@@ -108,6 +108,34 @@ class IndianKanoonService:
 
         return results
 
+    def search_references(
+        self,
+        query: str,
+        *,
+        doctypes: str | None = None,
+        max_results: int = 3,
+    ) -> list[dict[str, Any]]:
+        payload = self.search(query, page_num=0, doctypes=doctypes, max_cites=5)
+        docs = payload.get("docs") or []
+        results: list[dict[str, Any]] = []
+
+        for doc in docs[:max_results]:
+            doc_id = doc.get("tid")
+            if not doc_id:
+                continue
+            results.append(
+                {
+                    "doc_id": str(doc_id),
+                    "title": str(doc.get("title") or "").strip(),
+                    "headline": str(doc.get("headline") or "").strip(),
+                    "docsource": str(doc.get("docsource") or "").strip(),
+                    "citations": [str(item) for item in (doc.get("citations") or [])[:5]],
+                    "url": f"https://indiankanoon.org/doc/{doc_id}/",
+                }
+            )
+
+        return results
+
     def _headers(self) -> dict[str, str]:
         token = self.settings.indiankanoon_api_token.strip()
         if not token:

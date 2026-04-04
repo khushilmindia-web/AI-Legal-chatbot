@@ -19,6 +19,12 @@ import re
 from pathlib import Path
 from urllib.parse import urlencode
 
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run("backend.main:app", host="127.0.0.1", port=5000)
+    raise SystemExit(0)
+
 app = FastAPI(title="Integrated Legal Chatbot", version="1.0")
 sys.path.append(os.path.dirname(__file__))
 load_dotenv()
@@ -1692,12 +1698,3 @@ async def chat(request: ChatRequest, authorization: str | None = Header(default=
         save_chat_exchange(user["id"], message, response_payload)
         return response_payload
 
-if __name__ == "__main__":
-    try:
-        print("Starting server...")
-        import uvicorn
-        uvicorn.run(app, host="0.0.0.0", port=8000)
-    except Exception as e:
-        print(f"Error starting server: {e}")
-        import traceback
-        traceback.print_exc()

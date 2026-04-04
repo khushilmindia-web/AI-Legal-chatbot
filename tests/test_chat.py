@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from backend.app.services.indiankanoon_service import IndianKanoonService
+
 
 def test_first_message_creates_chat_session(client):
     response = client.post(
@@ -16,10 +18,26 @@ def test_first_message_creates_chat_session(client):
     assert payload["title"].startswith("I clicked a fake UPI")
     assert payload["domain"] == "cyber"
     assert payload["follow_up_question"] is None
+    assert "India Kanoon search results:" in payload["answer"]
 
     history = client.get("/chat/history").json()
     assert len(history["items"]) == 1
     assert history["items"][0]["id"] == payload["chat_id"]
+
+
+def test_chat_returns_exact_no_results_fallback(client, monkeypatch):
+    monkeypatch.setattr(IndianKanoonService, "search_references", lambda self, query, doctypes=None, max_results=3: [])
+
+    response = client.post(
+        "/chat",
+        json={
+            "message": "Explain an unknown niche statute with no indexed result",
+            "state": "Gujarat",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["answer"] == "No relevant legal data found on India Kanoon"
 
 
 def test_open_old_chat_returns_messages(client):

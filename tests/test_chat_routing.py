@@ -20,5 +20,4 @@ def test_chat_response_contains_session_id_and_guidance_fields(client):
     assert response.status_code == 200
     assert payload["chat_id"] > 0
     assert payload["authorities"]
-    assert payload["documents_to_keep"]
     assert payload["likely_forum"]
