@@ -4,6 +4,7 @@ const TOKEN_KEY = 'legalAuthToken';
 const USER_KEY = 'legalAuthUser';
 const ME_URL = `${apiBase}/auth/me`;
 const LOGOUT_URL = `${apiBase}/auth/logout`;
+const DEFAULT_REQUEST_TIMEOUT_MS = 30000;
 
 const state = {
   sessions: [],
@@ -39,6 +40,12 @@ const elements = {
   logoutButton: document.getElementById("logoutButton"),
 };
 
+function setElementText(element, text) {
+  if (element) {
+    element.textContent = text;
+  }
+}
+
 function formatTime(timestamp) {
   const date = new Date(timestamp);
   if (Number.isNaN(date.getTime())) {
@@ -59,19 +66,33 @@ function nlToBr(text) {
 
 function setBusy(isBusy) {
   state.isBusy = isBusy;
-  elements.sendButton.disabled = isBusy;
-  elements.messageInput.disabled = isBusy;
-  elements.fileInput.disabled = isBusy;
-  elements.typingIndicator.hidden = !isBusy;
-  elements.statusText.textContent = isBusy ? "Lawyer AI is preparing a response..." : "Ready";
+  if (elements.sendButton) {
+    elements.sendButton.disabled = isBusy;
+  }
+  if (elements.messageInput) {
+    elements.messageInput.disabled = isBusy;
+  }
+  if (elements.fileInput) {
+    elements.fileInput.disabled = isBusy;
+  }
+  if (elements.typingIndicator) {
+    elements.typingIndicator.hidden = !isBusy;
+  }
+  setElementText(elements.statusText, isBusy ? "Lawyer AI is preparing a response..." : "Ready");
 }
 
 function showError(message) {
+  if (!elements.errorBanner) {
+    return;
+  }
   elements.errorBanner.textContent = message;
   elements.errorBanner.hidden = false;
 }
 
 function clearError() {
+  if (!elements.errorBanner) {
+    return;
+  }
   elements.errorBanner.hidden = true;
   elements.errorBanner.textContent = "";
 }
@@ -99,27 +120,40 @@ async function requestJson(path, options = {}) {
   const headers = {
     ...(options.headers || {}),
   };
+  const controller = new AbortController();
+  const timeoutMs = options.timeoutMs || DEFAULT_REQUEST_TIMEOUT_MS;
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
   if (!(options.body instanceof FormData) && !headers["Content-Type"]) {
     headers["Content-Type"] = "application/json";
   }
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
-  const response = await fetch(`${apiBase}${path}`, {
-    ...options,
-    credentials: options.credentials || "include",
-    headers,
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (response.status === 401) {
-    clearSession();
-    redirectToAuth();
-    throw new Error("Authentication required");
+  try {
+    const response = await fetch(`${apiBase}${path}`, {
+      ...options,
+      credentials: options.credentials || "include",
+      headers,
+      signal: controller.signal,
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (response.status === 401) {
+      clearSession();
+      redirectToAuth();
+      throw new Error("Authentication required");
+    }
+    if (!response.ok) {
+      throw new Error(payload.detail || payload.message || options.timeoutMessage || `Request failed with status ${response.status}`);
+    }
+    return payload;
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error(options.timeoutMessage || "Request timed out. Please try again.");
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
   }
-  if (!response.ok) {
-    throw new Error(payload.detail || payload.message || `Request failed with status ${response.status}`);
-  }
-  return payload;
 }
 
 async function fetchCurrentUser() {
@@ -169,9 +203,15 @@ function setBlankDraft() {
   state.activeChatId = null;
   state.draftMessages = [];
   state.liveMessages = [];
-  elements.messageInput.value = "";
-  elements.fileInput.value = "";
-  elements.imageUrlsInput.value = "";
+  if (elements.messageInput) {
+    elements.messageInput.value = "";
+  }
+  if (elements.fileInput) {
+    elements.fileInput.value = "";
+  }
+  if (elements.imageUrlsInput) {
+    elements.imageUrlsInput.value = "";
+  }
   renderHistory();
   renderMessages();
 }
@@ -181,6 +221,9 @@ function getRenderedMessages() {
 }
 
 function renderHistory() {
+  if (!elements.historyList || !elements.emptyHistory) {
+    return;
+  }
   elements.historyList.innerHTML = "";
   elements.emptyHistory.hidden = state.sessions.length > 0;
 
@@ -237,6 +280,9 @@ function buildAssistantMeta(metadata) {
 }
 
 function renderMessages() {
+  if (!elements.chatThread) {
+    return;
+  }
   const messages = getRenderedMessages();
   elements.chatThread.innerHTML = "";
 
@@ -331,15 +377,18 @@ async function submitMessage(event) {
   clearError();
 
   const message = elements.messageInput.value.trim();
-  const hasFiles = elements.fileInput.files && elements.fileInput.files.length > 0;
-  const imageUrls = elements.imageUrlsInput.value.trim();
+  const hasFiles = Boolean(elements.fileInput && elements.fileInput.files && elements.fileInput.files.length > 0);
+  const imageUrls = elements.imageUrlsInput ? elements.imageUrlsInput.value.trim() : "";
   if (!message) {
     return;
   }
 
   appendOptimisticUserMessage(message);
-  elements.messageInput.value = "";
+  if (elements.messageInput) {
+    elements.messageInput.value = "";
+  }
   setBusy(true);
+  const fallbackAnswer = "No relevant legal data found on India Kanoon";
 
   try {
     const details = buildMatterDetails();
@@ -359,8 +408,14 @@ async function submitMessage(event) {
       if (imageUrls) {
         formData.append("image_urls", imageUrls);
       }
-      Array.from(elements.fileInput.files).forEach((file) => formData.append("files", file));
-      payload = await requestJson("/chat/upload", { method: "POST", body: formData, credentials: "include" });
+      Array.from(elements.fileInput?.files || []).forEach((file) => formData.append("files", file));
+      payload = await requestJson("/chat/upload", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+        timeoutMs: DEFAULT_REQUEST_TIMEOUT_MS,
+        timeoutMessage: fallbackAnswer,
+      });
     } else {
       payload = await requestJson("/chat", {
         method: "POST",
@@ -370,6 +425,8 @@ async function submitMessage(event) {
           ...details,
         }),
         credentials: "include",
+        timeoutMs: DEFAULT_REQUEST_TIMEOUT_MS,
+        timeoutMessage: fallbackAnswer,
       });
     }
 
@@ -396,15 +453,19 @@ async function submitMessage(event) {
       state.liveMessages = [...state.liveMessages, assistantMessage];
     }
 
-    elements.fileInput.value = "";
-    elements.imageUrlsInput.value = "";
+    if (elements.fileInput) {
+      elements.fileInput.value = "";
+    }
+    if (elements.imageUrlsInput) {
+      elements.imageUrlsInput.value = "";
+    }
     await loadHistory();
     renderHistory();
     renderMessages();
   } catch (error) {
-    const messageText = error instanceof Error ? error.message : "Something went wrong while sending the message.";
+    const messageText = error instanceof Error ? error.message : fallbackAnswer;
     showError(messageText);
-    appendFailureMessage("I could not complete that request just now. Please try again in a moment.");
+    appendFailureMessage(fallbackAnswer);
   } finally {
     setBusy(false);
   }
@@ -433,21 +494,29 @@ async function logout() {
 }
 
 function bindEvents() {
-  elements.composerForm.addEventListener("submit", submitMessage);
-  elements.newChatButton.addEventListener("click", () => {
-    clearError();
-    setBlankDraft();
-  });
-  elements.clearHistoryButton.addEventListener("click", () => {
-    clearHistory().catch((error) => {
-      showError(error instanceof Error ? error.message : "Could not clear chat history.");
+  if (elements.composerForm) {
+    elements.composerForm.addEventListener("submit", submitMessage);
+  }
+  if (elements.newChatButton) {
+    elements.newChatButton.addEventListener("click", () => {
+      clearError();
+      setBlankDraft();
     });
-  });
-  elements.detailsToggle.addEventListener("click", () => {
-    const expanded = elements.detailsToggle.getAttribute("aria-expanded") === "true";
-    elements.detailsToggle.setAttribute("aria-expanded", String(!expanded));
-    elements.detailsPanel.hidden = expanded;
-  });
+  }
+  if (elements.clearHistoryButton) {
+    elements.clearHistoryButton.addEventListener("click", () => {
+      clearHistory().catch((error) => {
+        showError(error instanceof Error ? error.message : "Could not clear chat history.");
+      });
+    });
+  }
+  if (elements.detailsToggle && elements.detailsPanel) {
+    elements.detailsToggle.addEventListener("click", () => {
+      const expanded = elements.detailsToggle.getAttribute("aria-expanded") === "true";
+      elements.detailsToggle.setAttribute("aria-expanded", String(!expanded));
+      elements.detailsPanel.hidden = expanded;
+    });
+  }
   if (elements.logoutButton) {
     elements.logoutButton.addEventListener("click", () => {
       logout().catch(() => {
@@ -456,12 +525,14 @@ function bindEvents() {
       });
     });
   }
-  elements.messageInput.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      elements.composerForm.requestSubmit();
-    }
-  });
+  if (elements.messageInput && elements.composerForm) {
+    elements.messageInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        elements.composerForm.requestSubmit();
+      }
+    });
+  }
 }
 
 async function boot() {

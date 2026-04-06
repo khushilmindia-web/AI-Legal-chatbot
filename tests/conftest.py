@@ -30,7 +30,7 @@ def anonymous_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestCli
     monkeypatch.setenv("DEBUG", "true")
     get_settings.cache_clear()
 
-    def fake_search_references(self, query, doctypes=None, max_results=3):
+    def fake_search_references_multi(self, query_variants, doctypes_options, max_results=3):
         return [
             {
                 "doc_id": "12345",
@@ -42,7 +42,7 @@ def anonymous_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestCli
             }
         ]
 
-    monkeypatch.setattr(IndianKanoonService, "search_references", fake_search_references)
+    monkeypatch.setattr(IndianKanoonService, "search_references_multi", fake_search_references_multi)
     app = create_app()
     return TestClient(app)
 

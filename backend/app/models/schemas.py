@@ -123,3 +123,20 @@ class InternalChatResult(BaseModel):
     caution: str | None = None
     warnings: list[str] = Field(default_factory=list)
     raw_json: dict[str, Any] = Field(default_factory=dict)
+
+
+class ConversationState(BaseModel):
+    conversation_started: bool = False
+    active_intent: str | None = None
+    awaiting_details: bool = False
+    last_user_issue: str | None = None
+    legal_domain: str | None = None
+    last_follow_up_question: str | None = None
+    issue_type: str | None = None
+    city: str | None = None
+    police_station: str | None = None
+    bank_name: str | None = None
+    platform: str | None = None
+    notice_stage: str | None = None
+    document_type: str | None = None
+    last_guidance_key: str | None = None

@@ -62,6 +62,7 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("INDIANKANOON_API_TOKEN", "INDIA_KANOON_API_TOKEN"),
     )
     indiankanoon_timeout_seconds: float = Field(default=20.0, alias="INDIANKANOON_TIMEOUT_SECONDS")
+    indiankanoon_trust_env_proxy: bool = Field(default=False, alias="INDIANKANOON_TRUST_ENV_PROXY")
 
     @field_validator("debug", mode="before")
     @classmethod
@@ -74,6 +75,20 @@ class Settings(BaseSettings):
         if normalized in {"1", "true", "yes", "on", "debug"}:
             return True
         if normalized in {"0", "false", "no", "off", "release", "prod", "production", "warn", "warning", "info", "error"}:
+            return False
+        return value
+
+    @field_validator("indiankanoon_trust_env_proxy", mode="before")
+    @classmethod
+    def coerce_indiankanoon_trust_env_proxy(cls, value):
+        if isinstance(value, bool):
+            return value
+        if value is None:
+            return False
+        normalized = str(value).strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off", ""}:
             return False
         return value
 

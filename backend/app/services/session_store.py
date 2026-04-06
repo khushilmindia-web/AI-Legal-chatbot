@@ -124,6 +124,7 @@ class SessionStore:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id INTEGER,
                     title TEXT NOT NULL,
+                    state_json TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
                     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -156,6 +157,8 @@ class SessionStore:
                 connection.execute("ALTER TABLE users ADD COLUMN google_sub TEXT")
             if not column_exists(connection, "chat_sessions", "user_id"):
                 connection.execute("ALTER TABLE chat_sessions ADD COLUMN user_id INTEGER")
+            if not column_exists(connection, "chat_sessions", "state_json"):
+                connection.execute("ALTER TABLE chat_sessions ADD COLUMN state_json TEXT")
             connection.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email)")
             connection.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_sub ON users(google_sub)")
             connection.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_auth_sessions_token ON auth_sessions(token)")
@@ -378,16 +381,18 @@ class SessionStore:
 
     def create_session(self, title: str, user_id: int | None = None) -> dict[str, Any]:
         now = utc_now()
+        empty_state = json.dumps({})
         with closing(self._get_connection()) as connection:
             cursor = connection.execute(
-                "INSERT INTO chat_sessions (user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?)",
-                (user_id, title, now, now),
+                "INSERT INTO chat_sessions (user_id, title, state_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+                (user_id, title, empty_state, now, now),
             )
             connection.commit()
             return {
                 "id": cursor.lastrowid,
                 "user_id": user_id,
                 "title": title,
+                "state": {},
                 "created_at": now,
                 "updated_at": now,
             }
@@ -396,19 +401,60 @@ class SessionStore:
         with closing(self._get_connection()) as connection:
             if user_id is None:
                 row = connection.execute(
-                    "SELECT id, user_id, title, created_at, updated_at FROM chat_sessions WHERE id = ?",
+                    "SELECT id, user_id, title, state_json, created_at, updated_at FROM chat_sessions WHERE id = ?",
                     (chat_id,),
                 ).fetchone()
             else:
                 row = connection.execute(
                     """
-                    SELECT id, user_id, title, created_at, updated_at
+                    SELECT id, user_id, title, state_json, created_at, updated_at
                     FROM chat_sessions
                     WHERE id = ? AND user_id = ?
                     """,
                     (chat_id, user_id),
                 ).fetchone()
-        return dict(row) if row is not None else None
+        if row is None:
+            return None
+        item = dict(row)
+        state = {}
+        raw_state = item.pop("state_json", None)
+        if raw_state:
+            try:
+                state = json.loads(raw_state)
+            except json.JSONDecodeError:
+                state = {}
+        item["state"] = state
+        return item
+
+    def get_conversation_state(self, chat_id: int, user_id: int | None = None) -> dict[str, Any]:
+        session = self.get_session(chat_id, user_id=user_id)
+        if session is None:
+            return {}
+        state = session.get("state")
+        return state if isinstance(state, dict) else {}
+
+    def update_conversation_state(
+        self,
+        chat_id: int,
+        state: dict[str, Any],
+        user_id: int | None = None,
+    ) -> dict[str, Any]:
+        now = utc_now()
+        payload = json.dumps(state or {})
+        with closing(self._get_connection()) as connection:
+            if user_id is not None:
+                owns_session = connection.execute(
+                    "SELECT 1 FROM chat_sessions WHERE id = ? AND user_id = ?",
+                    (chat_id, user_id),
+                ).fetchone()
+                if owns_session is None:
+                    raise ValueError("Chat session not found")
+            connection.execute(
+                "UPDATE chat_sessions SET state_json = ?, updated_at = ? WHERE id = ?",
+                (payload, now, chat_id),
+            )
+            connection.commit()
+        return state
 
     def add_message(
         self,

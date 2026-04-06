@@ -22,10 +22,21 @@ class IntentBot:
         # self.model = load_model("Model/Intents/Legalchatbot.h5")
         self.model = tf.keras.models.load_model(MODEL_DIR / "Intents" / "Legalchatbot.h5")
 
+    def _safe_tokenize(self, sentence):
+        try:
+            return nltk.word_tokenize(sentence)
+        except LookupError:
+            return sentence.split()
+
+    def _safe_lemmatize(self, word):
+        try:
+            return self.lemmatizer.lemmatize(word.lower())
+        except LookupError:
+            return word.lower()
         
     def clean_up_sentence(self, sentence):
-        sentence_words = nltk.word_tokenize(sentence)
-        sentence_words = [self.lemmatizer.lemmatize(word.lower()) for word in sentence_words]
+        sentence_words = self._safe_tokenize(sentence)
+        sentence_words = [self._safe_lemmatize(word) for word in sentence_words]
         return sentence_words
 
     def bag_of_words(self, sentence):

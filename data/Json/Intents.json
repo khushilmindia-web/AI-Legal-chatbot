@@ -1,0 +1,80 @@
+{
+  "intents": [
+    {
+      "tag": "greeting",
+      "patterns": ["hi", "hello", "hey", "hii"],
+      "responses": [
+        "Hello! Welcome to the Legal India! How may i help You?",
+        "Hey! Welcome to the Legal India! How can I help you?"
+      ]
+    },
+    {
+        "tag":"goodbye",
+        "patterns": ["bye", "see you", "goodbye","exit","quit"],
+      "responses": [
+        "remember I am here to help you! Have a great day!",
+        "If you need help again, remember I will be here. Take care!",
+        "Whenever you need help, just come back. I am here for you"
+      ]
+    },
+    {
+      "tag": "advice",
+      "patterns": ["I need legal help",
+        "Can you help me with legal advice?",
+      "i have a legal issue"],
+      "responses": [  "I can assist you with legal information. How can I help you today?",
+        "Hi there. Please describe your legal issue.",
+        "What legal matter do you need help with?",
+        "I am here to help you! describe your problem."
+      ]
+    },
+    {
+      "tag": "thanks",
+      "patterns": ["thanks", "thank you"],
+      "responses": [
+        "You're welcome!",
+        "My pleasure. I amm glad you asked for help.",
+        "Happy to help anytime!",
+        "Thanks for reaching out!"
+      ]
+    },
+    {
+      "tag": "legal_help",
+      "patterns": [
+        "what should i do",
+        "what can i do",
+        "how do i file an fir",
+        "how to file cyber fraud complaint",
+        "how to file consumer complaint",
+        "how to file police complaint",
+        "bank fraud complaint process",
+        "legal notice process",
+        "document verification process",
+        "consumer complaint process"
+      ],
+      "responses": [
+        "I can guide you through the legal process step by step.",
+        "Tell me the issue briefly and I will explain the practical legal steps.",
+        "I can help with the procedure, documents, and where to file your complaint."
+      ]
+    },
+    {
+      "tag": "procedural",
+      "patterns": [
+        "fir process",
+        "cyber fraud process",
+        "police complaint process",
+        "consumer court process",
+        "bank fraud process",
+        "notice process",
+        "document process",
+        "what is the procedure"
+      ],
+      "responses": [
+        "I can explain the legal procedure in simple steps.",
+        "Share the issue and I will outline the process, documents, and authority involved.",
+        "I can guide you through the complaint and document process."
+      ]
+    }
+  ]
+}

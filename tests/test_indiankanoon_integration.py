@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from backend.app.core.config import Settings
 from backend.app.core.config import get_settings
+from backend.app.services.indiankanoon_service import IndianKanoonService
 from backend.app.services.retrieval import RetrievalChunk, RetrievalService
 
 
@@ -79,3 +81,14 @@ def test_retrieval_skips_indiankanoon_when_local_context_is_strong(monkeypatch, 
     assert chunks
     assert chunks[0].source == "consumer.txt"
     assert called["value"] is False
+
+
+def test_indiankanoon_ignores_broken_env_proxy_by_default():
+    settings = Settings(
+        INDIANKANOON_API_TOKEN="token",
+        INDIANKANOON_TRUST_ENV_PROXY="false",
+    )
+
+    service = IndianKanoonService(settings)
+
+    assert service.session.trust_env is False

@@ -20,17 +20,31 @@ documents = []
 
 ignore_letters = ['?','!','/']
 
+
+def safe_tokenize(text: str) -> list[str]:
+    try:
+        return nltk.word_tokenize(text)
+    except LookupError:
+        return text.split()
+
+
+def safe_lemmatize(word: str) -> str:
+    try:
+        return lemmatizer.lemmatize(word.lower())
+    except LookupError:
+        return word.lower()
+
 for intent in intents['intents']:
     
     for pattern in intent['patterns']:
-        word_list = nltk.word_tokenize(pattern)
+        word_list = safe_tokenize(pattern)
         words.extend(word_list)
         documents.append((word_list, intent['tag']))
         
         if intent['tag'] not in classes:
             classes.append(intent['tag'])
 
-words = [lemmatizer.lemmatize(word.lower())     
+words = [safe_lemmatize(word)     
          for word in words 
          if word not in ignore_letters]
 
@@ -48,7 +62,7 @@ for document in documents:
     word_patterns = document[0]
 
     word_patterns = [
-        lemmatizer.lemmatize(word.lower()) 
+        safe_lemmatize(word) 
                      for word in word_patterns]
 
     for word in words:
