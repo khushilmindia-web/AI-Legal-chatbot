@@ -9,7 +9,6 @@ import requests
 from backend.app.core.config import Settings
 from backend.app.utils.request_context import get_logger
 
-
 logger = get_logger("lawyer_ai.indiankanoon")
 
 SOURCE_AUTHORITY_SCORES = {
@@ -214,6 +213,12 @@ class IndianKanoonService:
                     if not doc_id:
                         continue
                     doc_id_text = str(doc_id)
+                    if self._is_low_quality_search_doc(doc):
+                        logger.info(
+                            "indiankanoon pipeline stage=search_skip doc_id=%s reason=low_quality",
+                            doc_id_text,
+                        )
+                        continue
                     score = self._score_search_doc(doc, query=query, rank=rank)
                     current = candidates.get(doc_id_text)
                     if current is not None and current["score"] >= score:
@@ -267,6 +272,16 @@ class IndianKanoonService:
                 enriched_item["author"] = None
                 enriched_item["publishdate"] = None
 
+            enriched_item["doc_excerpt"] = self._sanitize_excerpt(enriched_item.get("doc_excerpt") or "")
+            enriched_item["fragment_excerpt"] = self._sanitize_excerpt(enriched_item.get("fragment_excerpt") or "")
+            enriched_item["fragment_headline"] = self._sanitize_excerpt(enriched_item.get("fragment_headline") or "")
+            if self._is_low_quality_enriched_doc(enriched_item):
+                logger.info(
+                    "indiankanoon pipeline stage=enrich_skip doc_id=%s reason=low_quality_enriched",
+                    doc_id_text,
+                )
+                continue
+
             enriched_item["score"] = candidate["score"] + self._score_enriched_doc(enriched_item, query=query)
             logger.info(
                 "indiankanoon pipeline stage=enrich doc_id=%s matched_query=%r score=%.2f",
@@ -277,7 +292,7 @@ class IndianKanoonService:
             enriched.append(enriched_item)
 
         enriched.sort(key=lambda item: item["score"], reverse=True)
-        return enriched[:max_results]
+        return self._limit_to_most_relevant(enriched, max_results=max_results, query=query_variants[0])
 
     def _headers(self) -> dict[str, str]:
         token = self.settings.indiankanoon_api_token.strip()
@@ -291,12 +306,20 @@ class IndianKanoonService:
     def _get_json(self, path: str, *, params: dict[str, Any] | None = None) -> dict[str, Any]:
         url = urljoin(self.base_url, path)
         try:
-            response = self.session.get(
-                url,
-                headers=self._headers(),
-                params=params,
-                timeout=self.settings.indiankanoon_timeout_seconds,
-            )
+            if path == "search/" or path.startswith("doc/") or path.startswith("docfragment/") or path.startswith("docmeta/"):
+                response = self.session.post(
+                    url,
+                    headers=self._headers(),
+                    data=params or {},
+                    timeout=self.settings.indiankanoon_timeout_seconds,
+                )
+            else:
+                response = self.session.get(
+                    url,
+                    headers=self._headers(),
+                    params=params,
+                    timeout=self.settings.indiankanoon_timeout_seconds,
+                )
         except requests.Timeout:
             logger.warning(
                 "indiankanoon request timed out path=%s timeout=%ss params=%s",
@@ -369,25 +392,94 @@ class IndianKanoonService:
     @staticmethod
     def _clean_text(text: Any) -> str:
         cleaned = re.sub(r"<[^>]+>", " ", str(text or ""))
+        cleaned = re.sub(r"\{[^{}]*\"errmsg\"[^{}]*\}", " ", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\b(errmsg|debug|traceback|stack trace|error in evaluting the fragments)\b\s*:?\s*[^.;]*", " ", cleaned, flags=re.IGNORECASE)
         cleaned = re.sub(r"\s+", " ", cleaned).strip()
         return cleaned
 
-    def _score_search_doc(self, doc: dict[str, Any], *, query: str, rank: int) -> float:
-        normalized_query = self._normalize_tokens(query)
-        haystack = " ".join(
+    def _sanitize_excerpt(self, text: str) -> str:
+        cleaned = self._clean_text(text)
+        cleaned = re.sub(r"\b(Document \d+|Search snippet|Relevant fragment|Excerpt|Title|Authority|Date|URL|Citations)\s*:\s*", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip(" ;,-")
+        return cleaned[:1800]
+
+    def _is_low_quality_search_doc(self, doc: dict[str, Any]) -> bool:
+        title = self._clean_text(doc.get("title") or "")
+        headline = self._clean_text(doc.get("headline") or "")
+        haystack = f"{title} {headline}".lower()
+        if not title:
+            return True
+        noisy_markers = [
+            "error in evaluting the fragments",
+            "no matching",
+            "internal server error",
+            "traceback",
+            "debug",
+        ]
+        return any(marker in haystack for marker in noisy_markers)
+
+    def _is_low_quality_enriched_doc(self, doc: dict[str, Any]) -> bool:
+        text = " ".join(
             [
                 str(doc.get("title") or ""),
+                str(doc.get("fragment_headline") or ""),
+                str(doc.get("fragment_excerpt") or ""),
+                str(doc.get("doc_excerpt") or ""),
+            ]
+        ).lower()
+        if not text.strip():
+            return True
+        noisy_markers = [
+            "error in evaluting the fragments",
+            "traceback",
+            "debug",
+            "internal server error",
+        ]
+        return any(marker in text for marker in noisy_markers)
+
+    def _score_search_doc(self, doc: dict[str, Any], *, query: str, rank: int) -> float:
+        normalized_query = self._normalize_tokens(query)
+        title = str(doc.get("title") or "")
+        source = str(doc.get("docsource") or "").strip().lower()
+        focus = self._query_focus(query)
+        haystack = " ".join(
+            [
+                title,
                 str(doc.get("headline") or ""),
-                str(doc.get("docsource") or ""),
+                source,
             ]
         )
         overlap = len(normalized_query & self._normalize_tokens(haystack))
-        source = str(doc.get("docsource") or "").strip().lower()
         authority_score = SOURCE_AUTHORITY_SCORES.get(source, 4.0)
-        return authority_score + float(overlap * 2) + max(0.0, 8.0 - rank)
+        score = authority_score + float(overlap * 2) + max(0.0, 8.0 - rank)
+        normalized_title = title.lower()
+        if "section" in query.lower() and "section" in normalized_title:
+            score += 8.0
+        if "ipc" in query.lower() and "indian penal code" in normalized_title:
+            score += 8.0
+        if "punishment" in query.lower() and "punished" in str(doc.get("headline") or "").lower():
+            score += 3.0
+        if "union of india - section" in source:
+            score += 6.0
+        if self._looks_like_exact_authority_match(title=title, query=query):
+            score += 10.0
+        if focus == "statute":
+            if source == "laws":
+                score += 8.0
+            elif source in {"supremecourt", "scorders"}:
+                score -= 2.0
+            if re.search(r"\b(vs\.?|v\.)\b", title.lower()):
+                score -= 3.0
+        elif focus == "case":
+            if source in {"supremecourt", "scorders"}:
+                score += 5.0
+            elif source == "laws":
+                score -= 2.0
+        return score
 
     def _score_enriched_doc(self, doc: dict[str, Any], *, query: str) -> float:
         normalized_query = self._normalize_tokens(query)
+        focus = self._query_focus(query)
         text = " ".join(
             [
                 doc.get("fragment_headline") or "",
@@ -396,7 +488,19 @@ class IndianKanoonService:
             ]
         )
         overlap = len(normalized_query & self._normalize_tokens(text))
-        return float(overlap * 1.5)
+        score = float(overlap * 1.5)
+        title = str(doc.get("title") or "")
+        if self._looks_like_exact_authority_match(title=title, query=query):
+            score += 8.0
+        if doc.get("fragment_excerpt"):
+            score += 2.0
+        if doc.get("doc_excerpt"):
+            score += 2.0
+        if focus == "statute" and str(doc.get("docsource") or "").strip().lower() == "laws":
+            score += 4.0
+        if focus == "case" and str(doc.get("docsource") or "").strip().lower() in {"supremecourt", "scorders"}:
+            score += 3.0
+        return score
 
     def _extract_document_excerpt(self, payload: dict[str, Any]) -> str:
         preferred_keys = [
@@ -413,6 +517,10 @@ class IndianKanoonService:
             value = payload.get(key)
             if isinstance(value, str) and value.strip():
                 return self._clean_text(value)[:1800]
+            if isinstance(value, list):
+                flattened = " ".join(self._clean_text(item) for item in value if str(item).strip())
+                if flattened.strip():
+                    return flattened[:1800]
             if isinstance(value, dict):
                 nested_text = self._extract_document_excerpt(value)
                 if nested_text:
@@ -421,6 +529,10 @@ class IndianKanoonService:
         for value in payload.values():
             if isinstance(value, str):
                 cleaned = self._clean_text(value)
+                if len(cleaned) > len(longest):
+                    longest = cleaned
+            elif isinstance(value, list):
+                cleaned = " ".join(self._clean_text(item) for item in value if str(item).strip())
                 if len(cleaned) > len(longest):
                     longest = cleaned
             elif isinstance(value, dict):
@@ -432,3 +544,83 @@ class IndianKanoonService:
     @staticmethod
     def _normalize_tokens(text: str) -> set[str]:
         return set(re.findall(r"[a-z0-9]+", text.lower()))
+
+    def _looks_like_exact_authority_match(self, *, title: str, query: str) -> bool:
+        normalized_title = title.lower()
+        normalized_query = query.lower()
+        section_match = re.search(r"\bsection\s+([0-9]+[a-z]?)\b", normalized_query)
+        article_match = re.search(r"\barticle\s+([0-9]+[a-z]?)\b", normalized_query)
+        if section_match and f"section {section_match.group(1)}" in normalized_title:
+            return True
+        if article_match and f"article {article_match.group(1)}" in normalized_title:
+            return True
+        if "ipc" in normalized_query and "indian penal code" in normalized_title:
+            return True
+        if "constitution" in normalized_query and "constitution" in normalized_title:
+            return True
+        return False
+
+    def _limit_to_most_relevant(
+        self,
+        documents: list[dict[str, Any]],
+        *,
+        max_results: int,
+        query: str = "",
+    ) -> list[dict[str, Any]]:
+        if not documents:
+            return []
+        filtered = [doc for doc in documents if not self._is_low_quality_enriched_doc(doc)]
+        if query.strip():
+            filtered = [doc for doc in filtered if not self._looks_irrelevant_for_query(doc=doc, query=query)]
+        if not filtered:
+            return []
+        selected: list[dict[str, Any]] = [filtered[0]]
+        top_source = str(filtered[0].get("docsource") or "").strip().lower()
+        top_score = float(filtered[0].get("score") or 0.0)
+        for doc in filtered[1:]:
+            if len(selected) >= max_results:
+                break
+            source = str(doc.get("docsource") or "").strip().lower()
+            score = float(doc.get("score") or 0.0)
+            if score < top_score - 8.0:
+                continue
+            if source == top_source and len(selected) >= 1:
+                continue
+            selected.append(doc)
+            if len(selected) >= 2:
+                break
+        return selected
+
+    def _looks_irrelevant_for_query(self, *, doc: dict[str, Any], query: str) -> bool:
+        focus = self._query_focus(query)
+        title = str(doc.get("title") or "").lower()
+        source = str(doc.get("docsource") or "").strip().lower()
+        text = " ".join(
+            [
+                str(doc.get("title") or ""),
+                str(doc.get("fragment_headline") or ""),
+                str(doc.get("fragment_excerpt") or ""),
+                str(doc.get("doc_excerpt") or ""),
+            ]
+        ).lower()
+        overlap = len(self._normalize_tokens(query) & self._normalize_tokens(text))
+        if focus == "statute":
+            section_match = re.search(r"\bsection\s+([0-9]+[a-z]?)\b", query.lower())
+            if source == "laws":
+                if section_match and f"section {section_match.group(1)}" not in title and overlap < 2:
+                    return True
+                return False
+            if section_match and f"section {section_match.group(1)}" not in text:
+                return True
+        if focus == "case" and overlap < 2:
+            return True
+        return overlap == 0
+
+    @staticmethod
+    def _query_focus(query: str) -> str:
+        normalized = query.lower()
+        if any(marker in normalized for marker in {"section ", "article ", " act", "ipc", "crpc", "cpc", "bns", "bnss", "constitution"}):
+            return "statute"
+        if any(marker in normalized for marker in {"judgment", "judgement", "precedent", "citation", "supreme court", "high court", "case law"}):
+            return "case"
+        return "general"

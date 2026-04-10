@@ -1,6 +1,5 @@
 const apiBase = window.APP_CONFIG?.apiBaseUrl ?? "";
 const frontendBase = window.APP_CONFIG?.frontendBaseUrl || "/frontend";
-const TOKEN_KEY = 'legalAuthToken';
 const USER_KEY = 'legalAuthUser';
 const ME_URL = `${apiBase}/auth/me`;
 const LOGOUT_URL = `${apiBase}/auth/logout`;
@@ -97,17 +96,12 @@ function clearError() {
   elements.errorBanner.textContent = "";
 }
 
-function getAuthToken() {
-  return localStorage.getItem(TOKEN_KEY);
-}
-
 function setStoredUser(user) {
-  localStorage.setItem(USER_KEY, JSON.stringify(user));
+  sessionStorage.setItem(USER_KEY, JSON.stringify(user));
 }
 
 function clearSession() {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
+  sessionStorage.removeItem(USER_KEY);
   state.currentUser = null;
 }
 
@@ -116,7 +110,6 @@ function redirectToAuth() {
 }
 
 async function requestJson(path, options = {}) {
-  const token = getAuthToken();
   const headers = {
     ...(options.headers || {}),
   };
@@ -125,9 +118,6 @@ async function requestJson(path, options = {}) {
   const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
   if (!(options.body instanceof FormData) && !headers["Content-Type"]) {
     headers["Content-Type"] = "application/json";
-  }
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
   }
   try {
     const response = await fetch(`${apiBase}${path}`, {
@@ -228,16 +218,34 @@ function renderHistory() {
   elements.emptyHistory.hidden = state.sessions.length > 0;
 
   state.sessions.forEach((session) => {
+    const item = document.createElement("div");
+    item.className = `history-item${state.activeChatId === session.id ? " active" : ""}`;
+
     const button = document.createElement("button");
     button.type = "button";
-    button.className = `history-item${state.activeChatId === session.id ? " active" : ""}`;
+    button.className = "history-item-open";
     button.innerHTML = `
       <span class="history-item-title">${escapeHtml(session.title)}</span>
       <span class="history-item-time">${formatTime(session.updated_at)}</span>
       <span class="history-item-preview">${escapeHtml(session.last_message_preview || "No preview yet")}</span>
     `;
     button.addEventListener("click", () => openChat(session.id));
-    elements.historyList.appendChild(button);
+
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "history-item-delete";
+    deleteButton.setAttribute("aria-label", `Delete chat ${session.title}`);
+    deleteButton.textContent = "Delete";
+    deleteButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      deleteChat(session.id).catch((error) => {
+        showError(error instanceof Error ? error.message : "Could not delete this chat.");
+      });
+    });
+
+    item.appendChild(button);
+    item.appendChild(deleteButton);
+    elements.historyList.appendChild(item);
   });
 }
 
@@ -480,6 +488,23 @@ async function clearHistory() {
   await requestJson("/chat/history", { method: "DELETE", credentials: "include" });
   state.sessions = [];
   setBlankDraft();
+}
+
+async function deleteChat(chatId) {
+  const session = state.sessions.find((item) => item.id === chatId);
+  const title = session?.title || "this chat";
+  const confirmed = window.confirm(`Delete only ${title}?`);
+  if (!confirmed) {
+    return;
+  }
+  clearError();
+  await requestJson(`/chat/${chatId}`, { method: "DELETE", credentials: "include" });
+  state.sessions = state.sessions.filter((item) => item.id !== chatId);
+  if (state.activeChatId === chatId) {
+    setBlankDraft();
+  } else {
+    renderHistory();
+  }
 }
 
 async function logout() {

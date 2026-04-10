@@ -1,0 +1,23 @@
+{
+  "input_dir": "D:\\Learning\\data",
+  "output_dir": "data\\training_ingestion\\learning_data_corpus",
+  "processed_files": 10,
+  "chunk_count": 2440,
+  "documents_file": "data\\training_ingestion\\learning_data_corpus\\documents.jsonl",
+  "chunks_file": "data\\training_ingestion\\learning_data_corpus\\chunks.jsonl",
+  "source_ids": [
+    "acts_data.json",
+    "Alphabetical list of all central acts.pdf",
+    "Constitution of India.pdf",
+    "deepseeek.txt",
+    "Indian penal code.pdf",
+    "Intents.json",
+    "Law of Crimes-I BNS 2024.pdf",
+    "legal_data.json",
+    "Manual for District Legal Services Authorities.pdf",
+    "The code of civil procedure.pdf"
+  ],
+  "embeddings_file": "data\\training_ingestion\\learning_data_corpus\\embeddings.jsonl",
+  "vectors_file": "data\\training_ingestion\\learning_data_corpus\\vectors.jsonl",
+  "embedding_records": 2440
+}

@@ -55,6 +55,24 @@ PROCEDURAL_MARKERS = (
     "verification",
     "where to file",
     "where should i file",
+    "insect",
+    "contaminated",
+    "unsafe food",
+    "food poisoning",
+    "spoiled",
+    "chocolate",
+    "expired",
+    "seller",
+    "refund",
+    "replacement",
+    "damaged",
+    "defective",
+    "mobile snatched",
+    "phone stolen",
+    "landlord",
+    "eviction",
+    "deposit",
+    "lockout",
 )
 LEGAL_HELP_PRIORITY_MARKERS = (
     "upi",
@@ -79,6 +97,22 @@ LEGAL_HELP_PRIORITY_MARKERS = (
     "threat",
     "evict",
     "notice",
+    "insect",
+    "contaminated",
+    "unsafe food",
+    "food poisoning",
+    "spoiled",
+    "expired",
+    "seller",
+    "refund",
+    "replacement",
+    "damaged",
+    "defective",
+    "snatched",
+    "stolen",
+    "robbed",
+    "deposit",
+    "lockout",
 )
 PURE_GREETING_PATTERN = re.compile(
     r"^(hi|hello|hey|good morning|good afternoon|good evening|namaste|hii+|heyy+)\W*$"
@@ -102,6 +136,20 @@ ISSUE_STATEMENT_MARKERS = (
     "property",
     "notice",
     "complaint",
+    "insect",
+    "contaminated",
+    "unsafe food",
+    "food poisoning",
+    "spoiled",
+    "expired",
+    "seller",
+    "refund",
+    "replacement",
+    "damaged",
+    "defective",
+    "snatched",
+    "stolen",
+    "robbed",
     "abuse",
     "assault",
     "cheat",
@@ -290,7 +338,14 @@ class IntentRoutingService:
 
     @staticmethod
     def _looks_like_technical_topic(normalized: str) -> bool:
-        return any(marker in normalized for marker in TECHNICAL_TOPIC_MARKERS)
+        for marker in TECHNICAL_TOPIC_MARKERS:
+            if " " in marker:
+                if marker in normalized:
+                    return True
+                continue
+            if re.search(rf"\b{re.escape(marker)}\b", normalized):
+                return True
+        return False
 
     @staticmethod
     def _response_for_tag(tag: str, catalog: dict[str, dict[str, list[str]]]) -> str:

@@ -92,3 +92,46 @@ def test_indiankanoon_ignores_broken_env_proxy_by_default():
     service = IndianKanoonService(settings)
 
     assert service.session.trust_env is False
+
+
+def test_indiankanoon_prefers_exact_authority_and_filters_noisy_docs():
+    settings = Settings(
+        INDIANKANOON_API_TOKEN="token",
+        INDIANKANOON_TRUST_ENV_PROXY="false",
+    )
+    service = IndianKanoonService(settings)
+
+    docs = [
+        {
+            "doc_id": "1",
+            "title": "Section 420 in The Indian Penal Code, 1860",
+            "headline": "Punishment may extend to seven years and fine.",
+            "fragment_excerpt": "Punishment may extend to seven years and fine.",
+            "doc_excerpt": "Cheating may be punished with imprisonment which may extend to seven years and fine.",
+            "docsource": "laws",
+            "score": 42.0,
+        },
+        {
+            "doc_id": "2",
+            "title": "Noisy Result",
+            "headline": "debug: internal server error",
+            "fragment_excerpt": "{\"errmsg\":\"Error in evaluting the fragments\"}",
+            "doc_excerpt": "traceback dump",
+            "docsource": "gujarat",
+            "score": 41.0,
+        },
+        {
+            "doc_id": "3",
+            "title": "Another Weak Match",
+            "headline": "Some distant observation",
+            "fragment_excerpt": "Unrelated facts",
+            "doc_excerpt": "Unrelated facts",
+            "docsource": "gujarat",
+            "score": 30.0,
+        },
+    ]
+
+    selected = service._limit_to_most_relevant(docs, max_results=4)
+
+    assert len(selected) == 1
+    assert selected[0]["doc_id"] == "1"

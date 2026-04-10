@@ -24,7 +24,11 @@ def test_session_store_persists_conversation_state(tmp_path):
         "conversation_started": True,
         "active_intent": "legal_help",
         "awaiting_details": True,
+        "interview_mode": True,
+        "intake_stage": 2,
         "last_user_issue": "My landlord is harassing me",
+        "current_intake_key": "record_status",
+        "collected_facts": {"issue_summary": "My landlord is harassing me"},
         "issue_type": "police_complaint",
         "city": "Ahmedabad",
     }
@@ -34,5 +38,9 @@ def test_session_store_persists_conversation_state(tmp_path):
 
     assert saved["active_intent"] == "legal_help"
     assert saved["awaiting_details"] is True
+    assert saved["interview_mode"] is True
+    assert saved["intake_stage"] == 2
+    assert saved["current_intake_key"] == "record_status"
+    assert saved["collected_facts"]["issue_summary"] == "My landlord is harassing me"
     assert saved["issue_type"] == "police_complaint"
     assert saved["city"] == "Ahmedabad"

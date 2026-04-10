@@ -107,6 +107,15 @@ def chat_messages(chat_id: int, request: Request) -> ChatMessagesResponse:
     return ChatMessagesResponse(items=items)
 
 
+@router.delete("/chat/{chat_id}")
+def delete_chat(chat_id: int, request: Request) -> dict[str, str]:
+    user = require_current_user(request)
+    deleted = request.app.state.session_store.delete_session(chat_id, user["id"])
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Chat session not found")
+    return {"status": "ok"}
+
+
 @router.delete("/chat/history")
 def clear_history(request: Request) -> dict[str, str]:
     user = require_current_user(request)

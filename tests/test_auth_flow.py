@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from urllib.parse import parse_qs, urlparse
 
 from backend.app.api.routes import auth as auth_routes
@@ -18,18 +19,19 @@ def test_signup_me_logout_and_protected_redirects(anonymous_client):
     assert frontend_root_response.status_code == 307
     assert frontend_root_response.headers["location"] == "/frontend/auth.html"
 
+    email = f"integration-{uuid.uuid4().hex[:8]}@example.com"
     signup_response = anonymous_client.post(
         "/auth/signup",
         json={
             "full_name": "Integration User",
-            "email": "integration@example.com",
+            "email": email,
             "password": "password123",
             "state": "Gujarat",
         },
     )
 
     assert signup_response.status_code == 200
-    assert signup_response.json()["user"]["email"] == "integration@example.com"
+    assert signup_response.json()["user"]["email"] == email
 
     me_response = anonymous_client.get("/auth/me")
     assert me_response.status_code == 200
@@ -158,3 +160,37 @@ def test_password_reset_request_and_confirm_flow(monkeypatch, anonymous_client):
         json={"email": "reset@example.com", "password": "newpassword123"},
     )
     assert new_login.status_code == 200
+
+
+def test_signup_cookie_not_secure_in_debug_local_mode(anonymous_client):
+    email = f"cookie-debug-{uuid.uuid4().hex[:8]}@example.com"
+    response = anonymous_client.post(
+        "/auth/signup",
+        json={
+            "full_name": "Cookie Debug User",
+            "email": email,
+            "password": "password123",
+            "state": "Gujarat",
+        },
+    )
+    assert response.status_code == 200
+    set_cookie = response.headers.get("set-cookie", "")
+    assert "Secure" not in set_cookie
+
+
+def test_signup_cookie_secure_for_https_forwarded_requests(monkeypatch, anonymous_client):
+    anonymous_client.app.state.settings.debug = False
+    email = f"cookie-secure-{uuid.uuid4().hex[:8]}@example.com"
+    response = anonymous_client.post(
+        "/auth/signup",
+        json={
+            "full_name": "Cookie Secure User",
+            "email": email,
+            "password": "password123",
+            "state": "Gujarat",
+        },
+        headers={"x-forwarded-proto": "https"},
+    )
+    assert response.status_code == 200
+    set_cookie = response.headers.get("set-cookie", "")
+    assert "Secure" in set_cookie

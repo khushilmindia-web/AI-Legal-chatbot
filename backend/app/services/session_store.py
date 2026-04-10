@@ -82,11 +82,20 @@ class SessionStore:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         try:
             self._init_db()
-        except sqlite3.OperationalError:
-            fallback_path = Path(tempfile.gettempdir()) / f"{self.db_path.stem}_runtime{self.db_path.suffix}"
+        except sqlite3.OperationalError as exc:
+            logger.warning("Primary sqlite init failed for %s; switching to temp fallback: %s", self.db_path, exc)
+            fallback_path = self._build_fallback_db_path(self.db_path)
             self.db_path = fallback_path
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
             self._init_db()
+
+    @staticmethod
+    def _build_fallback_db_path(original_path: Path) -> Path:
+        resolved = str(original_path.resolve())
+        digest = hashlib.sha256(resolved.encode("utf-8")).hexdigest()[:12]
+        stem = original_path.stem or "lawyer_ai"
+        suffix = original_path.suffix or ".db"
+        return Path(tempfile.gettempdir()) / f"{stem}_runtime_{digest}{suffix}"
 
     def _get_connection(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.db_path, check_same_thread=False, timeout=30.0)
@@ -589,3 +598,15 @@ class SessionStore:
                 )
                 connection.execute("DELETE FROM chat_sessions WHERE user_id = ?", (user_id,))
             connection.commit()
+
+    def delete_session(self, chat_id: int, user_id: int | None = None) -> bool:
+        with closing(self._get_connection()) as connection:
+            if user_id is None:
+                cursor = connection.execute("DELETE FROM chat_sessions WHERE id = ?", (chat_id,))
+            else:
+                cursor = connection.execute(
+                    "DELETE FROM chat_sessions WHERE id = ? AND user_id = ?",
+                    (chat_id, user_id),
+                )
+            connection.commit()
+            return cursor.rowcount > 0

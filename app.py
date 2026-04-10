@@ -1,3 +1,5 @@
+# Legacy entrypoint retained only for historical reference.
+# Active runtime entrypoint: backend/app/main.py
 # from backend.app import *  # noqa: F401,F403
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware

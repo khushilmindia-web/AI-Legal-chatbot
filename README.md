@@ -1,6 +1,6 @@
 # Lawyer AI MVP
 
-Lawyer AI is a production-style MVP for Indian legal guidance. It uses a simple FastAPI backend, OpenAI Responses API, lightweight local knowledge files, upload-based grounding, and a ChatGPT-like frontend.
+Lawyer AI is a production-style MVP for Indian legal guidance. The active runtime is a FastAPI app with authenticated chat sessions, India Kanoon grounded retrieval, upload-aware grounding, and structured legal response formatting.
 
 This version is intentionally simple:
 
@@ -16,6 +16,7 @@ backend/
   app/
     api/
       routes/
+        auth.py
         chat.py
         debug.py
         health.py
@@ -29,13 +30,13 @@ backend/
     services/
       chat_service.py
       file_extractor.py
-      openai_service.py
-      retrieval.py
+      indiankanoon_service.py
+      intent_service.py
       session_store.py
+      openai_service.py
     utils/
       request_context.py
     main.py
-  main.py
 frontend/
   index.html
   style.css
@@ -49,15 +50,16 @@ README.md
 
 ## Features
 
-- FastAPI routes for `POST /chat`, `POST /chat/upload`, `GET /health`, `GET /debug/status`
+- FastAPI routes for auth, chat, health, and debug status
+- Cookie-based authenticated sessions for chat history and account access
 - shared chat orchestration in one service layer
 - blank chat history until the first real user message
 - old chats reopen properly
 - clear history deletes all local sessions and messages
-- simple legal grounding using curated files in `knowledge/`
+- India Kanoon grounded retrieval with structured answer generation
 - upload support for text, PDF, and image files
 - safe OpenAI wrapper with timeout, retry, and graceful fallback
-- state-aware guidance without forcing unnecessary gating questions
+- stateful multi-turn follow-up handling across legal-help and grounded-RAG flows
 - structured logging with request IDs
 
 ## Setup
@@ -95,13 +97,14 @@ Open the frontend in the browser:
 
 - `OPENAI_API_KEY`
 - `OPENAI_MODEL`
-- `MAX_FILE_SIZE_MB`
+- `INDIANKANOON_API_TOKEN` (or legacy alias `INDIA_KANOON_API_TOKEN`)
+- `INDIANKANOON_API_BASE_URL`
+- `INDIANKANOON_TIMEOUT_SECONDS`
 - `DEBUG`
 - `DEFAULT_STATE`
-- `RETRIEVAL_MODE`
-- `OPENAI_TIMEOUT_SECONDS`
-- `OPENAI_MAX_RETRIES`
 - `CORS_ALLOW_ORIGINS`
+- `AUTH_COOKIE_NAME`
+- `AUTH_SESSION_DURATION_DAYS`
 - `APP_BASE_URL`
 - `SMTP_HOST`
 - `SMTP_PORT`
@@ -111,7 +114,6 @@ Open the frontend in the browser:
 - `SMTP_FROM_NAME`
 - `SMTP_USE_TLS`
 - `PASSWORD_RESET_TOKEN_TTL_MINUTES`
-- `OPENAI_VECTOR_STORE_ID`
 
 ## Chat Flow
 
@@ -191,4 +193,4 @@ This MVP is designed to upgrade cleanly to:
 - Indian State-specific expansion
 - advocate referral or human escalation
 
-To move beyond the MVP later, you can keep the same API surface and swap out the retrieval provider behind `backend/app/services/retrieval.py`.
+To move beyond the MVP later, you can keep the same API surface and extend the active grounded path in `backend/app/services/chat_service.py` and `backend/app/services/indiankanoon_service.py`.

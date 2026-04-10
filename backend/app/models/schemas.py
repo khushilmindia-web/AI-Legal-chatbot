@@ -129,9 +129,13 @@ class ConversationState(BaseModel):
     conversation_started: bool = False
     active_intent: str | None = None
     awaiting_details: bool = False
+    interview_mode: bool = False
+    intake_stage: int = 0
     last_user_issue: str | None = None
     legal_domain: str | None = None
     last_follow_up_question: str | None = None
+    current_intake_key: str | None = None
+    collected_facts: dict[str, str] = Field(default_factory=dict)
     issue_type: str | None = None
     city: str | None = None
     police_station: str | None = None

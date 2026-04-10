@@ -135,17 +135,44 @@ textarea {
 }
 
 .history-item {
-    text-align: left;
     border: 1px solid transparent;
     border-radius: 18px;
-    padding: 14px 14px 12px;
     background: rgba(255, 255, 255, 0.88);
     box-shadow: var(--shadow);
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    align-items: start;
+    padding: 12px;
 }
 
 .history-item.active {
     border-color: rgba(31, 77, 139, 0.22);
     background: #f1f5fb;
+}
+
+.history-item-open {
+    text-align: left;
+    border: none;
+    background: transparent;
+    padding: 2px;
+    cursor: pointer;
+}
+
+.history-item-delete {
+    border: 1px solid rgba(139, 44, 31, 0.18);
+    border-radius: 12px;
+    background: #fff4f0;
+    color: var(--danger-text);
+    padding: 8px 10px;
+    font-family: "Segoe UI", sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.history-item-delete:hover {
+    background: #ffe8e1;
 }
 
 .history-item-title,

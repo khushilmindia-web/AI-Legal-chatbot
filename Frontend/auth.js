@@ -23,7 +23,6 @@ const GOOGLE_STATUS_URL = `${BASE_API_URL}/auth/google/status`;
 const PASSWORD_RESET_URL = `${BASE_API_URL}/auth/password-reset`;
 const PASSWORD_RESET_CONFIRM_URL = `${BASE_API_URL}/auth/password-reset/confirm`;
 const ME_URL = `${BASE_API_URL}/auth/me`;
-const TOKEN_KEY = 'legalAuthToken';
 const USER_KEY = 'legalAuthUser';
 const GOOGLE_CONFIG = {
     backendConfigured: false,
@@ -52,29 +51,17 @@ window.addEventListener('load', async () => {
     }
 });
 
-function buildAuthHeaders(token) {
-    const headers = {};
-    if (token) {
-        headers.Authorization = `Bearer ${token}`;
-    }
-    return headers;
-}
-
 function redirectToApp() {
     window.location.href = APP_URL;
 }
 
 function clearSession() {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
+    sessionStorage.removeItem(USER_KEY);
 }
 
 function saveSession(data) {
-    if (data.token) {
-        localStorage.setItem(TOKEN_KEY, data.token);
-    }
     if (data.user) {
-        localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+        sessionStorage.setItem(USER_KEY, JSON.stringify(data.user));
     }
 }
 
@@ -152,11 +139,10 @@ async function submitJson(url, payload) {
     }
 }
 
-async function fetchCurrentUser(token) {
+async function fetchCurrentUser() {
     const response = await fetch(ME_URL, {
         method: 'GET',
-        credentials: 'include',
-        headers: buildAuthHeaders(token)
+        credentials: 'include'
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -166,18 +152,6 @@ async function fetchCurrentUser(token) {
 }
 
 async function redirectIfAuthenticated() {
-    const storedToken = localStorage.getItem(TOKEN_KEY);
-    if (storedToken) {
-        try {
-            const user = await fetchCurrentUser(storedToken);
-            saveSession({ token: storedToken, user });
-            redirectToApp();
-            return;
-        } catch (error) {
-            clearSession();
-        }
-    }
-
     try {
         const user = await fetchCurrentUser();
         saveSession({ user });
@@ -230,7 +204,6 @@ function clearOAuthQueryParams() {
 
 async function handleOAuthCallback() {
     const params = new URLSearchParams(window.location.search);
-    const token = params.get('token');
     const error = params.get('error');
 
     if (error) {
@@ -248,22 +221,7 @@ async function handleOAuthCallback() {
         return true;
     }
 
-    if (!token) {
-        return false;
-    }
-
-    try {
-        const user = await fetchCurrentUser(token);
-        saveSession({ token, user });
-        clearOAuthQueryParams();
-        redirectToApp();
-        return true;
-    } catch (oauthError) {
-        clearSession();
-        showMessage('Google sign-in succeeded but the session could not be restored. Please try again.', true);
-        clearOAuthQueryParams();
-        return true;
-    }
+    return false;
 }
 
 function startGoogleLogin(event) {
