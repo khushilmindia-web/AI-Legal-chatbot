@@ -20,7 +20,11 @@ router = APIRouter(tags=["chat"])
 
 
 def get_chat_service(request: Request) -> ChatService:
-    return ChatService(settings=request.app.state.settings, store=request.app.state.session_store)
+    service = getattr(request.app.state, "chat_service", None)
+    if service is None:
+        service = ChatService(settings=request.app.state.settings, store=request.app.state.session_store)
+        request.app.state.chat_service = service
+    return service
 
 
 @router.post("/chat", response_model=ChatUploadResponse)
@@ -107,17 +111,17 @@ def chat_messages(chat_id: int, request: Request) -> ChatMessagesResponse:
     return ChatMessagesResponse(items=items)
 
 
+@router.delete("/chat/history")
+def clear_history(request: Request) -> dict[str, str]:
+    user = require_current_user(request)
+    request.app.state.session_store.clear_history(user["id"])
+    return {"status": "ok"}
+
+
 @router.delete("/chat/{chat_id}")
 def delete_chat(chat_id: int, request: Request) -> dict[str, str]:
     user = require_current_user(request)
     deleted = request.app.state.session_store.delete_session(chat_id, user["id"])
     if not deleted:
         raise HTTPException(status_code=404, detail="Chat session not found")
-    return {"status": "ok"}
-
-
-@router.delete("/chat/history")
-def clear_history(request: Request) -> dict[str, str]:
-    user = require_current_user(request)
-    request.app.state.session_store.clear_history(user["id"])
     return {"status": "ok"}

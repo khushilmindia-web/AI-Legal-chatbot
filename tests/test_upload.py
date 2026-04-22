@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import io
 
+from backend.app.services.chat_service import ChatService
 from backend.app.services.file_extractor import FileExtractionService
 from backend.app.services.indiankanoon_service import IndianKanoonService
 from backend.app.services.openai_service import OpenAIResponsesService
@@ -25,6 +26,15 @@ def test_chat_upload_accepts_text_file(client, monkeypatch):
 
     monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", no_live_docs)
     monkeypatch.setattr(OpenAIResponsesService, "generate_json", fake_generate_json)
+    monkeypatch.setattr(
+        ChatService,
+        "_run_semantic_support_check",
+        lambda self, answer, query, documents, source_sufficiency: {
+            "status": "supported",
+            "confidence": 0.99,
+            "reason": "test override",
+        },
+    )
 
     response = client.post(
         "/chat/upload",

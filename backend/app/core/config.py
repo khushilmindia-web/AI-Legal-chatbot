@@ -63,6 +63,20 @@ class Settings(BaseSettings):
     )
     indiankanoon_timeout_seconds: float = Field(default=20.0, alias="INDIANKANOON_TIMEOUT_SECONDS")
     indiankanoon_trust_env_proxy: bool = Field(default=False, alias="INDIANKANOON_TRUST_ENV_PROXY")
+    google_search_enabled: bool = Field(default=False, alias="GOOGLE_SEARCH_ENABLED")
+    google_custom_search_api_key: str = Field(default="", alias="GOOGLE_CUSTOM_SEARCH_API_KEY")
+    google_custom_search_cx: str = Field(default="", alias="GOOGLE_CUSTOM_SEARCH_CX")
+    google_search_timeout_seconds: float = Field(default=8.0, alias="GOOGLE_SEARCH_TIMEOUT_SECONDS")
+    google_search_max_results: int = Field(default=3, alias="GOOGLE_SEARCH_MAX_RESULTS")
+    google_search_cache_ttl_seconds: int = Field(default=21600, alias="GOOGLE_SEARCH_CACHE_TTL_SECONDS")
+    google_search_trusted_domains_raw: str = Field(
+        default="gov.in,nic.in,rbi.org.in,cybercrime.gov.in,sci.gov.in",
+        alias="GOOGLE_SEARCH_TRUSTED_DOMAINS",
+    )
+    local_model_assist_enabled: bool = Field(default=True, alias="LOCAL_MODEL_ASSIST_ENABLED")
+    local_text_similarity_model: str = Field(default="", alias="LOCAL_TEXT_SIMILARITY_MODEL")
+    local_support_check_enabled: bool = Field(default=True, alias="LOCAL_SUPPORT_CHECK_ENABLED")
+    local_support_check_threshold: float = Field(default=0.58, alias="LOCAL_SUPPORT_CHECK_THRESHOLD")
 
     @field_validator("debug", mode="before")
     @classmethod
@@ -92,9 +106,32 @@ class Settings(BaseSettings):
             return False
         return value
 
+    @field_validator(
+        "local_model_assist_enabled",
+        "local_support_check_enabled",
+        "google_search_enabled",
+        mode="before",
+    )
+    @classmethod
+    def coerce_local_bool(cls, value):
+        if isinstance(value, bool):
+            return value
+        if value is None:
+            return False
+        normalized = str(value).strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off", ""}:
+            return False
+        return value
+
     @property
     def cors_origins(self) -> list[str]:
         return [item.strip() for item in self.cors_origins_raw.split(",") if item.strip()]
+
+    @property
+    def google_search_trusted_domains(self) -> list[str]:
+        return [item.strip().lower() for item in self.google_search_trusted_domains_raw.split(",") if item.strip()]
 
     @property
     def database_url(self) -> str:
@@ -123,6 +160,10 @@ class Settings(BaseSettings):
         return PROMPT_PATH
 
     @property
+    def domain_packs_manifest_path(self) -> Path:
+        return DATA_DIR / "manifests" / "legal_domain_packs.json"
+
+    @property
     def smtp_configured(self) -> bool:
         required = [
             self.smtp_host.strip(),
@@ -135,6 +176,14 @@ class Settings(BaseSettings):
     @property
     def indiankanoon_configured(self) -> bool:
         return bool(self.indiankanoon_api_token.strip())
+
+    @property
+    def google_custom_search_configured(self) -> bool:
+        return (
+            self.google_search_enabled
+            and bool(self.google_custom_search_api_key.strip())
+            and bool(self.google_custom_search_cx.strip())
+        )
 
 
 @lru_cache(maxsize=1)

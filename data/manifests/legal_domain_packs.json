@@ -1,0 +1,69 @@
+{
+  "default_pack": {
+    "pack_id": "general_local_pack_v1",
+    "boost_terms": ["authority", "legal position", "procedure", "forum"],
+    "preferred_authority_types": ["statute", "case_law"],
+    "preferred_sources": ["supremecourt", "laws"],
+    "fallback_sources": ["internal_guidance"]
+  },
+  "domain_packs": {
+    "criminal": {
+      "pack_id": "criminal_core_pack_v1",
+      "boost_terms": ["fir", "theft", "fraud", "section", "bns", "bnss", "police"],
+      "preferred_authority_types": ["statute", "case_law"],
+      "preferred_sources": ["laws", "supremecourt", "gujarat"],
+      "fallback_sources": ["internal_guidance"]
+    },
+    "consumer": {
+      "pack_id": "consumer_core_pack_v1",
+      "boost_terms": ["refund", "defective", "seller", "consumer commission", "invoice"],
+      "preferred_authority_types": ["case_law", "statute"],
+      "preferred_sources": ["consumer", "supremecourt"],
+      "fallback_sources": ["internal_guidance"]
+    },
+    "property": {
+      "pack_id": "property_core_pack_v1",
+      "boost_terms": ["landlord", "tenant", "rent", "eviction", "deposit", "lockout"],
+      "preferred_authority_types": ["case_law", "statute"],
+      "preferred_sources": ["supremecourt", "gujarat"],
+      "fallback_sources": ["internal_guidance"]
+    },
+    "document_review": {
+      "pack_id": "document_review_pack_v1",
+      "boost_terms": ["agreement", "notice", "clause", "draft", "contract", "document"],
+      "preferred_authority_types": ["internal_guidance", "statute"],
+      "preferred_sources": ["internal_guidance", "laws"],
+      "fallback_sources": ["case_law"]
+    },
+    "procedure": {
+      "pack_id": "procedure_core_pack_v1",
+      "boost_terms": ["how to", "where to file", "complaint", "authority", "portal", "steps"],
+      "preferred_authority_types": ["internal_guidance", "statute"],
+      "preferred_sources": ["internal_guidance", "laws"],
+      "fallback_sources": ["case_law"]
+    }
+  },
+  "issue_packs": {
+    "cyber_fraud": {
+      "pack_id": "cyber_fraud_pack_v1",
+      "boost_terms": ["upi", "phishing", "bank fraud", "1930", "cyber crime portal", "debit"],
+      "preferred_authority_types": ["internal_guidance", "statute"],
+      "preferred_sources": ["internal_guidance", "laws", "supremecourt"],
+      "fallback_sources": ["case_law"]
+    },
+    "snatching_theft": {
+      "pack_id": "snatching_theft_pack_v1",
+      "boost_terms": ["snatched", "stolen", "theft", "mobile", "phone", "imei"],
+      "preferred_authority_types": ["statute", "case_law"],
+      "preferred_sources": ["laws", "supremecourt", "gujarat"],
+      "fallback_sources": ["internal_guidance"]
+    },
+    "food_safety": {
+      "pack_id": "food_safety_pack_v1",
+      "boost_terms": ["contaminated", "expired", "food safety", "packet", "invoice", "seller"],
+      "preferred_authority_types": ["internal_guidance", "case_law"],
+      "preferred_sources": ["internal_guidance", "consumer"],
+      "fallback_sources": ["laws"]
+    }
+  }
+}

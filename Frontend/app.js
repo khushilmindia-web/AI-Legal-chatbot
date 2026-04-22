@@ -12,9 +12,14 @@ const state = {
   liveMessages: [],
   isBusy: false,
   currentUser: null,
+  sidebarOpen: true,
+  desktopSidebarLayout: true,
 };
 
 const elements = {
+  sidebar: document.getElementById("sidebar"),
+  sidebarBackdrop: document.getElementById("sidebarBackdrop"),
+  sidebarToggle: document.getElementById("sidebarToggle"),
   historyList: document.getElementById("historyList"),
   emptyHistory: document.getElementById("emptyHistory"),
   chatThread: document.getElementById("chatThread"),
@@ -38,6 +43,36 @@ const elements = {
   currentUserMeta: document.getElementById("currentUserMeta"),
   logoutButton: document.getElementById("logoutButton"),
 };
+
+function isDesktopSidebarLayout() {
+  return window.innerWidth > 980;
+}
+
+function setSidebarOpen(isOpen) {
+  state.sidebarOpen = isOpen;
+  document.body.classList.toggle("sidebar-open", isOpen);
+  document.body.classList.toggle("sidebar-closed", !isOpen);
+  if (elements.sidebarToggle) {
+    elements.sidebarToggle.setAttribute("aria-expanded", String(isOpen));
+  }
+  if (elements.sidebarBackdrop) {
+    elements.sidebarBackdrop.hidden = !isOpen;
+  }
+}
+
+function syncSidebarForViewport(force = false) {
+  const desktopLayout = isDesktopSidebarLayout();
+  if (force || desktopLayout !== state.desktopSidebarLayout) {
+    setSidebarOpen(desktopLayout);
+  }
+  state.desktopSidebarLayout = desktopLayout;
+}
+
+function closeSidebarIfOverlayMode() {
+  if (!isDesktopSidebarLayout()) {
+    setSidebarOpen(false);
+  }
+}
 
 function setElementText(element, text) {
   if (element) {
@@ -88,6 +123,28 @@ function showError(message) {
   elements.errorBanner.hidden = false;
 }
 
+function errorTextFromPayload(payload, fallbackMessage) {
+  if (!payload) {
+    return fallbackMessage;
+  }
+  if (typeof payload.detail === "string" && payload.detail.trim()) {
+    return payload.detail;
+  }
+  if (Array.isArray(payload.detail) && payload.detail.length > 0) {
+    const first = payload.detail[0];
+    if (typeof first === "string" && first.trim()) {
+      return first;
+    }
+    if (first && typeof first.msg === "string" && first.msg.trim()) {
+      return first.msg;
+    }
+  }
+  if (typeof payload.message === "string" && payload.message.trim()) {
+    return payload.message;
+  }
+  return fallbackMessage;
+}
+
 function clearError() {
   if (!elements.errorBanner) {
     return;
@@ -133,7 +190,7 @@ async function requestJson(path, options = {}) {
       throw new Error("Authentication required");
     }
     if (!response.ok) {
-      throw new Error(payload.detail || payload.message || options.timeoutMessage || `Request failed with status ${response.status}`);
+      throw new Error(errorTextFromPayload(payload, options.timeoutMessage || `Request failed with status ${response.status}`));
     }
     return payload;
   } catch (error) {
@@ -348,6 +405,7 @@ async function openChat(chatId) {
   state.draftMessages = [];
   renderHistory();
   renderMessages();
+  closeSidebarIfOverlayMode();
 }
 
 function appendOptimisticUserMessage(message) {
@@ -486,8 +544,8 @@ async function clearHistory() {
   }
   clearError();
   await requestJson("/chat/history", { method: "DELETE", credentials: "include" });
-  state.sessions = [];
   setBlankDraft();
+  await loadHistory();
 }
 
 async function deleteChat(chatId) {
@@ -526,6 +584,17 @@ function bindEvents() {
     elements.newChatButton.addEventListener("click", () => {
       clearError();
       setBlankDraft();
+      closeSidebarIfOverlayMode();
+    });
+  }
+  if (elements.sidebarToggle) {
+    elements.sidebarToggle.addEventListener("click", () => {
+      setSidebarOpen(!state.sidebarOpen);
+    });
+  }
+  if (elements.sidebarBackdrop) {
+    elements.sidebarBackdrop.addEventListener("click", () => {
+      setSidebarOpen(false);
     });
   }
   if (elements.clearHistoryButton) {
@@ -558,9 +627,16 @@ function bindEvents() {
       }
     });
   }
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && state.sidebarOpen && !isDesktopSidebarLayout()) {
+      setSidebarOpen(false);
+    }
+  });
+  window.addEventListener("resize", syncSidebarForViewport);
 }
 
 async function boot() {
+  syncSidebarForViewport(true);
   bindEvents();
   await ensureAuthenticated();
   setBlankDraft();

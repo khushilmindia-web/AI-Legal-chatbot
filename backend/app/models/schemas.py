@@ -132,11 +132,17 @@ class ConversationState(BaseModel):
     interview_mode: bool = False
     intake_stage: int = 0
     last_user_issue: str | None = None
+    last_grounded_query: str | None = None
     legal_domain: str | None = None
     last_follow_up_question: str | None = None
     current_intake_key: str | None = None
     collected_facts: dict[str, str] = Field(default_factory=dict)
     issue_type: str | None = None
+    case_state: str | None = None
+    district: str | None = None
+    case_stage: str | None = None
+    is_own_matter: bool | None = None
+    uploaded_document_summaries: list[str] = Field(default_factory=list)
     city: str | None = None
     police_station: str | None = None
     bank_name: str | None = None

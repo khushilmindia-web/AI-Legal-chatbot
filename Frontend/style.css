@@ -1,4 +1,8 @@
 :root {
+    --sidebar-width: 320px;
+    --content-wide: 1320px;
+    --content-read: 1180px;
+    --content-user: 920px;
     --bg: #f4efe6;
     --panel: #fffdf8;
     --panel-strong: #ffffff;
@@ -29,6 +33,10 @@ body {
     font-family: Georgia, "Times New Roman", serif;
 }
 
+body.sidebar-closed .shell {
+    grid-template-columns: 0 1fr;
+}
+
 button,
 input,
 select,
@@ -38,8 +46,9 @@ textarea {
 
 .shell {
     display: grid;
-    grid-template-columns: 320px 1fr;
+    grid-template-columns: minmax(280px, var(--sidebar-width)) minmax(0, 1fr);
     min-height: 100vh;
+    width: 100%;
 }
 
 .sidebar {
@@ -50,6 +59,21 @@ textarea {
     display: flex;
     flex-direction: column;
     gap: 22px;
+    min-width: 0;
+    overflow: hidden;
+    transition: transform 0.18s ease, opacity 0.18s ease, padding 0.18s ease, border 0.18s ease;
+}
+
+body.sidebar-closed .sidebar {
+    opacity: 0;
+    padding-left: 0;
+    padding-right: 0;
+    border-right: none;
+    pointer-events: none;
+}
+
+.sidebar-backdrop {
+    display: none;
 }
 
 .eyebrow {
@@ -207,6 +231,8 @@ textarea {
     display: grid;
     grid-template-rows: auto auto 1fr auto auto;
     min-height: 100vh;
+    width: 100%;
+    min-width: 0;
 }
 
 .chat-header {
@@ -215,6 +241,39 @@ textarea {
     align-items: flex-start;
     gap: 16px;
     padding: 24px 28px 18px;
+    width: 100%;
+}
+
+/* .chat-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    width: 100%;
+    padding-top: 18px;
+    flex-direction: row;
+    align-items: flex-start;
+    flex-wrap: nowrap;
+} */
+
+.chat-header-copy {
+    display: grid;
+    gap: 8px;
+}
+
+.sidebar-toggle {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.92);
+    color: var(--brand);
+    padding: 10px 14px;
+    font-family: "Segoe UI", sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: var(--shadow);
 }
 
 .status-text {
@@ -245,10 +304,12 @@ textarea {
     flex-direction: column;
     gap: 18px;
     overflow-y: auto;
+    width: 100%;
+    align-items: stretch;
 }
 
 .blank-state {
-    max-width: 760px;
+    width: min(100%, var(--content-wide));
     padding: 28px;
     border: 1px solid rgba(130, 101, 63, 0.18);
     border-radius: 26px;
@@ -288,7 +349,7 @@ textarea {
 }
 
 .message-bubble {
-    max-width: min(840px, 86%);
+    width: min(100%, var(--content-read));
     padding: 18px 20px 14px;
     border-radius: 24px;
     box-shadow: var(--shadow);
@@ -296,6 +357,7 @@ textarea {
 
 .message-bubble.user {
     align-self: flex-end;
+    width: min(100%, var(--content-user));
     background: linear-gradient(180deg, #2a5a98 0%, #1f4d8b 100%);
     color: #fff;
 }
@@ -395,8 +457,10 @@ textarea {
 
 .composer {
     padding: 18px 28px 28px;
-    display: grid;
+    display: flex;
+    flex-direction: column;
     gap: 14px;
+    width: 100%;
 }
 
 .composer-toolbar {
@@ -404,6 +468,7 @@ textarea {
     justify-content: space-between;
     gap: 16px;
     align-items: center;
+    width: min(100%, var(--content-wide));
 }
 
 .details-toggle {
@@ -431,6 +496,7 @@ textarea {
     border-radius: 22px;
     background: rgba(255, 255, 255, 0.76);
     border: 1px solid var(--border);
+    width: min(100%, var(--content-wide));
 }
 
 .details-panel label {
@@ -468,6 +534,19 @@ textarea {
     grid-template-columns: 1fr 140px;
     gap: 12px;
     align-items: end;
+    width: min(100%, var(--content-wide));
+}
+
+.composer-main {
+    order: 1;
+}
+
+.composer-toolbar {
+    order: 2;
+}
+
+.details-panel {
+    order: 3;
 }
 
 .send-button {
@@ -784,8 +863,45 @@ textarea {
     }
 
     .sidebar {
-        border-right: none;
-        border-bottom: 1px solid var(--border);
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: min(320px, 86vw);
+        border-right: 1px solid var(--border);
+        border-bottom: none;
+        z-index: 30;
+        transform: translateX(-105%);
+        transition: transform 0.18s ease;
+        opacity: 1;
+        padding-left: 18px;
+        padding-right: 18px;
+        pointer-events: auto;
+    }
+
+    body.sidebar-open .sidebar {
+        transform: translateX(0);
+    }
+
+    body.sidebar-closed .shell {
+        grid-template-columns: 1fr;
+    }
+
+    .sidebar-backdrop {
+        position: fixed;
+        inset: 0;
+        display: block;
+        border: none;
+        background: rgba(29, 26, 22, 0.24);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.18s ease;
+        z-index: 20;
+    }
+
+    body.sidebar-open .sidebar-backdrop {
+        opacity: 1;
+        pointer-events: auto;
     }
 
     .auth-shell {
@@ -794,6 +910,12 @@ textarea {
 
     .auth-hero-grid {
         grid-template-columns: 1fr;
+    }
+
+    :root {
+        --content-wide: 100%;
+        --content-read: 100%;
+        --content-user: min(92vw, 760px);
     }
 }
 
@@ -817,7 +939,7 @@ textarea {
 
     .blank-state,
     .message-bubble {
-        max-width: 100%;
+        width: 100%;
     }
 
     .composer-toolbar,
@@ -844,7 +966,60 @@ textarea {
         padding: 22px;
     }
 
+    /* Mobile auth page reordering: show login card first at top of viewport */
+    .auth-card {
+        order: 1;
+    }
+
+    .auth-hero {
+        order: 2;
+        padding: 16px;
+        gap: 14px;
+    }
+
+    .auth-hero-copy h1 {
+        font-size: clamp(20px, 5vw, 24px);
+        margin: 4px 0 6px;
+    }
+
+    .auth-hero-copy p {
+        font-size: 13px;
+        line-height: 1.5;
+    }
+
+    .auth-kicker {
+        font-size: 10px;
+        padding: 6px 10px;
+    }
+
+    .auth-hero-grid {
+        gap: 6px;
+    }
+
+    .auth-feature-card {
+        padding: 10px;
+    }
+
+    .auth-feature-card h2 {
+        font-size: 14px;
+        margin: 0 0 4px;
+    }
+
+    .auth-feature-card p {
+        font-size: 12px;
+        line-height: 1.4;
+    }
+    
     .auth-card-head h2 {
         font-size: 28px;
+        
+    }
+
+    .message-bubble {
+        padding: 16px 16px 12px;
+    }
+
+    .message-content {
+        font-size: 17px;
     }
 }

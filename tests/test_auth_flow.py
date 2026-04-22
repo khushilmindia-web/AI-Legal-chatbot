@@ -96,6 +96,11 @@ def test_google_callback_sets_session_cookie(monkeypatch, anonymous_client):
 
 
 def test_password_reset_requires_smtp_configuration(anonymous_client):
+    anonymous_client.app.state.settings.smtp_host = ""
+    anonymous_client.app.state.settings.smtp_username = ""
+    anonymous_client.app.state.settings.smtp_password = ""
+    anonymous_client.app.state.settings.smtp_from_email = ""
+
     response = anonymous_client.post("/auth/password-reset", json={"email": "missing@example.com"})
 
     assert response.status_code == 503

@@ -10,6 +10,7 @@ from backend.app.api.routes.debug import router as debug_router
 from backend.app.api.routes.health import router as health_router
 from backend.app.core.config import get_settings
 from backend.app.core.logging import configure_logging
+from backend.app.services.chat_service import ChatService
 from backend.app.services.session_store import SessionStore
 from backend.app.utils.request_context import RequestContextMiddleware
 
@@ -21,6 +22,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="Lawyer AI", version="0.1.0")
     app.state.settings = settings
     app.state.session_store = SessionStore(settings.database_url)
+    app.state.chat_service = ChatService(settings=settings, store=app.state.session_store)
 
     app.add_middleware(RequestContextMiddleware)
     app.add_middleware(

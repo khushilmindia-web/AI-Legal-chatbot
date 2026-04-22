@@ -8,7 +8,7 @@
 </head>
 <body>
     <div class="shell">
-        <aside class="sidebar">
+        <aside id="sidebar" class="sidebar">
             <div class="brand">
                 <div>
                     <p class="eyebrow">Lawyer AI</p>
@@ -29,10 +29,12 @@
                 <div id="historyList" class="history-list"></div>
             </section>
         </aside>
+        <button id="sidebarBackdrop" class="sidebar-backdrop" type="button" aria-label="Close sidebar"></button>
 
         <main class="chat-layout">
             <header class="chat-header">
-                <div>
+                <div class="chat-header-copy">
+                    <button id="sidebarToggle" class="sidebar-toggle" type="button" aria-expanded="true" aria-controls="sidebar">Menu</button>
                     <p class="eyebrow">Indian Legal Guidance</p>
                     <h2>Ask your legal question in simple language</h2>
                 </div>

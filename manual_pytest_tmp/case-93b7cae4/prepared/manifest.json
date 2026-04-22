@@ -1,0 +1,15 @@
+{
+  "input_dir": "D:\\AI-Chatbot\\manual_pytest_tmp\\case-93b7cae4\\source",
+  "output_dir": "D:\\AI-Chatbot\\manual_pytest_tmp\\case-93b7cae4\\prepared",
+  "processed_files": 2,
+  "chunk_count": 2,
+  "documents_file": "D:\\AI-Chatbot\\manual_pytest_tmp\\case-93b7cae4\\prepared\\documents.jsonl",
+  "chunks_file": "D:\\AI-Chatbot\\manual_pytest_tmp\\case-93b7cae4\\prepared\\chunks.jsonl",
+  "source_ids": [
+    "gst.json",
+    "note.txt"
+  ],
+  "embeddings_file": "D:\\AI-Chatbot\\manual_pytest_tmp\\case-93b7cae4\\prepared\\embeddings.jsonl",
+  "vectors_file": "D:\\AI-Chatbot\\manual_pytest_tmp\\case-93b7cae4\\prepared\\vectors.jsonl",
+  "embedding_records": 2
+}
