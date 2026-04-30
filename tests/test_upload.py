@@ -96,7 +96,7 @@ def test_file_extractor_reads_text_file(tmp_path):
     from backend.app.core import config as config_module
     from backend.app.core.config import get_settings
 
-    config_module.TEMP_DIR = tmp_path / "temp"
+    config_module.TEMP_DIR = tmp_path / "tmp"
     config_module.KNOWLEDGE_DIR = tmp_path / "knowledge"
     config_module.KNOWLEDGE_DIR.mkdir(parents=True, exist_ok=True)
     config_module.TEMP_DIR.mkdir(parents=True, exist_ok=True)

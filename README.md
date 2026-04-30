@@ -115,6 +115,31 @@ Open the frontend in the browser:
 - `SMTP_USE_TLS`
 - `PASSWORD_RESET_TOKEN_TTL_MINUTES`
 
+## Google OAuth Setup
+
+If email login works but Google login fails on mobile or when opening the app with your PC IP, the usual cause is a redirect URI mismatch.
+
+Set these values to the exact origin you open in the browser:
+
+- `APP_BASE_URL`
+- `GOOGLE_REDIRECT_URI`
+- `CORS_ALLOW_ORIGINS`
+
+Example for LAN/mobile testing:
+
+```env
+APP_BASE_URL=http://192.168.1.25:5000
+GOOGLE_REDIRECT_URI=http://192.168.1.25:5000/auth/google/callback
+CORS_ALLOW_ORIGINS=http://127.0.0.1:5000,http://localhost:5000,http://192.168.1.25:5000
+```
+
+In Google Cloud Console, the OAuth client must also include the same exact values:
+
+- Authorized JavaScript origins: `http://192.168.1.25:5000`
+- Authorized redirect URIs: `http://192.168.1.25:5000/auth/google/callback`
+
+Do not mix `127.0.0.1`, `localhost`, and your PC IP across these settings. The browser URL, backend config, and Google Console redirect URI must all match.
+
 ## Chat Flow
 
 1. The page opens with a blank chat area and blank history.

@@ -1,5 +1,0 @@
-Next correct execution order:
-131 → Fix mixed query detection (critical bug)
-127 / 132 → Fix fallback tone (UX issue)
-130 / 133 → Human lawyer tone
-135 → Google CX routing (after system stable)

@@ -1,10 +1,14 @@
 const loginTab = document.getElementById('loginTab');
 const signupTab = document.getElementById('signupTab');
+
 const loginForm = document.getElementById('loginForm');
 const signupForm = document.getElementById('signupForm');
+
 const authMessage = document.getElementById('authMessage');
 const signupState = document.getElementById('signupState');
+
 const googleLoginBtn = document.getElementById('googleLoginBtn');
+
 const forgotPasswordLink = document.getElementById('forgotPasswordLink');
 const passwordResetModal = document.getElementById('passwordResetModal');
 const passwordResetForm = document.getElementById('passwordResetForm');
@@ -13,17 +17,17 @@ const resetMessage = document.getElementById('resetMessage');
 const passwordResetTitle = document.getElementById('passwordResetTitle');
 const closeModal = document.getElementsByClassName('close')[0];
 
-const BASE_API_URL = window.APP_CONFIG?.apiBaseUrl ?? '';
 const FRONTEND_BASE_URL = window.APP_CONFIG?.frontendBaseUrl || '/frontend';
-const APP_URL = `${FRONTEND_BASE_URL}/index.html`;
-const LOGIN_URL = `${BASE_API_URL}/auth/login`;
-const SIGNUP_URL = `${BASE_API_URL}/auth/signup`;
-const GOOGLE_LOGIN_URL = `${BASE_API_URL}/auth/google/login`;
-const GOOGLE_STATUS_URL = `${BASE_API_URL}/auth/google/status`;
-const PASSWORD_RESET_URL = `${BASE_API_URL}/auth/password-reset`;
-const PASSWORD_RESET_CONFIRM_URL = `${BASE_API_URL}/auth/password-reset/confirm`;
-const ME_URL = `${BASE_API_URL}/auth/me`;
+const LOGIN_URL = '/auth/login';
+const SIGNUP_URL = '/auth/signup';
+const GOOGLE_LOGIN_URL = '/auth/google/login';
+const GOOGLE_STATUS_URL = '/auth/google/status';
+const PASSWORD_RESET_URL = '/auth/password-reset';
+const PASSWORD_RESET_CONFIRM_URL = '/auth/password-reset/confirm';
+const ME_URL = '/auth/me';
 const USER_KEY = 'legalAuthUser';
+const TOKEN_KEY = 'legalAuthToken';
+
 const GOOGLE_CONFIG = {
     backendConfigured: false,
     clientIdConfigured: false,
@@ -45,6 +49,7 @@ window.addEventListener('load', async () => {
     bindEvents();
     await checkGoogleAuthStatus();
     initializePasswordResetMode();
+
     const handledLegacyCallback = await handleOAuthCallback();
     if (!handledLegacyCallback && !getResetTokenFromUrl()) {
         await redirectIfAuthenticated();
@@ -52,16 +57,37 @@ window.addEventListener('load', async () => {
 });
 
 function redirectToApp() {
-    window.location.href = APP_URL;
+    window.location.replace('/frontend/index.html');
 }
 
 function clearSession() {
-    sessionStorage.removeItem(USER_KEY);
+    localStorage.removeItem(USER_KEY);
+    localStorage.removeItem(TOKEN_KEY);
 }
 
 function saveSession(data) {
+    if (data.token) {
+        localStorage.setItem(TOKEN_KEY, data.token);
+    }
     if (data.user) {
-        sessionStorage.setItem(USER_KEY, JSON.stringify(data.user));
+        localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+    }
+}
+
+function getStoredToken() {
+    return localStorage.getItem(TOKEN_KEY) || '';
+}
+
+function getStoredUser() {
+    const raw = localStorage.getItem(USER_KEY);
+    if (!raw) {
+        return null;
+    }
+    try {
+        return JSON.parse(raw);
+    } catch (error) {
+        localStorage.removeItem(USER_KEY);
+        return null;
     }
 }
 
@@ -71,6 +97,7 @@ function bindEvents() {
     googleLoginBtn.addEventListener('click', startGoogleLogin);
     forgotPasswordLink.addEventListener('click', openPasswordResetModal);
     closeModal.addEventListener('click', closePasswordResetModal);
+
     loginForm.addEventListener('submit', handleLogin);
     signupForm.addEventListener('submit', handleSignup);
     passwordResetForm.addEventListener('submit', handlePasswordReset);
@@ -85,6 +112,7 @@ function bindEvents() {
 
 function populateStates() {
     STATES_AND_UTS.forEach((state) => {
+
         const option = document.createElement('option');
         option.value = state;
         option.textContent = state;
@@ -116,14 +144,20 @@ function showResetMessage(text, isError = false) {
 async function submitJson(url, payload) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const token = getStoredToken();
+
     try {
         const response = await fetch(url, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { Authorization: `Bearer ${token}` } : {})
+            },
             credentials: 'include',
             body: JSON.stringify(payload),
             signal: controller.signal
         });
+
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
             throw new Error(data.detail || `Request failed with status ${response.status}`);
@@ -140,10 +174,13 @@ async function submitJson(url, payload) {
 }
 
 async function fetchCurrentUser() {
+    const token = getStoredToken();
     const response = await fetch(ME_URL, {
         method: 'GET',
-        credentials: 'include'
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
     });
+
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
         throw new Error(data.detail || `Request failed with status ${response.status}`);
@@ -152,20 +189,33 @@ async function fetchCurrentUser() {
 }
 
 async function redirectIfAuthenticated() {
+    const token = getStoredToken();
+    if (!token) {
+        return;
+    }
+
+    const storedUser = getStoredUser();
+    if (storedUser) {
+        redirectToApp();
+        return;
+    }
+
     try {
         const user = await fetchCurrentUser();
-        saveSession({ user });
+        saveSession({ token, user });
         redirectToApp();
     } catch (error) {
-        // No active cookie session. Stay on auth page.
+        clearSession();
     }
 }
 
 async function checkGoogleAuthStatus() {
     GOOGLE_CONFIG.gisScriptLoaded = typeof window.google !== 'undefined';
+
     try {
         const response = await fetch(GOOGLE_STATUS_URL, { credentials: 'include' });
         const data = await response.json().catch(() => ({}));
+
         if (!response.ok) {
             googleLoginBtn.disabled = false;
             googleLoginBtn.textContent = 'Continue with Google';
@@ -229,21 +279,24 @@ function startGoogleLogin(event) {
         event.preventDefault();
         event.stopPropagation();
     }
+
     if (googleLoginBtn.disabled) {
         showMessage('Google sign-in is not configured. Please use email/password login.', true);
         return;
     }
-    window.location.href = GOOGLE_LOGIN_URL;
+    window.location.replace(GOOGLE_LOGIN_URL);
 }
 
 async function handleLogin(event) {
     event.preventDefault();
     event.stopPropagation();
+
     const loginBtn = document.querySelector('#loginForm .auth-submit');
     const originalText = loginBtn.textContent;
     loginBtn.textContent = 'Logging in...';
     loginBtn.disabled = true;
     showMessage('');
+
     try {
         const data = await submitJson(LOGIN_URL, {
             email: document.getElementById('loginEmail').value.trim(),
@@ -262,11 +315,13 @@ async function handleLogin(event) {
 async function handleSignup(event) {
     event.preventDefault();
     event.stopPropagation();
+
     const signupBtn = document.querySelector('#signupForm .auth-submit');
     const originalText = signupBtn.textContent;
     signupBtn.textContent = 'Creating account...';
     signupBtn.disabled = true;
     showMessage('');
+
     try {
         const data = await submitJson(SIGNUP_URL, {
             full_name: document.getElementById('signupName').value.trim(),
@@ -298,6 +353,7 @@ function closePasswordResetModal() {
     passwordResetModal.setAttribute('aria-hidden', 'true');
     passwordResetForm.reset();
     passwordResetConfirmForm.reset();
+
     if (!getResetTokenFromUrl()) {
         setPasswordResetMode('request');
     }
@@ -321,11 +377,14 @@ function setPasswordResetMode(mode) {
 }
 
 function initializePasswordResetMode() {
+
     if (getResetTokenFromUrl()) {
         setPasswordResetMode('confirm');
         passwordResetModal.style.display = 'grid';
         passwordResetModal.setAttribute('aria-hidden', 'false');
-    } else {
+    } 
+    
+    else {
         setPasswordResetMode('request');
     }
 }
@@ -341,7 +400,9 @@ async function handlePasswordReset(event) {
         setTimeout(() => {
             closePasswordResetModal();
         }, 2200);
-    } catch (error) {
+    } 
+    
+    catch (error) {
         showResetMessage(error.message, true);
     }
 }
@@ -358,10 +419,12 @@ async function handlePasswordResetConfirm(event) {
         showResetMessage('Reset link is missing or invalid.', true);
         return;
     }
+    
     if (password.length < 8) {
         showResetMessage('Password must be at least 8 characters.', true);
         return;
     }
+    
     if (password !== confirmPassword) {
         showResetMessage('Passwords do not match.', true);
         return;
@@ -377,7 +440,9 @@ async function handlePasswordResetConfirm(event) {
             switchTab('login');
             showMessage('Password updated. Please log in with your new password.');
         }, 1500);
-    } catch (error) {
+    } 
+    
+    catch (error) {
         showResetMessage(error.message, true);
     }
 }

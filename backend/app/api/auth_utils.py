@@ -61,8 +61,7 @@ def _should_use_secure_cookie(request: Request) -> bool:
     if forwarded_proto == "https":
         return True
 
-    hostname = (request.url.hostname or "").strip().lower()
-    if hostname in {"localhost", "127.0.0.1", "::1"}:
-        return False
-
-    return request.url.scheme.lower() == "https" or bool(hostname)
+    # Only mark auth cookies as Secure when the effective request scheme is HTTPS.
+    # Plain HTTP LAN access such as http://192.168.x.x:5000 must stay non-Secure
+    # or browsers will refuse to send the cookie back on the frontend redirect.
+    return request.url.scheme.lower() == "https"

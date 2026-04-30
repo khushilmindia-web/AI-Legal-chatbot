@@ -49,8 +49,15 @@ def normalize_email(email: str) -> str:
     return email.strip().lower()
 
 
+def external_base_url(request: Request) -> str:
+    configured = request.app.state.settings.app_base_url.strip()
+    if configured:
+        return configured.rstrip("/")
+    return str(request.base_url).rstrip("/")
+
+
 def build_frontend_url(request: Request, path: str, **query: str) -> str:
-    base_url = str(request.base_url).rstrip("/")
+    base_url = external_base_url(request)
     cleaned_path = path if path.startswith("/") else f"/{path}"
     if not query:
         return f"{base_url}{cleaned_path}"

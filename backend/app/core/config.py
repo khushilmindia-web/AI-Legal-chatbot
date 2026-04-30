@@ -13,7 +13,8 @@ BACKEND_DIR = ROOT_DIR / "backend"
 FRONTEND_DIR = ROOT_DIR / "frontend"
 DATA_DIR = ROOT_DIR / "data"
 KNOWLEDGE_DIR = ROOT_DIR / "knowledge"
-TEMP_DIR = DATA_DIR / "temp_uploads"
+UPLOADS_DIR = DATA_DIR / "uploads"
+TEMP_DIR = DATA_DIR / "tmp"
 DB_PATH = DATA_DIR / "lawyer_ai.db"
 PROMPT_PATH = BACKEND_DIR / "app" / "core" / "prompts" / "lawyer_ai_system.md"
 
@@ -31,6 +32,9 @@ class Settings(BaseSettings):
     retrieval_mode: str = Field(default="local_context", alias="RETRIEVAL_MODE")
     openai_timeout_seconds: float = Field(default=45.0, alias="OPENAI_TIMEOUT_SECONDS")
     openai_max_retries: int = Field(default=2, alias="OPENAI_MAX_RETRIES")
+    database_backend: str = Field(default="sqlite", alias="DATABASE_BACKEND")
+    mongodb_uri: str = Field(default="mongodb://127.0.0.1:27017", alias="MONGODB_URI")
+    mongodb_database: str = Field(default="lawyer_ai", alias="MONGODB_DATABASE")
     cors_origins_raw: str = Field(
         default="http://127.0.0.1:5000,http://localhost:5000",
         alias="CORS_ALLOW_ORIGINS",
@@ -92,6 +96,14 @@ class Settings(BaseSettings):
             return False
         return value
 
+    @field_validator("database_backend", mode="before")
+    @classmethod
+    def normalize_database_backend(cls, value):
+        normalized = str(value or "sqlite").strip().lower()
+        if normalized in {"sqlite", "mongodb"}:
+            return normalized
+        raise ValueError("DATABASE_BACKEND must be either 'sqlite' or 'mongodb'")
+
     @field_validator("indiankanoon_trust_env_proxy", mode="before")
     @classmethod
     def coerce_indiankanoon_trust_env_proxy(cls, value):
@@ -149,6 +161,11 @@ class Settings(BaseSettings):
     def knowledge_dir(self) -> Path:
         KNOWLEDGE_DIR.mkdir(parents=True, exist_ok=True)
         return KNOWLEDGE_DIR
+
+    @property
+    def uploads_dir(self) -> Path:
+        UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+        return UPLOADS_DIR
 
     @property
     def temp_dir(self) -> Path:

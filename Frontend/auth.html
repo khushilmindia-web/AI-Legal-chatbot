@@ -6,9 +6,11 @@
     <title>Legal AI Auth</title>
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body class="auth-body">
     <main class="auth-shell">
         <section class="auth-hero auth-panel">
+
             <div class="auth-hero-copy">
                 <span class="auth-kicker">Lawyer AI Workspace</span>
                 <h1>Secure legal guidance with saved history and protected access.</h1>
@@ -20,10 +22,12 @@
                     <h2>Protected by default</h2>
                     <p>`index.html` now requires authentication before the chat workspace loads.</p>
                 </article>
+                
                 <article class="auth-feature-card">
                     <h2>Google and email login</h2>
                     <p>Use your Google account or a regular password flow, then stay signed in across reloads.</p>
                 </article>
+                
                 <article class="auth-feature-card">
                     <h2>Per-user chat history</h2>
                     <p>Your sessions, messages, and UI state stay scoped to your account instead of leaking globally.</p>
@@ -48,35 +52,40 @@
                     Email
                     <input id="loginEmail" type="email" placeholder="you@example.com" autocomplete="email" required>
                 </label>
+                
                 <label>
                     Password
                     <input id="loginPassword" type="password" placeholder="Enter your password" autocomplete="current-password" required>
                 </label>
+                
                 <button class="auth-submit" type="submit">Login</button>
                 <button id="googleLoginBtn" class="google-btn" type="button">Continue with Google</button>
                 <a href="#" id="forgotPasswordLink" class="forgot-password-link">Forgot Password?</a>
             </form>
-
 
             <form id="signupForm" class="auth-form hidden" method="post" action="javascript:void(0)" novalidate>
                 <label>
                     Full Name
                     <input id="signupName" type="text" placeholder="Your full name" autocomplete="name" required>
                 </label>
+
                 <label>
                     Email
                     <input id="signupEmail" type="email" placeholder="you@example.com" autocomplete="email" required>
                 </label>
+
                 <label>
                     Password
                     <input id="signupPassword" type="password" placeholder="At least 8 characters" autocomplete="new-password" required>
                 </label>
+
                 <label>
                     State / UT
                     <select id="signupState">
                         <option value="">Select State / UT</option>
                     </select>
                 </label>
+
                 <button class="auth-submit" type="submit">Create Account</button>
             </form>
 
@@ -88,6 +97,7 @@
             <div class="modal-content">
                 <span class="close">&times;</span>
                 <h2 id="passwordResetTitle">Reset Password</h2>
+
                 <form id="passwordResetForm" class="auth-form" method="post" action="javascript:void(0)" novalidate>
                     <label>
                         Email
@@ -95,17 +105,21 @@
                     </label>
                     <button class="auth-submit" type="submit">Send Reset Link</button>
                 </form>
+
                 <form id="passwordResetConfirmForm" class="auth-form hidden" method="post" action="javascript:void(0)" novalidate>
                     <label>
                         New Password
                         <input id="resetNewPassword" type="password" placeholder="Enter a new password" autocomplete="new-password" minlength="8" required>
                     </label>
+
                     <label>
                         Confirm Password
                         <input id="resetConfirmPassword" type="password" placeholder="Confirm your new password" autocomplete="new-password" minlength="8" required>
                     </label>
+                    
                     <button class="auth-submit" type="submit">Update Password</button>
                 </form>
+
                 <div id="resetMessage" class="auth-message"></div>
             </div>
         </div>
@@ -114,5 +128,6 @@
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="config.js"></script>
     <script src="auth.js"></script>
+    
 </body>
 </html>

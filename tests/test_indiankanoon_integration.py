@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import requests
+
 from backend.app.core.config import Settings
 from backend.app.core.config import get_settings
 from backend.app.services.indiankanoon_service import IndianKanoonService
@@ -135,3 +137,56 @@ def test_indiankanoon_prefers_exact_authority_and_filters_noisy_docs():
 
     assert len(selected) == 1
     assert selected[0]["doc_id"] == "1"
+
+
+def test_indiankanoon_grounded_retrieval_continues_after_failed_query_variant(monkeypatch):
+    settings = Settings(
+        INDIANKANOON_API_TOKEN="token",
+        INDIANKANOON_TRUST_ENV_PROXY="false",
+    )
+    service = IndianKanoonService(settings)
+    calls: list[str] = []
+
+    def fake_search(query, page_num=0, doctypes=None, max_cites=8):
+        calls.append(query)
+        if query == "Section 21 BNS":
+            raise requests.RequestException("temporary exact-search failure")
+        return {
+            "docs": [
+                {
+                    "tid": "21",
+                    "title": "Section 21 in The Bharatiya Nyaya Sanhita, 2023",
+                    "headline": "Text of Section 21.",
+                    "docsource": "laws",
+                    "citations": [],
+                }
+            ]
+        }
+
+    monkeypatch.setattr(service, "search", fake_search)
+    monkeypatch.setattr(
+        service,
+        "get_document_fragments",
+        lambda doc_id, query: {
+            "title": "Section 21 in The Bharatiya Nyaya Sanhita, 2023",
+            "headline": "Section 21 Bharatiya Nyaya Sanhita fragment.",
+        },
+    )
+    monkeypatch.setattr(
+        service,
+        "get_document",
+        lambda doc_id, max_cites=6, max_cited_by=4: {
+            "doc": "Section 21 of the Bharatiya Nyaya Sanhita applies here."
+        },
+    )
+    monkeypatch.setattr(service, "get_document_meta", lambda doc_id: {})
+
+    docs = service.retrieve_grounded_documents(
+        query_variants=["Section 21 BNS", "Section 21 Bharatiya Nyaya Sanhita"],
+        doctypes_options=["laws"],
+        max_results=4,
+    )
+
+    assert calls == ["Section 21 BNS", "Section 21 Bharatiya Nyaya Sanhita"]
+    assert docs
+    assert docs[0]["doc_id"] == "21"

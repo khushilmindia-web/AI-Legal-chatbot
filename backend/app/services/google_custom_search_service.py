@@ -63,7 +63,7 @@ class GoogleCustomSearchService:
             params["siteSearch"] = site_restrict.strip()
             params["siteSearchFilter"] = "i"
 
-        response = requests.get(
+        response = self._http_get(
             self.SEARCH_URL,
             params=params,
             timeout=self.settings.google_search_timeout_seconds,
@@ -71,6 +71,22 @@ class GoogleCustomSearchService:
         response.raise_for_status()
         payload = response.json() if response.content else {}
         items = payload.get("items") or []
+        raw_item_preview = [
+            {
+                "title": str(item.get("title") or "").strip(),
+                "link": str(item.get("link") or "").strip(),
+                "snippet": str(item.get("snippet") or "").strip()[:240],
+            }
+            for item in items[:3]
+        ]
+        logger.info(
+            "google custom search raw_response query=%r item_count=%s site=%s trusted_only=%s raw_items=%s",
+            query[:140],
+            len(items),
+            site_restrict or "",
+            trusted_only,
+            raw_item_preview,
+        )
         documents = self._normalize_items(items, trusted_only=trusted_only)
         self._write_cache(normalized_query, documents)
         logger.info(
@@ -87,6 +103,14 @@ class GoogleCustomSearchService:
             trusted_result_count=len(documents),
         )
 
+    @staticmethod
+    def _http_get(url: str, **kwargs: Any) -> requests.Response:
+        with requests.Session() as session:
+            # Keep CX calls independent from machine-level proxy variables. Some
+            # local test environments set HTTP_PROXY/HTTPS_PROXY to dead ports.
+            session.trust_env = False
+            return session.get(url, **kwargs)
+
     def _normalize_items(self, items: list[dict[str, Any]], *, trusted_only: bool) -> list[dict[str, Any]]:
         documents: list[dict[str, Any]] = []
         trusted_domains = self.settings.google_search_trusted_domains
@@ -95,13 +119,36 @@ class GoogleCustomSearchService:
             title = str(item.get("title") or "").strip() or "Official web result"
             snippet = str(item.get("snippet") or "").strip()
             domain = self._domain_for_url(link)
-            if not link or not domain:
-                continue
+            reject_reasons: list[str] = []
+            if not link:
+                reject_reasons.append("missing_link")
+            if link and not domain:
+                reject_reasons.append("invalid_or_missing_domain")
             is_trusted = any(domain == trusted or domain.endswith(f".{trusted}") for trusted in trusted_domains)
-            if trusted_only:
-                if trusted_domains and not is_trusted:
-                    continue
-            elif not self._is_allowed_general_domain(domain):
+            logger.info(
+                "google custom search candidate index=%s title=%r domain=%s trusted=%s trusted_only=%s link=%s snippet=%r",
+                index,
+                title[:140],
+                domain,
+                is_trusted,
+                trusted_only,
+                link,
+                snippet[:240],
+            )
+            if trusted_only and trusted_domains and not is_trusted:
+                reject_reasons.append("trusted_domain_filter_miss")
+            if not trusted_only and link and domain and not self._is_allowed_general_domain(domain):
+                reject_reasons.append("general_domain_filter_blocked")
+            if reject_reasons:
+                logger.info(
+                    "google custom search reject index=%s title=%r domain=%s trusted=%s trusted_only=%s reasons=%s",
+                    index,
+                    title[:140],
+                    domain or "",
+                    is_trusted,
+                    trusted_only,
+                    reject_reasons,
+                )
                 continue
             authority_type = self._authority_type_for_domain(domain)
             score = max(8.0, 20.0 - float(index - 1) * 2.5)
@@ -126,6 +173,7 @@ class GoogleCustomSearchService:
                     "metadata_confidence": 0.78 if is_trusted else (0.72 if authority_type in {"government_portal", "regulator"} else 0.58),
                     "source_domain": domain,
                     "google_scope": "curated" if trusted_only else "general_fallback",
+                    "trusted_domain_match": is_trusted,
                 }
             )
         return documents[: self.settings.google_search_max_results]

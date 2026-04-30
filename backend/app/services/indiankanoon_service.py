@@ -200,7 +200,16 @@ class IndianKanoonService:
 
         for query in query_variants:
             for doctypes in doctypes_options:
-                payload = self.search(query, page_num=0, doctypes=doctypes, max_cites=8)
+                try:
+                    payload = self.search(query, page_num=0, doctypes=doctypes, max_cites=8)
+                except (requests.RequestException, ValueError) as exc:
+                    logger.warning(
+                        "indiankanoon pipeline stage=search_failed query=%r doctypes=%r error=%s",
+                        query[:160],
+                        doctypes,
+                        exc,
+                    )
+                    continue
                 docs = payload.get("docs") or []
                 logger.info(
                     "indiankanoon pipeline stage=search query=%r doctypes=%r docs=%s",

@@ -58,7 +58,7 @@ def test_google_custom_search_filters_to_trusted_domains_and_caches(monkeypatch)
             }
         )
 
-    monkeypatch.setattr("backend.app.services.google_custom_search_service.requests.get", fake_get)
+    monkeypatch.setattr(GoogleCustomSearchService, "_http_get", staticmethod(fake_get))
 
     first = service.search(query="latest RBI circular on unauthorized transaction", max_results=3)
     second = service.search(query="latest RBI circular on unauthorized transaction", max_results=3)
@@ -97,10 +97,43 @@ def test_google_custom_search_general_mode_applies_basic_domain_filtering(monkey
             }
         )
 
-    monkeypatch.setattr("backend.app.services.google_custom_search_service.requests.get", fake_get)
+    monkeypatch.setattr(GoogleCustomSearchService, "_http_get", staticmethod(fake_get))
 
     result = service.search(query="section 420 ipc official text", max_results=3, trusted_only=False)
 
     assert len(result.documents) == 1
     assert result.documents[0]["source_domain"] == "indiacode.nic.in"
     assert result.documents[0]["google_scope"] == "general_fallback"
+
+
+def test_google_custom_search_http_get_ignores_proxy_environment(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class FakeSession:
+        def __init__(self) -> None:
+            self.trust_env = True
+
+        def __enter__(self):
+            captured["entered_trust_env"] = self.trust_env
+            return self
+
+        def __exit__(self, exc_type, exc, traceback) -> None:
+            return None
+
+        def get(self, url, **kwargs):
+            captured["trust_env"] = self.trust_env
+            captured["url"] = url
+            captured["kwargs"] = kwargs
+            return FakeResponse({"items": []})
+
+    monkeypatch.setattr("backend.app.services.google_custom_search_service.requests.Session", FakeSession)
+
+    response = GoogleCustomSearchService._http_get(
+        "https://customsearch.googleapis.com/customsearch/v1",
+        params={"q": "Article 21"},
+        timeout=8,
+    )
+
+    assert isinstance(response, FakeResponse)
+    assert captured["trust_env"] is False
+    assert captured["url"] == "https://customsearch.googleapis.com/customsearch/v1"

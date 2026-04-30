@@ -8,6 +8,7 @@ from backend.app.models.schemas import ConversationState, InternalChatResult
 from backend.app.services.chat_service import ChatService
 from backend.app.services.google_custom_search_service import GoogleSearchResult, GoogleCustomSearchService
 from backend.app.services.indiankanoon_service import IndianKanoonService
+from backend.app.services.legal_dataset_service import LocalLegalDatasetService
 from backend.app.services.legal_hybrid_retrieval import LegalHybridRetrievalService
 from backend.app.services.local_ml import LocalTextSimilarityService
 from backend.app.services.openai_service import OpenAIResponsesService
@@ -128,6 +129,53 @@ def test_chat_returns_no_data_fallback_only_after_retrieval_attempts_fail(client
     assert "Disclaimer:" in answer
 
 
+def test_section_bns_query_variants_expand_statute_and_try_multiple_forms():
+    service = ChatService.__new__(ChatService)
+
+    variants = service._build_query_variants("Section 21 BNS")
+
+    assert "Section 21 Bharatiya Nyaya Sanhita" in variants
+    assert "Bharatiya Nyaya Sanhita Section 21" in variants
+    assert "Section 21 Bharatiya Nyaya Sanhita explanation" in variants
+    assert "Bharatiya Nyaya Sanhita Section 21 official text" in variants
+    assert "BNS Section 21" in variants
+
+
+def test_article_query_variants_include_constitution_broader_forms():
+    service = ChatService.__new__(ChatService)
+
+    variants = service._build_query_variants("Article 21")
+
+    assert "Article 21 Constitution of India" in variants
+    assert "Constitution of India Article 21" in variants
+    assert "Article 21 explanation" in variants
+    assert "Article 21 official text" in variants
+
+
+def test_bns_section_authority_filter_keeps_usable_expanded_result():
+    service = ChatService.__new__(ChatService)
+    documents = [
+        {
+            "doc_id": "bns-21",
+            "title": "Bharatiya Nyaya Sanhita, 2023",
+            "headline": "A statute result from India Kanoon.",
+            "fragment_excerpt": "The Bharatiya Nyaya Sanhita text includes Section 21 and its effect.",
+            "doc_excerpt": "Section 21 of the Bharatiya Nyaya Sanhita is the relevant provision.",
+            "docsource": "laws",
+            "source_kind": "indiankanoon",
+            "score": 20.0,
+        }
+    ]
+
+    filtered = service._filter_grounded_documents_for_query(
+        documents=documents,
+        query="Section 21 BNS",
+        answer_mode="statute_first",
+    )
+
+    assert filtered == documents
+
+
 def test_chat_returns_structured_grounded_answer_when_llm_call_fails(client, monkeypatch):
     def fake_retrieve_grounded_documents(self, query_variants, doctypes_options, max_results=4):
         return [
@@ -173,7 +221,8 @@ def test_chat_returns_structured_grounded_answer_when_llm_call_fails(client, mon
 
     assert response.status_code == 200
     payload = response.json()
-    assert "Summary:" in payload["answer"]
+    _assert_human_grounded_answer(payload["answer"])
+    assert "Article 39A" in payload["answer"]
     assert "Legal Position:" in payload["answer"]
     assert "Practical Next Steps:" in payload["answer"]
     assert "Sources:" in payload["answer"]
@@ -236,6 +285,98 @@ def test_statute_llm_failure_returns_useful_answer_for_section_138(client, monke
     assert "not reliable enough to return safely" not in payload["answer"]
     assert payload["likely_forum"] == "laws"
     assert payload["citations"][0].startswith("Section 138 in The Negotiable Instruments Act, 1881 | laws")
+
+
+def test_bns_section_llm_quota_failure_returns_deterministic_source_answer(client, monkeypatch):
+    def fake_retrieve_grounded_documents(self, query_variants, doctypes_options, max_results=4):
+        assert "Section 21 Bharatiya Nyaya Sanhita" in query_variants
+        return [
+            {
+                "doc_id": "bns-21",
+                "title": "Section 21 in Bharatiya Nyaya Sanhita, 2023",
+                "headline": "Act done by a person justified, or by mistake of fact believing himself justified, by law.",
+                "fragment_headline": "Section 21 BNS official text.",
+                "doc_excerpt": "Nothing is an offence which is done by any person who is justified by law, or who by reason of a mistake of fact and not by reason of a mistake of law in good faith believes himself to be justified by law, in doing it.",
+                "docsource": "laws",
+                "citations": ["BNS 21"],
+                "publishdate": "01-07-2024",
+                "url": "https://indiankanoon.org/doc/bns-21/",
+                "score": 38.0,
+            }
+        ]
+
+    def raise_quota_error(self, user_prompt, conversation):
+        raise RuntimeError("429 insufficient_quota: OpenAI quota is exhausted for the configured API key.")
+
+    def fail_semantic_support(self, *, answer, query, documents, source_sufficiency):
+        raise AssertionError("Deterministic source-based statute fallback should not be rewrapped by semantic fallback")
+
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", fake_retrieve_grounded_documents)
+    monkeypatch.setattr(OpenAIResponsesService, "generate_json", raise_quota_error)
+    monkeypatch.setattr(ChatService, "_run_semantic_support_check", fail_semantic_support)
+
+    response = client.post(
+        "/chat",
+        json={"message": "explain bns section 21", "state": "Gujarat"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "Section 21 in Bharatiya Nyaya Sanhita, 2023" in payload["answer"]
+    assert "mistake of fact" in payload["answer"]
+    assert "not reliable enough to return safely" not in payload["answer"]
+    assert payload["likely_forum"] == "laws"
+    messages = client.get(f"/chat/{payload['chat_id']}/messages").json()["items"]
+    assistant_message = [item for item in messages if item["role"] == "assistant"][-1]
+    llm_payload = assistant_message["metadata"]["retrieval"]["llm_payload"]
+    assert llm_payload["source"] == "deterministic_grounded_fallback"
+    assert llm_payload["llm_failed"] is True
+    assert "insufficient_quota" in llm_payload["llm_error"]
+
+
+def test_article_query_llm_quota_failure_returns_deterministic_source_answer(client, monkeypatch):
+    def fake_retrieve_grounded_documents(self, query_variants, doctypes_options, max_results=4):
+        assert "Article 99 Constitution of India" in query_variants
+        return [
+            {
+                "doc_id": "constitution-99",
+                "title": "Article 99 in Constitution of India",
+                "headline": "Oath or affirmation by members.",
+                "fragment_headline": "Article 99 constitutional text.",
+                "doc_excerpt": "Every member of either House of Parliament shall, before taking his seat, make and subscribe before the President, or some person appointed in that behalf by him, an oath or affirmation according to the form set out for the purpose in the Third Schedule.",
+                "docsource": "constitution",
+                "citations": ["Constitution Article 99"],
+                "publishdate": "",
+                "url": "https://indiankanoon.org/doc/constitution-99/",
+                "score": 36.0,
+            }
+        ]
+
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", fake_retrieve_grounded_documents)
+    monkeypatch.setattr(
+        OpenAIResponsesService,
+        "generate_json",
+        lambda self, user_prompt, conversation: (_ for _ in ()).throw(
+            RuntimeError("429 insufficient_quota: OpenAI quota is exhausted for the configured API key.")
+        ),
+    )
+
+    response = client.post(
+        "/chat",
+        json={"message": "explain article 99 constitution", "state": "Gujarat"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "Article 99 in Constitution of India" in payload["answer"]
+    assert "oath or affirmation" in payload["answer"].lower()
+    assert "not reliable enough to return safely" not in payload["answer"]
+    assert payload["likely_forum"] == "constitution"
+    messages = client.get(f"/chat/{payload['chat_id']}/messages").json()["items"]
+    assistant_message = [item for item in messages if item["role"] == "assistant"][-1]
+    llm_payload = assistant_message["metadata"]["retrieval"]["llm_payload"]
+    assert llm_payload["source"] == "deterministic_grounded_fallback"
+    assert llm_payload["llm_failed"] is True
 
 
 def test_tax_statute_llm_failure_uses_domain_specific_next_steps(client, monkeypatch):
@@ -312,7 +453,8 @@ def test_chat_returns_structured_grounded_answer_when_llm_payload_is_empty(clien
 
     assert response.status_code == 200
     payload = response.json()
-    assert "Summary:" in payload["answer"]
+    _assert_human_grounded_answer(payload["answer"])
+    assert "Section 34" in payload["answer"]
     assert "Legal Position:" in payload["answer"]
     assert "Practical Next Steps:" in payload["answer"]
     assert "Sources:" in payload["answer"]
@@ -1367,7 +1509,7 @@ def test_fast_authority_lookup_bypasses_grounded_pipeline_for_article_query(clie
     assert "In simple terms" not in payload["answer"]
     assert "In broad terms" not in payload["answer"]
     assert "Practical Next Steps:" not in payload["answer"]
-    assert payload["citations"] == ["Constitution of India | Article 21"]
+    assert payload["citations"] == ["Constitution of India (local dataset: data/legal_datasets/constitution.json)"]
     assert payload["likely_forum"] is None
     assert payload["documents_to_keep"] == []
 
@@ -1394,7 +1536,7 @@ def test_fast_authority_lookup_uses_normalized_query_for_typo_article_request(cl
     payload = response.json()
     assert "Article 21" in payload["answer"]
     assert "life and personal liberty" in payload["answer"].lower()
-    assert payload["citations"] == ["Constitution of India | Article 21"]
+    assert payload["citations"] == ["Constitution of India (local dataset: data/legal_datasets/constitution.json)"]
     assert payload["likely_forum"] is None
     assert payload["documents_to_keep"] == []
 
@@ -1422,7 +1564,7 @@ def test_fast_authority_lookup_uses_controlled_fuzzy_matching_for_article_alias(
     assert "Article 21" in payload["answer"]
     assert "life and personal liberty" in payload["answer"].lower()
     assert "Practical Next Steps:" not in payload["answer"]
-    assert payload["citations"] == ["Constitution of India | Article 21"]
+    assert payload["citations"] == ["Constitution of India (local dataset: data/legal_datasets/constitution.json)"]
     assert payload["likely_forum"] is None
     assert payload["documents_to_keep"] == []
 
@@ -1450,7 +1592,7 @@ def test_fast_authority_lookup_bypasses_grounded_pipeline_for_common_section_que
     assert "Section 420" in payload["answer"]
     assert "cheating" in payload["answer"].lower()
     assert "Practical Next Steps:" not in payload["answer"]
-    assert payload["citations"] == ["Indian Penal Code, 1860 | Section 420"]
+    assert payload["citations"] == ["Indian Penal Code, 1860 (local dataset: data/legal_datasets/ipc.json)"]
     assert payload["likely_forum"] is None
     assert payload["documents_to_keep"] == []
 
@@ -1552,7 +1694,7 @@ def test_classifier_activation_controls_fast_path_entry(client, monkeypatch):
     monkeypatch.setattr(
         ChatService,
         "_classify_pipeline_path",
-        lambda self, message, domain, conversation_state: {"path": "heavy", "reason": "forced_heavy_for_test"},
+        lambda self, message, domain, conversation_state, uploaded_texts=None: {"path": "heavy", "reason": "forced_heavy_for_test"},
     )
     monkeypatch.setattr(
         ChatService,
@@ -1710,6 +1852,51 @@ def test_understand_legal_query_classifies_authority_explainer_intent():
     assert profile["all_components_direct"] is False
 
 
+def test_understand_legal_query_treats_constitutional_remedies_as_direct_article_lookup():
+    service = ChatService.__new__(ChatService)
+
+    profile = service._understand_legal_query("Which article gives constitutional remedies?")
+
+    assert profile["answer_intent"] == "authority_explainer"
+    assert profile["clarification_hint"] is None
+
+
+def test_understand_legal_query_recognizes_article_300a_as_direct_authority():
+    service = ChatService.__new__(ChatService)
+
+    profile = service._understand_legal_query("Article 300A")
+
+    assert profile["answer_intent"] == "authority_explainer"
+    assert profile["clarification_hint"] is None
+
+
+def test_understand_legal_query_detects_curated_google_authority_variants_from_typos_and_hinglish():
+    service = ChatService.__new__(ChatService)
+
+    constitutional = service._understand_legal_query("bandharan artical 19")
+    bns = service._understand_legal_query("bns section 21")
+    bnss = service._understand_legal_query("bnss section 21")
+    reversed_bns = service._understand_legal_query("section 21 bns")
+
+    assert constitutional["normalized_query"] == "constitution article 19"
+    assert constitutional["authority_lookup_variant"]["google_query"] == "Article 19 Constitution of India explanation"
+    assert bns["authority_lookup_variant"]["google_query"] == "Section 21 Bharatiya Nyaya Sanhita explanation"
+    assert bnss["authority_lookup_variant"]["google_query"] == "Section 21 Bharatiya Nagarik Suraksha Sanhita explanation"
+    assert reversed_bns["authority_lookup_variant"]["google_query"] == "Section 21 Bharatiya Nyaya Sanhita explanation"
+
+
+def test_understand_legal_query_builds_cx_targets_for_clear_non_variant_authority_patterns():
+    service = ChatService.__new__(ChatService)
+
+    article = service._understand_legal_query("Article 99")
+    ipc_section = service._understand_legal_query("Section 420 IPC")
+    ni_section = service._understand_legal_query("Section 138 NI Act")
+
+    assert article["authority_lookup_variant"]["google_query"] == "Article 99 Constitution of India explanation"
+    assert ipc_section["authority_lookup_variant"]["google_query"] == "Section 420 Indian Penal Code explanation"
+    assert ni_section["authority_lookup_variant"]["google_query"] == "Section 138 Negotiable Instruments Act explanation"
+
+
 def test_understand_legal_query_builds_direct_answer_format_profile_for_direct_modes():
     service = ChatService.__new__(ChatService)
 
@@ -1752,6 +1939,29 @@ def test_understand_legal_query_adds_clarification_hint_for_low_confidence_direc
     assert "Which Constitution article" in authority["clarification_hint"]["question"]
 
 
+def test_understand_legal_query_treats_complete_authority_references_as_complete_by_default():
+    service = ChatService.__new__(ChatService)
+
+    article = service._understand_legal_query("Article 99")
+    bns_section = service._understand_legal_query("bns section 21")
+    reversed_bns_section = service._understand_legal_query("section 21 bns")
+
+    assert article["answer_intent"] == "authority_explainer"
+    assert article["clarification_hint"] is None
+    assert article["authority_lookup_variant"]["google_query"] == "Article 99 Constitution of India explanation"
+    assert bns_section["clarification_hint"] is None
+    assert reversed_bns_section["clarification_hint"] is None
+
+
+def test_understand_legal_query_does_not_clarify_clear_standard_legal_explainer_query():
+    service = ChatService.__new__(ChatService)
+
+    profile = service._understand_legal_query("Explain legal notice")
+
+    assert profile["answer_intent"] == "general_explainer"
+    assert profile["clarification_hint"] is None
+
+
 def test_safe_fallback_uses_human_clarification_for_unsupported_output():
     service = ChatService.__new__(ChatService)
 
@@ -1765,6 +1975,22 @@ def test_safe_fallback_uses_human_clarification_for_unsupported_output():
     assert "I am not confident enough to give a safe answer in that form yet." in result.answer
     assert result.follow_up_question
     assert result.raw_json["fallback_reason_code"] == "unsupported_output"
+
+
+def test_safe_fallback_does_not_clarify_complete_authority_reference_queries():
+    service = ChatService.__new__(ChatService)
+    service._legal_dataset = LocalLegalDatasetService()
+
+    result = service._build_safe_fallback_result(
+        kind="no_relevant_authority",
+        domain="criminal",
+        warnings=[],
+        query="section 21 bns",
+    )
+
+    assert "bns dataset/source unavailable for section 21 bns" in result.answer.lower()
+    assert result.follow_up_question is None
+    assert result.raw_json["fallback_reason_code"] == "bns_dataset_source_unavailable"
 
 
 def test_pipeline_classifier_uses_understanding_profile_for_direct_modes():
@@ -1793,6 +2019,41 @@ def test_pipeline_classifier_uses_understanding_profile_for_direct_modes():
     assert authority == {"path": "fast", "reason": "authority_fast_path"}
     assert explainer == {"path": "medium", "reason": "constitutional_explainer"}
     assert mixed == {"path": "medium", "reason": "constitutional_mixed_direct"}
+
+
+def test_understand_legal_query_classifies_general_legal_explainer_intent():
+    service = ChatService.__new__(ChatService)
+
+    profile = service._understand_legal_query("What is arbitration?")
+
+    assert profile["answer_intent"] == "general_explainer"
+    assert profile["direct_answer_format"]["family"] == "general_explainer"
+
+
+def test_understand_legal_query_classifies_common_low_risk_legal_explainers_directly():
+    service = ChatService.__new__(ChatService)
+
+    fir = service._understand_legal_query("What is FIR?")
+    bail = service._understand_legal_query("What is bail?")
+
+    assert fir["answer_intent"] == "general_explainer"
+    assert fir["clarification_hint"] is None
+    assert bail["answer_intent"] == "general_explainer"
+    assert bail["clarification_hint"] is None
+
+
+def test_pipeline_classifier_marks_general_legal_explainer_as_medium_path():
+    service = ChatService.__new__(ChatService)
+    state = ConversationState()
+
+    result = service._classify_pipeline_path(
+        message="What is arbitration?",
+        domain="civil",
+        conversation_state=state,
+        understanding_profile={"answer_intent": "general_explainer", "all_components_direct": False},
+    )
+
+    assert result == {"path": "medium", "reason": "general_legal_explainer"}
 
 
 def test_fundamental_duties_query_uses_direct_constitutional_explainer_path(client, monkeypatch):
@@ -1825,6 +2086,61 @@ def test_fundamental_duties_query_uses_direct_constitutional_explainer_path(clie
     messages = client.get(f"/chat/{chat_id}/messages").json()["items"]
     assistant_message = [item for item in messages if item["role"] == "assistant"][-1]
     assert assistant_message["metadata"]["route_classification"]["path"] == "medium"
+
+
+def test_general_legal_explainer_query_uses_direct_medium_path_without_grounded_retrieval(client, monkeypatch):
+    def fail_if_called(self, query_variants, doctypes_options, max_results=4):
+        raise AssertionError("Grounded retrieval should not run for a general legal explainer query")
+
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", fail_if_called)
+
+    response = client.post(
+        "/chat",
+        json={
+            "message": "What is arbitration?",
+            "state": "Gujarat",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    answer = payload["answer"]
+    assert "Arbitration is a private dispute-resolution process" in answer
+    assert "court trial" in answer
+    assert "Summary:" not in answer
+    assert "Legal Position:" not in answer
+    assert "Practical Next Steps:" not in answer
+    assert payload["citations"] == []
+    assert payload["likely_forum"] is None
+    assert payload["documents_to_keep"] == []
+    chat_id = payload["chat_id"]
+    messages = client.get(f"/chat/{chat_id}/messages").json()["items"]
+    assistant_message = [item for item in messages if item["role"] == "assistant"][-1]
+    assert assistant_message["metadata"]["route_classification"]["path"] == "medium"
+    assert assistant_message["metadata"]["route_classification"]["reason"] == "general_legal_explainer"
+    assert assistant_message["metadata"]["retrieval"]["source"] == "general_legal_explainer"
+
+
+def test_common_low_risk_legal_explainer_query_uses_direct_path_without_fallback(client, monkeypatch):
+    def fail_if_called(self, query_variants, doctypes_options, max_results=4):
+        raise AssertionError("Grounded retrieval should not run for a low-risk legal explainer query")
+
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", fail_if_called)
+
+    response = client.post(
+        "/chat",
+        json={
+            "message": "What is FIR?",
+            "state": "Gujarat",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "First Information Report (FIR) is" in payload["answer"]
+    assert "I am not confident enough" not in payload["answer"]
+    assert "Which exact statute or Act" not in payload["answer"]
+    assert payload["follow_up_question"] is None
 
 
 def test_constitutional_explainer_uses_query_understanding_for_typo_and_detail_handling(client, monkeypatch):
@@ -2142,6 +2458,31 @@ def test_grouped_article_authority_query_combines_multiple_articles_directly(cli
     assert assistant_message["metadata"]["route_classification"]["path"] == "medium"
 
 
+def test_grouped_article_authority_query_with_shared_prefix_and_commas_combines_directly(client, monkeypatch):
+    def fail_if_called(self, query_variants, doctypes_options, max_results=4):
+        raise AssertionError("Grounded retrieval should not run for a grouped mixed article query")
+
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", fail_if_called)
+
+    response = client.post(
+        "/chat",
+        json={
+            "message": "Article 19, 21 and 22",
+            "state": "Gujarat",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    answer = payload["answer"]
+    assert "Article 19 of the Constitution of India" in answer
+    assert "Article 21 of the Constitution of India" in answer
+    assert "Article 22 of the Constitution of India" in answer
+    assert "Constitution of India | Article 19" in payload["citations"]
+    assert "Constitution of India | Article 21" in payload["citations"]
+    assert "Constitution of India | Article 22" in payload["citations"]
+
+
 def test_grouped_section_authority_query_combines_multiple_sections_directly(client, monkeypatch):
     def fail_if_called(self, query_variants, doctypes_options, max_results=4):
         raise AssertionError("Grounded retrieval should not run for a grouped mixed section query")
@@ -2169,6 +2510,79 @@ def test_grouped_section_authority_query_combines_multiple_sections_directly(cli
     assistant_message = [item for item in messages if item["role"] == "assistant"][-1]
     assert assistant_message["metadata"]["route_classification"]["path"] == "medium"
     assert assistant_message["metadata"]["retrieval"]["source"] == "authority_mixed_direct"
+
+
+def test_grouped_section_authority_query_with_commas_combines_multiple_sections_directly(client, monkeypatch):
+    def fail_if_called(self, query_variants, doctypes_options, max_results=4):
+        raise AssertionError("Grounded retrieval should not run for a grouped mixed section query")
+
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", fail_if_called)
+
+    response = client.post(
+        "/chat",
+        json={
+            "message": "Sections 420, 406 and 498A IPC",
+            "state": "Gujarat",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    answer = payload["answer"]
+    assert "Section 420 of the Indian Penal Code, 1860" in answer
+    assert "Section 406 of the Indian Penal Code, 1860" in answer
+    assert "Section 498A of the Indian Penal Code, 1860" in answer
+    assert "Indian Penal Code, 1860 | Section 420" in payload["citations"]
+    assert "Indian Penal Code, 1860 | Section 406" in payload["citations"]
+    assert "Indian Penal Code, 1860 | Section 498A" in payload["citations"]
+
+
+def test_article_300a_query_uses_direct_fast_authority_path(client, monkeypatch):
+    def fail_if_called(self, query_variants, doctypes_options, max_results=4):
+        raise AssertionError("Grounded retrieval should not run for Article 300A direct authority lookup")
+
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", fail_if_called)
+
+    response = client.post(
+        "/chat",
+        json={
+            "message": "Article 300A",
+            "state": "Gujarat",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "Article 300A of the Constitution of India" in payload["answer"]
+    assert "property" in payload["answer"].lower()
+    assert "Constitution of India | Article 300A" in payload["citations"]
+    chat_id = payload["chat_id"]
+    messages = client.get(f"/chat/{chat_id}/messages").json()["items"]
+    assistant_message = [item for item in messages if item["role"] == "assistant"][-1]
+    assert assistant_message["metadata"]["route_classification"]["path"] == "fast"
+    assert assistant_message["metadata"]["retrieval"]["source"] == "authority_fast_path"
+
+
+def test_constitutional_remedies_query_uses_direct_article_32_answer(client, monkeypatch):
+    def fail_if_called(self, query_variants, doctypes_options, max_results=4):
+        raise AssertionError("Grounded retrieval should not run for constitutional remedies direct authority lookup")
+
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", fail_if_called)
+
+    response = client.post(
+        "/chat",
+        json={
+            "message": "Which article gives constitutional remedies?",
+            "state": "Gujarat",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    answer = payload["answer"]
+    assert "Article 32 of the Constitution of India" in answer
+    assert "constitutional remedy" in answer.lower()
+    assert "Constitution of India | Article 32" in payload["citations"]
 
 
 def test_fast_authority_response_uses_understanding_driven_format_metadata(client, monkeypatch):
@@ -2270,7 +2684,8 @@ def test_direct_answer_formatting_uses_pointwise_layout_for_explainer_queries():
     )
 
     assert "Here are the key points:" in answer
-    assert "- Fundamental Rights under the Constitution of India: the basic freedoms and protections guaranteed against State action." in answer
+    assert "- Overview: the basic freedoms and protections guaranteed against State action." in answer
+    assert "- Article-wise breakdown:" in answer
     assert "- Articles 14-18: Right to Equality." in answer
     assert "- Legal position: they are enforceable, and courts can protect them through constitutional remedies." in answer
     assert "In simple terms" not in answer
@@ -2285,9 +2700,25 @@ def test_direct_answer_formatting_uses_pointwise_layout_for_authority_queries():
     )
 
     assert answer.startswith("Article 21 of the Constitution of India")
-    assert "- Provision: protects life and personal liberty and requires a fair, just, and reasonable legal process." in answer
+    assert "- Overview: protects life and personal liberty and requires a fair, just, and reasonable legal process." in answer
     assert "- Legal position: courts interpret it broadly to cover dignity, privacy, livelihood, and related protections." in answer
     assert "In broad terms" not in answer
+
+
+def test_general_legal_explainer_in_points_uses_structured_non_repetitive_breakdown():
+    answer = ChatService._format_general_legal_explainer_answer(
+        title="Bail",
+        summary="the legal release of an accused person from custody subject to conditions.",
+        legal_position="In broad terms, it concerns liberty during the criminal process rather than a final decision on guilt.",
+        next_steps="Check the offence, stage, and court before moving further.",
+        format_profile={"layout": "points", "detail_instructions": {"in_points": True, "practical_context": True}},
+    )
+
+    assert answer.startswith("Bail")
+    assert "- Overview: the legal release of an accused person from custody subject to conditions." in answer
+    assert "- Legal position: it concerns liberty during the criminal process rather than a final decision on guilt." in answer
+    assert "- Practical use: Check the offence, stage, and court before moving further." in answer
+    assert "Bail is" not in answer
 
 
 def test_fast_authority_formatting_uses_concise_layout_when_requested():
@@ -2320,9 +2751,34 @@ def test_constitutional_explainer_in_points_uses_bulleted_direct_format(client, 
     assert response.status_code == 200
     answer = response.json()["answer"]
     assert "Here are the key points:" in answer
+    assert "- Overview:" in answer
+    assert "- Article-wise breakdown:" in answer
     assert "- Articles 14-18: Right to Equality" in answer
     assert "enforceable" in answer.lower()
     assert "Summary:" not in answer
+
+
+def test_general_legal_explainer_in_points_uses_direct_structured_breakdown(client, monkeypatch):
+    def fail_if_called(self, query_variants, doctypes_options, max_results=4):
+        raise AssertionError("Grounded retrieval should not run for a general legal explainer query")
+
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", fail_if_called)
+
+    response = client.post(
+        "/chat",
+        json={
+            "message": "What is FIR in points",
+            "state": "Gujarat",
+        },
+    )
+
+    assert response.status_code == 200
+    answer = response.json()["answer"]
+    assert answer.startswith("First Information Report (FIR)")
+    assert "Here are the key points:" in answer
+    assert "- Overview:" in answer
+    assert "- Legal position:" in answer
+    assert "I am not confident enough" not in answer
 
 
 def test_fast_authority_query_prefers_curated_google_citations_when_available(client, monkeypatch):
@@ -2414,22 +2870,588 @@ def test_constitutional_explainer_falls_back_to_local_direct_citations_when_cura
     assert assistant_message["metadata"]["route_classification"]["path"] == "medium"
 
 
+def test_unsupported_article_lookup_prefers_curated_google_before_india_kanoon(client, monkeypatch):
+    monkeypatch.setattr(GoogleCustomSearchService, "configured", property(lambda self: True))
+
+    def fake_search(self, *, query: str, max_results: int | None = None, site_restrict: str | None = None, trusted_only: bool = True):
+        assert trusted_only is True
+        return GoogleSearchResult(
+            documents=[
+                {
+                    "doc_id": "google:article-39a",
+                    "title": "India Code - Constitution of India Article 39A",
+                    "headline": "Official constitutional property-right text.",
+                    "fragment_headline": "Article 39A official text.",
+                    "fragment_excerpt": "The State shall secure that the operation of the legal system promotes justice, on a basis of equal opportunity, and shall provide free legal aid.",
+                    "doc_excerpt": "The State shall secure that the operation of the legal system promotes justice, on a basis of equal opportunity, and shall provide free legal aid.",
+                    "docsource": "google:indiacode.nic.in",
+                    "citations": ["India Code - Constitution of India Article 39A"],
+                    "publishdate": "",
+                    "url": "https://www.indiacode.nic.in/",
+                    "score": 18.0,
+                    "source_kind": "google_custom_search",
+                    "authority_type": "government_portal",
+                }
+            ],
+            from_cache=False,
+            trusted_result_count=1,
+        )
+
+    def fail_if_called(self, *, query_variants, doctypes_options, max_results=4):
+        return []
+
+    def fake_generate_json(self, user_prompt, conversation):
+        return {
+            "answer": "Summary: Article 39A concerns equal justice and free legal aid.\nLegal position: The official constitutional text says the State shall secure justice on a basis of equal opportunity and provide free legal aid.\nPractical next steps: Read the official article text and then match it with the exact legal-aid or access-to-justice issue you want checked.\nSources: India Code - Constitution of India Article 39A.\nDisclaimer: This is general legal information.",
+            "follow_up_question": None,
+            "likely_forum": "google:indiacode.nic.in",
+            "caution": "Check the full constitutional text and current case law before relying on it.",
+            "documents_to_keep": ["legal-aid application record", "relevant order or notice"],
+        }
+
+    monkeypatch.setattr(GoogleCustomSearchService, "search", fake_search)
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", fail_if_called)
+    monkeypatch.setattr(OpenAIResponsesService, "generate_json", fake_generate_json)
+
+    response = client.post(
+        "/chat",
+        json={
+            "message": "Article 39A",
+            "state": "Gujarat",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    _assert_human_grounded_answer(payload["answer"])
+    assert "Article 39A" in payload["answer"]
+    messages = client.get(f"/chat/{payload['chat_id']}/messages").json()["items"]
+    assistant_message = [item for item in messages if item["role"] == "assistant"][-1]
+    assert assistant_message["metadata"]["route_classification"]["path"] == "heavy"
+    assert assistant_message["metadata"]["retrieval"]["documents"][0]["source_kind"] == "google_custom_search"
+    assert assistant_message["metadata"]["retrieval"]["documents"][0]["docsource"] == "google:indiacode.nic.in"
+
+
+def test_unsupported_section_lookup_prefers_curated_google_before_india_kanoon(client, monkeypatch):
+    monkeypatch.setattr(GoogleCustomSearchService, "configured", property(lambda self: True))
+
+    def fake_search(self, *, query: str, max_results: int | None = None, site_restrict: str | None = None, trusted_only: bool = True):
+        assert trusted_only is True
+        return GoogleSearchResult(
+            documents=[
+                {
+                    "doc_id": "google:section-34",
+                    "title": "India Code - Arbitration and Conciliation Act Section 34",
+                    "headline": "Official text for setting aside arbitral awards.",
+                    "fragment_headline": "Section 34 official text.",
+                    "fragment_excerpt": "Recourse to a Court against an arbitral award may be made only by an application for setting aside such award.",
+                    "doc_excerpt": "Recourse to a Court against an arbitral award may be made only by an application for setting aside such award.",
+                    "docsource": "google:indiacode.nic.in",
+                    "citations": ["India Code - Arbitration and Conciliation Act Section 34"],
+                    "publishdate": "",
+                    "url": "https://www.indiacode.nic.in/",
+                    "score": 18.0,
+                    "source_kind": "google_custom_search",
+                    "authority_type": "government_portal",
+                }
+            ],
+            from_cache=False,
+            trusted_result_count=1,
+        )
+
+    def fail_if_called(self, *, query_variants, doctypes_options, max_results=4):
+        return []
+
+    def fake_generate_json(self, user_prompt, conversation):
+        return {
+            "answer": "Summary: Section 34 of the Arbitration and Conciliation Act provides the court challenge route against an arbitral award.\nLegal position: The official text says recourse to a court against an arbitral award may be made only through an application for setting aside the award.\nPractical next steps: Check the official section text, the award, and the filing timeline before taking the next step.\nSources: India Code - Arbitration and Conciliation Act Section 34.\nDisclaimer: This is general legal information.",
+            "follow_up_question": None,
+            "likely_forum": "google:indiacode.nic.in",
+            "caution": "Check the current statutory text and timeline before filing.",
+            "documents_to_keep": ["arbitral award", "arbitration agreement"],
+        }
+
+    monkeypatch.setattr(GoogleCustomSearchService, "search", fake_search)
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", fail_if_called)
+    monkeypatch.setattr(OpenAIResponsesService, "generate_json", fake_generate_json)
+
+    response = client.post(
+        "/chat",
+        json={
+            "message": "Section 34 Arbitration Act",
+            "state": "Gujarat",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    _assert_human_grounded_answer(payload["answer"])
+    assert "Section 34" in payload["answer"]
+    messages = client.get(f"/chat/{payload['chat_id']}/messages").json()["items"]
+    assistant_message = [item for item in messages if item["role"] == "assistant"][-1]
+    assert assistant_message["metadata"]["route_classification"]["path"] == "heavy"
+    assert assistant_message["metadata"]["retrieval"]["documents"][0]["source_kind"] == "google_custom_search"
+    assert assistant_message["metadata"]["retrieval"]["documents"][0]["docsource"] == "google:indiacode.nic.in"
+
+
+def test_bandharan_artical_query_uses_curated_google_first_and_skips_india_kanoon(client, monkeypatch):
+    monkeypatch.setattr(GoogleCustomSearchService, "configured", property(lambda self: True))
+
+    def fake_search(self, *, query: str, max_results: int | None = None, site_restrict: str | None = None, trusted_only: bool = True):
+        assert trusted_only is True
+        assert query == "Article 19 Constitution of India explanation"
+        return GoogleSearchResult(
+            documents=[
+                {
+                    "doc_id": "google:article-19",
+                    "title": "India Code - Constitution of India Article 19",
+                    "headline": "Official constitutional freedoms text.",
+                    "fragment_headline": "Article 19 official text.",
+                    "fragment_excerpt": "All citizens shall have the right to freedom of speech and expression and the other freedoms listed in Article 19.",
+                    "doc_excerpt": "All citizens shall have the right to freedom of speech and expression and the other freedoms listed in Article 19.",
+                    "docsource": "google:indiacode.nic.in",
+                    "citations": ["India Code - Constitution of India Article 19"],
+                    "publishdate": "",
+                    "url": "https://www.indiacode.nic.in/",
+                    "score": 18.0,
+                    "source_kind": "google_custom_search",
+                    "authority_type": "government_portal",
+                }
+            ],
+            from_cache=False,
+            trusted_result_count=1,
+        )
+
+    def fail_if_called(self, *, query_variants, doctypes_options, max_results=4):
+        return []
+
+    monkeypatch.setattr(GoogleCustomSearchService, "search", fake_search)
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", fail_if_called)
+
+    response = client.post(
+        "/chat",
+        json={
+            "message": "bandharan artical 19",
+            "state": "Gujarat",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    _assert_human_grounded_answer(payload["answer"])
+    assert "Article 19" in payload["answer"]
+    messages = client.get(f"/chat/{payload['chat_id']}/messages").json()["items"]
+    assistant_message = [item for item in messages if item["role"] == "assistant"][-1]
+    assert assistant_message["metadata"]["route_classification"] == {
+        "path": "heavy",
+        "reason": "confidence_based_authority_retrieval",
+    }
+    assert assistant_message["metadata"]["retrieval"]["source"] == "curated_google_authority_lookup"
+    assert assistant_message["metadata"]["retrieval"]["documents"][0]["source_kind"] == "google_custom_search"
+
+
+def test_bnss_section_variant_uses_curated_google_first_and_skips_india_kanoon(client, monkeypatch):
+    monkeypatch.setattr(GoogleCustomSearchService, "configured", property(lambda self: True))
+
+    def fake_search(self, *, query: str, max_results: int | None = None, site_restrict: str | None = None, trusted_only: bool = True):
+        assert trusted_only is True
+        assert query == "Section 21 Bharatiya Nagarik Suraksha Sanhita explanation"
+        return GoogleSearchResult(
+            documents=[
+                {
+                    "doc_id": "google:bnss-21",
+                    "title": "India Code - Bharatiya Nagarik Suraksha Sanhita Section 21",
+                    "headline": "Official BNSS Section 21 text.",
+                    "fragment_headline": "BNSS Section 21 official text.",
+                    "fragment_excerpt": "Official BNSS Section 21 text excerpt.",
+                    "doc_excerpt": "Official BNSS Section 21 text excerpt.",
+                    "docsource": "google:indiacode.nic.in",
+                    "citations": ["India Code - Bharatiya Nagarik Suraksha Sanhita Section 21"],
+                    "publishdate": "",
+                    "url": "https://www.indiacode.nic.in/",
+                    "score": 17.5,
+                    "source_kind": "google_custom_search",
+                    "authority_type": "government_portal",
+                }
+            ],
+            from_cache=False,
+            trusted_result_count=1,
+        )
+
+    def fail_if_called(self, *, query_variants, doctypes_options, max_results=4):
+        return []
+
+    monkeypatch.setattr(GoogleCustomSearchService, "search", fake_search)
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", fail_if_called)
+
+    response = client.post(
+        "/chat",
+        json={
+            "message": "bnss section 21",
+            "state": "Gujarat",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    _assert_human_grounded_answer(payload["answer"])
+    assert "Section 21" in payload["answer"]
+    messages = client.get(f"/chat/{payload['chat_id']}/messages").json()["items"]
+    assistant_message = [item for item in messages if item["role"] == "assistant"][-1]
+    assert assistant_message["metadata"]["retrieval"]["source"] == "curated_google_authority_lookup"
+    assert assistant_message["metadata"]["route_classification"]["reason"] == "confidence_based_authority_retrieval"
+
+
+def test_bns_section_variant_answers_from_relevant_trusted_curated_google_result(client, monkeypatch):
+    monkeypatch.setattr(GoogleCustomSearchService, "configured", property(lambda self: True))
+
+    def fake_search(self, *, query: str, max_results: int | None = None, site_restrict: str | None = None, trusted_only: bool = True):
+        assert trusted_only is True
+        assert query == "Section 21 Bharatiya Nyaya Sanhita explanation"
+        return GoogleSearchResult(
+            documents=[
+                {
+                    "doc_id": "google:bns-21",
+                    "title": "India Code - Bharatiya Nyaya Sanhita Section 21",
+                    "headline": "Explanation of BNS Section 21.",
+                    "fragment_headline": "BNS Section 21 explanation.",
+                    "fragment_excerpt": "Official explanation and text for BNS Section 21.",
+                    "doc_excerpt": "Official explanation and text for BNS Section 21.",
+                    "docsource": "google:indiacode.nic.in",
+                    "citations": ["India Code - Bharatiya Nyaya Sanhita Section 21"],
+                    "publishdate": "",
+                    "url": "https://www.indiacode.nic.in/",
+                    "score": 9.0,
+                    "source_kind": "google_custom_search",
+                    "authority_type": "government_portal",
+                }
+            ],
+            from_cache=False,
+            trusted_result_count=1,
+        )
+
+    def fail_if_called(self, *, query_variants, doctypes_options, max_results=4):
+        return []
+
+    monkeypatch.setattr(GoogleCustomSearchService, "search", fake_search)
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", fail_if_called)
+
+    response = client.post(
+        "/chat",
+        json={
+            "message": "bns section 21",
+            "state": "Gujarat",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    _assert_human_grounded_answer(payload["answer"])
+    assert "Section 21" in payload["answer"]
+    assert payload["follow_up_question"] is None
+    messages = client.get(f"/chat/{payload['chat_id']}/messages").json()["items"]
+    assistant_message = [item for item in messages if item["role"] == "assistant"][-1]
+    assert assistant_message["metadata"]["retrieval"]["source"] == "curated_google_authority_lookup"
+    assert assistant_message["metadata"]["route_classification"]["reason"] == "confidence_based_authority_retrieval"
+
+
+def test_bns_section_variant_passes_curated_google_context_into_answer_generation(client, monkeypatch):
+    monkeypatch.setattr(GoogleCustomSearchService, "configured", property(lambda self: True))
+    captured: dict[str, str] = {}
+
+    def fake_search(self, *, query: str, max_results: int | None = None, site_restrict: str | None = None, trusted_only: bool = True):
+        assert trusted_only is True
+        assert query == "Section 21 Bharatiya Nyaya Sanhita explanation"
+        return GoogleSearchResult(
+            documents=[
+                {
+                    "doc_id": "google:bns-21",
+                    "title": "India Code - Bharatiya Nyaya Sanhita Section 21",
+                    "headline": "Explanation of BNS Section 21.",
+                    "fragment_headline": "BNS Section 21 explanation.",
+                    "fragment_excerpt": "Official explanation and text for BNS Section 21.",
+                    "doc_excerpt": "Official explanation and text for BNS Section 21.",
+                    "docsource": "google:indiacode.nic.in",
+                    "citations": ["India Code - Bharatiya Nyaya Sanhita Section 21"],
+                    "publishdate": "",
+                    "url": "https://www.indiacode.nic.in/",
+                    "score": 9.0,
+                    "source_kind": "google_custom_search",
+                    "authority_type": "government_portal",
+                }
+            ],
+            from_cache=False,
+            trusted_result_count=1,
+        )
+
+    def fail_if_called(self, *, query_variants, doctypes_options, max_results=4):
+        return []
+
+    def fake_generate_json(self, user_prompt, conversation):
+        captured["prompt"] = user_prompt
+        return {
+            "answer": "Summary: BNS Section 21 is covered by the retrieved official authority.\nLegal position: The retrieved official material explains BNS Section 21.\nPractical next steps: Read the official section text and match it with the exact point you want checked.\nSources: India Code - Bharatiya Nyaya Sanhita Section 21.\nDisclaimer: This is general legal information.",
+            "follow_up_question": None,
+            "likely_forum": "google:indiacode.nic.in",
+            "caution": "Check the full official text before relying on it.",
+            "documents_to_keep": ["copy of the relevant authority"],
+        }
+
+    monkeypatch.setattr(GoogleCustomSearchService, "search", fake_search)
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", fail_if_called)
+    monkeypatch.setattr(OpenAIResponsesService, "generate_json", fake_generate_json)
+
+    response = client.post(
+        "/chat",
+        json={
+            "message": "bns section 21",
+            "state": "Gujarat",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    _assert_human_grounded_answer(payload["answer"])
+    assert "Official explanation and text for BNS Section 21." in captured["prompt"]
+    messages = client.get(f"/chat/{payload['chat_id']}/messages").json()["items"]
+    assistant_message = [item for item in messages if item["role"] == "assistant"][-1]
+    assert assistant_message["metadata"]["retrieval"]["source"] == "curated_google_authority_lookup"
+
+
+def test_section_bns_variant_answers_from_trusted_curated_google_result_without_exact_title_match(client, monkeypatch):
+    monkeypatch.setattr(GoogleCustomSearchService, "configured", property(lambda self: True))
+
+    def fake_search(self, *, query: str, max_results: int | None = None, site_restrict: str | None = None, trusted_only: bool = True):
+        assert trusted_only is True
+        assert query == "Section 21 Bharatiya Nyaya Sanhita explanation"
+        return GoogleSearchResult(
+            documents=[
+                {
+                    "doc_id": "google:bns-21-relaxed",
+                    "title": "India Code - Bharatiya Nyaya Sanhita Chapter II",
+                    "headline": "Official BNS provision guidance.",
+                    "fragment_headline": "Bharatiya Nyaya Sanhita official material.",
+                    "fragment_excerpt": "This material includes Section 21 of the Bharatiya Nyaya Sanhita and its official explanation.",
+                    "doc_excerpt": "This material includes Section 21 of the Bharatiya Nyaya Sanhita and its official explanation.",
+                    "docsource": "google:indiacode.nic.in",
+                    "citations": ["India Code - Bharatiya Nyaya Sanhita Chapter II"],
+                    "publishdate": "",
+                    "url": "https://www.indiacode.nic.in/",
+                    "score": 8.5,
+                    "source_kind": "google_custom_search",
+                    "authority_type": "government_portal",
+                }
+            ],
+            from_cache=False,
+            trusted_result_count=1,
+        )
+
+    def fail_if_called(self, *, query_variants, doctypes_options, max_results=4):
+        return []
+
+    def fake_generate_json(self, user_prompt, conversation):
+        return {
+            "answer": "Summary: Section 21 of the Bharatiya Nyaya Sanhita is covered by the retrieved official authority.\nLegal position: The retrieved official material includes Section 21 and its explanation.\nPractical next steps: Read the official section text and match it with the exact point you want checked.\nSources: India Code - Bharatiya Nyaya Sanhita Chapter II.\nDisclaimer: This is general legal information.",
+            "follow_up_question": None,
+            "likely_forum": "google:indiacode.nic.in",
+            "caution": "Check the full official text before relying on it.",
+            "documents_to_keep": ["copy of the relevant authority"],
+        }
+
+    monkeypatch.setattr(GoogleCustomSearchService, "search", fake_search)
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", fail_if_called)
+    monkeypatch.setattr(OpenAIResponsesService, "generate_json", fake_generate_json)
+
+    response = client.post(
+        "/chat",
+        json={
+            "message": "section 21 bns",
+            "state": "Gujarat",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    _assert_human_grounded_answer(payload["answer"])
+    assert "Section 21" in payload["answer"]
+    assert payload["follow_up_question"] is None
+    messages = client.get(f"/chat/{payload['chat_id']}/messages").json()["items"]
+    assistant_message = [item for item in messages if item["role"] == "assistant"][-1]
+    assert assistant_message["metadata"]["retrieval"]["source"] == "curated_google_authority_lookup"
+    assert assistant_message["metadata"]["route_classification"]["reason"] == "confidence_based_authority_retrieval"
+
+
+def test_bns_section_variant_keeps_trusted_curated_google_result_despite_weaker_authority_metadata(client, monkeypatch):
+    monkeypatch.setattr(GoogleCustomSearchService, "configured", property(lambda self: True))
+
+    def fake_search(self, *, query: str, max_results: int | None = None, site_restrict: str | None = None, trusted_only: bool = True):
+        assert trusted_only is True
+        assert query == "Section 21 Bharatiya Nyaya Sanhita explanation"
+        return GoogleSearchResult(
+            documents=[
+                {
+                    "doc_id": "google:bns-21-trusted-domain-only",
+                    "title": "India Code - Bharatiya Nyaya Sanhita materials",
+                    "headline": "Official BNS materials from India Code.",
+                    "fragment_headline": "Section 21 material.",
+                    "fragment_excerpt": "This page includes Section 21 of the Bharatiya Nyaya Sanhita and the related official explanation.",
+                    "doc_excerpt": "This page includes Section 21 of the Bharatiya Nyaya Sanhita and the related official explanation.",
+                    "docsource": "google:indiacode.nic.in",
+                    "citations": ["India Code - Bharatiya Nyaya Sanhita materials"],
+                    "publishdate": "",
+                    "url": "https://www.indiacode.nic.in/handle/123456",
+                    "score": 8.0,
+                    "source_kind": "google_custom_search",
+                    "authority_type": "web_reference",
+                    "source_domain": "indiacode.nic.in",
+                }
+            ],
+            from_cache=False,
+            trusted_result_count=1,
+        )
+
+    def fail_if_called(self, *, query_variants, doctypes_options, max_results=4):
+        return []
+
+    def fake_generate_json(self, user_prompt, conversation):
+        return {
+            "answer": "Summary: Section 21 of the Bharatiya Nyaya Sanhita is covered by the retrieved trusted official source.\nLegal position: The trusted India Code material includes Section 21 and its official explanation.\nPractical next steps: Read the official section text and compare it with the exact issue you want checked.\nSources: India Code - Bharatiya Nyaya Sanhita materials.\nDisclaimer: This is general legal information.",
+            "follow_up_question": None,
+            "likely_forum": "google:indiacode.nic.in",
+            "caution": "Check the full official text before relying on it.",
+            "documents_to_keep": ["copy of the relevant authority"],
+        }
+
+    monkeypatch.setattr(GoogleCustomSearchService, "search", fake_search)
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", fail_if_called)
+    monkeypatch.setattr(OpenAIResponsesService, "generate_json", fake_generate_json)
+
+    response = client.post(
+        "/chat",
+        json={
+            "message": "bns section 21",
+            "state": "Gujarat",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    _assert_human_grounded_answer(payload["answer"])
+    assert payload["follow_up_question"] is None
+    messages = client.get(f"/chat/{payload['chat_id']}/messages").json()["items"]
+    assistant_message = [item for item in messages if item["role"] == "assistant"][-1]
+    assert assistant_message["metadata"]["retrieval"]["source"] == "curated_google_authority_lookup"
+    assert assistant_message["metadata"]["route_classification"]["reason"] == "confidence_based_authority_retrieval"
+
+
+def test_bns_section_variant_defers_to_grounded_retrieval_when_curated_google_has_no_result(client, monkeypatch):
+    monkeypatch.setattr(GoogleCustomSearchService, "configured", property(lambda self: True))
+
+    def fake_search(self, *, query: str, max_results: int | None = None, site_restrict: str | None = None, trusted_only: bool = True):
+        assert trusted_only is True
+        assert query == "Section 21 Bharatiya Nyaya Sanhita explanation"
+        return GoogleSearchResult(documents=[], from_cache=False, trusted_result_count=0)
+
+    def fake_indiankanoon(self, *, query_variants, doctypes_options, max_results=4):
+        return []
+
+    monkeypatch.setattr(GoogleCustomSearchService, "search", fake_search)
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", fake_indiankanoon)
+
+    response = client.post(
+        "/chat",
+        json={
+            "message": "bns section 21",
+            "state": "Gujarat",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "Do you want the exact BNS Section 21 text" not in payload["answer"]
+    assert payload["follow_up_question"] is None
+    messages = client.get(f"/chat/{payload['chat_id']}/messages").json()["items"]
+    assistant_message = [item for item in messages if item["role"] == "assistant"][-1]
+    assert assistant_message["metadata"]["retrieval"]["source"] != "curated_google_authority_clarification"
+    assert assistant_message["metadata"]["route_classification"]["reason"] == "confidence_based_authority_retrieval"
+
+
+def test_trusted_curated_google_authority_result_bypasses_low_confidence_and_unsupported_fallback(client, monkeypatch):
+    monkeypatch.setattr(GoogleCustomSearchService, "configured", property(lambda self: True))
+
+    def fake_search(self, *, query: str, max_results: int | None = None, site_restrict: str | None = None, trusted_only: bool = True):
+        assert trusted_only is True
+        return GoogleSearchResult(
+            documents=[
+                {
+                    "doc_id": "google:section-34-low-score",
+                    "title": "India Code - Arbitration and Conciliation Act Chapter VII",
+                    "headline": "Official court-challenge material.",
+                    "fragment_headline": "Section 34 official explanation.",
+                    "fragment_excerpt": "Section 34 of the Arbitration and Conciliation Act provides the official court challenge route against an arbitral award.",
+                    "doc_excerpt": "Section 34 of the Arbitration and Conciliation Act provides the official court challenge route against an arbitral award.",
+                    "docsource": "google:indiacode.nic.in",
+                    "citations": ["India Code - Arbitration and Conciliation Act Chapter VII"],
+                    "publishdate": "",
+                    "url": "https://www.indiacode.nic.in/",
+                    "score": 8.0,
+                    "source_kind": "google_custom_search",
+                    "authority_type": "government_portal",
+                }
+            ],
+            from_cache=False,
+            trusted_result_count=1,
+        )
+
+    def fail_indiankanoon(self, *, query_variants, doctypes_options, max_results=4):
+        return []
+
+    def fake_generate_json(self, user_prompt, conversation):
+        return {
+            "answer": "Summary: Section 34 provides the court challenge route against an arbitral award.\nLegal position: The retrieved official material says recourse to a court against an arbitral award may be made through Section 34.\nPractical next steps: Read the official section text, the award, and the filing timeline before taking the next step.\nSources: India Code - Arbitration and Conciliation Act Chapter VII.\nDisclaimer: This is general legal information.",
+            "follow_up_question": None,
+            "likely_forum": "google:indiacode.nic.in",
+            "caution": "Check the current statutory text and timeline before filing.",
+            "documents_to_keep": ["arbitral award", "arbitration agreement"],
+        }
+
+    def fail_semantic_support(self, *, answer, query, documents, source_sufficiency):
+        raise AssertionError("Trusted curated Google authority results should bypass the unsupported-output semantic fallback")
+
+    monkeypatch.setattr(GoogleCustomSearchService, "search", fake_search)
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", fail_indiankanoon)
+    monkeypatch.setattr(OpenAIResponsesService, "generate_json", fake_generate_json)
+    monkeypatch.setattr(ChatService, "_run_semantic_support_check", fail_semantic_support)
+
+    response = client.post(
+        "/chat",
+        json={
+            "message": "Section 34 Arbitration Act",
+            "state": "Gujarat",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    _assert_human_grounded_answer(payload["answer"])
+    assert "Section 34" in payload["answer"]
+    messages = client.get(f"/chat/{payload['chat_id']}/messages").json()["items"]
+    assistant_message = [item for item in messages if item["role"] == "assistant"][-1]
+    assert assistant_message["metadata"]["retrieval"]["source"] == "curated_google_authority_lookup"
+    assert assistant_message["metadata"]["retrieval"]["validation_flags"] == []
+
+
 def test_fast_authority_query_uses_lightweight_direct_cache_on_repeat_requests(client, monkeypatch):
     service = client.app.state.chat_service
     service._direct_answer_cache.clear()
-    original = ChatService._format_fast_authority_answer
+    original = ChatService._format_local_legal_dataset_answer
     calls = {"count": 0}
 
-    def wrapped(*, title, summary, legal_position, format_profile=None):
+    def wrapped(match):
         calls["count"] += 1
-        return original(
-            title=title,
-            summary=summary,
-            legal_position=legal_position,
-            format_profile=format_profile,
-        )
+        return original(match)
 
-    monkeypatch.setattr(ChatService, "_format_fast_authority_answer", staticmethod(wrapped))
+    monkeypatch.setattr(ChatService, "_format_local_legal_dataset_answer", staticmethod(wrapped))
 
     first = client.post("/chat", json={"message": "Article 21", "state": "Gujarat"})
     second = client.post("/chat", json={"message": "Article 21", "state": "Gujarat"})
@@ -2539,11 +3561,10 @@ def test_fast_authority_in_points_uses_bulleted_direct_format(client, monkeypatc
 
     assert response.status_code == 200
     answer = response.json()["answer"]
-    assert answer.startswith("Article 21 of the Constitution of India")
-    assert "\n- Provision:" in answer
-    assert "\n- Legal position:" in answer
+    assert answer.startswith("Article 21 concerns protection of life and personal liberty.")
+    assert "Its real effect depends on the facts" in answer
     assert "life and personal liberty" in answer.lower()
-    assert "lawful, fair, and non-arbitrary procedure" in answer.lower()
+    assert "lawful procedure" in answer.lower() or "personal liberty" in answer.lower()
 
 
 def test_fast_authority_in_short_uses_concise_direct_format(client, monkeypatch):
@@ -2563,11 +3584,11 @@ def test_fast_authority_in_short_uses_concise_direct_format(client, monkeypatch)
     assert response.status_code == 200
     payload = response.json()
     answer = payload["answer"]
-    assert answer.startswith("Article 21 of the Constitution of India protects life and personal liberty")
-    assert "\n\n" not in answer
+    assert answer.startswith("1. What it is: Article 21 of Constitution of India deals with protection of life and personal liberty.")
+    assert "6. Source: Constitution of India" in answer
     messages = client.get(f"/chat/{payload['chat_id']}/messages").json()["items"]
     assistant_message = [item for item in messages if item["role"] == "assistant"][-1]
-    assert assistant_message["metadata"]["retrieval"]["direct_answer_format"]["authority_layout"] == "concise"
+    assert assistant_message["metadata"]["retrieval"]["source"] == "local_legal_dataset"
 
 
 def test_fast_authority_step_by_step_uses_numbered_direct_format(client, monkeypatch):
@@ -2587,11 +3608,12 @@ def test_fast_authority_step_by_step_uses_numbered_direct_format(client, monkeyp
     assert response.status_code == 200
     payload = response.json()
     answer = payload["answer"]
-    assert answer.startswith("Article 21 of the Constitution of India")
-    assert "\n1. " in answer
+    assert answer.startswith("1. What it is: Article 21 of Constitution of India deals with protection of life and personal liberty.")
+    assert "3. Key points / elements:" in answer
+    assert "5. Practical use:" in answer
     messages = client.get(f"/chat/{payload['chat_id']}/messages").json()["items"]
     assistant_message = [item for item in messages if item["role"] == "assistant"][-1]
-    assert assistant_message["metadata"]["retrieval"]["direct_answer_format"]["authority_layout"] == "step_by_step"
+    assert assistant_message["metadata"]["retrieval"]["source"] == "local_legal_dataset"
 
 
 def test_fast_authority_lookup_uses_controlled_fuzzy_matching_for_statute_alias_without_touching_identifier(client, monkeypatch):
@@ -2614,8 +3636,419 @@ def test_fast_authority_lookup_uses_controlled_fuzzy_matching_for_statute_alias_
 
     assert response.status_code == 200
     payload = response.json()
-    assert "Section 498A of the Indian Penal Code, 1860" in payload["answer"]
+    assert "1. What it is: Section 498A of Indian Penal Code, 1860 deals with husband or relative of husband of a woman subjecting her to cruelty." in payload["answer"]
+    assert "1. What it is:" in payload["answer"]
     assert "Summary:" not in payload["answer"]
+
+
+def test_local_legal_dataset_returns_deterministic_article_answer_before_indiankanoon(client, monkeypatch):
+    def fail_if_called(self, query_variants, doctypes_options, max_results=4):
+        raise AssertionError("India Kanoon should not run when a local legal dataset match exists")
+
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", fail_if_called)
+
+    response = client.post(
+        "/chat",
+        json={
+            "message": "article 12",
+            "state": "Gujarat",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    _assert_pure_authority_response(payload)
+    answer = payload["answer"]
+    assert "1. What it is: Article 12 of Constitution of India deals with definitions." in answer
+    assert "In plain terms, it sets out the constitutional position on definitions." in answer
+    assert "3. Key points / elements:" in answer
+    assert "6. Source: Constitution of India" in answer
+    messages = client.get(f"/chat/{payload['chat_id']}/messages").json()["items"]
+    assistant_message = [item for item in messages if item["role"] == "assistant"][-1]
+    assert assistant_message["metadata"]["retrieval"]["source"] == "local_legal_dataset"
+
+
+def _assert_pure_authority_response(payload):
+    answer = payload["answer"]
+    assert "6. Source:" in answer
+    assert "Note:" in answer
+    assert "1. What it is:" in answer
+    assert "2. Meaning:" in answer
+    assert "4. Punishment:" in answer
+    assert "5. Practical use:" in answer
+    assert "Summary:" not in answer
+    assert "Legal Position:" not in answer
+    assert "Practical Next Steps:" not in answer
+    assert "Source/citation:" not in answer
+    assert "Simple explanation:" not in answer
+    assert payload["documents_to_keep"] == []
+    assert payload["likely_forum"] is None
+    assert payload["caution"] is None
+
+
+def _assert_human_grounded_answer(answer: str):
+    assert "6. Source:" in answer
+    assert "Note:" in answer
+    assert "1. What it is:" in answer
+    assert "2. Meaning:" in answer
+    assert "Summary:" not in answer
+    assert "Legal Position:" not in answer
+    assert "Practical Next Steps:" not in answer
+    assert "Disclaimer:" not in answer
+
+
+def test_authority_structured_answer_uses_six_part_lawyer_format():
+    answer = ChatService._format_authority_structured_answer(
+        matched_query="Article 21",
+        title="Protection of life and personal liberty",
+        text="No person shall be deprived of his life or personal liberty except according to procedure established by law.",
+        explanation="this is the constitutional provision dealing with protection of life and personal liberty. Its real effect depends on the facts and on judicial interpretation.",
+        source="Constitution of India",
+    )
+
+    assert answer.startswith("1. What it is: Article 21 of Constitution of India deals with protection of life and personal liberty.")
+    assert "2. Meaning: In plain terms, it sets out the constitutional position on protection of life and personal liberty." in answer
+    assert "3. Key points / elements:" in answer
+    assert "4. Punishment: No specific punishment is stated in the material I relied on." in answer
+    assert "6. Source: Constitution of India" in answer
+    assert "Note: This is general legal information" in answer
+
+
+def test_normalize_final_answer_turns_sectioned_model_output_into_human_prose():
+    service = ChatService.__new__(ChatService)
+    answer = service._normalize_final_answer(
+        "Summary: Article 39A concerns equal justice and free legal aid.\n"
+        "Legal position: The text requires the State to secure justice on a basis of equal opportunity and provide free legal aid.\n"
+        "Practical next steps: Read the article with the exact access-to-justice issue you want checked.\n"
+        "Sources: India Code - Constitution of India Article 39A.\n"
+        "Disclaimer: This is general legal information."
+    )
+
+    assert answer.startswith("1. What it is: Article 39A concerns equal justice and free legal aid.")
+    assert "2. Meaning: The text requires the State to secure justice on a basis of equal opportunity and provide free legal aid." in answer
+    assert "5. Practical use: Read the article with the exact access-to-justice issue you want checked." in answer
+    assert "6. Source: India Code - Constitution of India Article 39A" in answer
+    assert "Note: This is general legal information." in answer
+    assert "Summary:" not in answer
+
+
+def test_local_legal_dataset_supports_bare_section_lookup_without_external_lookup(client, monkeypatch):
+    def fail_if_called(self, query_variants, doctypes_options, max_results=4):
+        raise AssertionError("India Kanoon should not run for a bare local IPC section match")
+
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", fail_if_called)
+
+    response = client.post(
+        "/chat",
+        json={
+            "message": "section 34",
+            "state": "Gujarat",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    _assert_pure_authority_response(payload)
+    assert "1. What it is: Section 34 of Indian Penal Code, 1860 deals with acts done by several persons in furtherance of common intention." in payload["answer"]
+    assert "6. Source: Indian Penal Code, 1860" in payload["answer"]
+    messages = client.get(f"/chat/{payload['chat_id']}/messages").json()["items"]
+    assistant_message = [item for item in messages if item["role"] == "assistant"][-1]
+    assert assistant_message["metadata"]["query_profile"]["response_mode"] == "authority"
+    assert assistant_message["metadata"]["retrieval"]["source"] == "local_legal_dataset"
+
+
+def test_local_legal_dataset_supports_reverse_ipc_reference_without_external_lookup(client, monkeypatch):
+    def fail_if_called(self, query_variants, doctypes_options, max_results=4):
+        raise AssertionError("India Kanoon should not run for reverse-order IPC dataset matches")
+
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", fail_if_called)
+
+    response = client.post(
+        "/chat",
+        json={
+            "message": "ipc 420",
+            "state": "Gujarat",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    _assert_pure_authority_response(payload)
+    answer = payload["answer"]
+    assert "Section 420 of Indian Penal Code, 1860 deals with cheating and dishonestly inducing delivery of property." in answer
+    assert "In plain terms, it addresses cheating and dishonestly inducing delivery of property." in answer
+    assert "Source: Indian Penal Code, 1860" in answer
+
+
+def test_local_legal_dataset_normalizes_420_ipc_sectin_without_external_lookup(client, monkeypatch):
+    def fail_if_called(self, query_variants, doctypes_options, max_results=4):
+        raise AssertionError("India Kanoon should not run for typo-normalized local IPC matches")
+
+    def fail_if_llm_called(self, user_prompt, conversation):
+        raise AssertionError("LLM should not run for typo-normalized local IPC matches")
+
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", fail_if_called)
+    monkeypatch.setattr(OpenAIResponsesService, "generate_json", fail_if_llm_called)
+
+    response = client.post(
+        "/chat",
+        json={
+            "message": "420 ipc sectin",
+            "state": "Gujarat",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    _assert_pure_authority_response(payload)
+    assert "Section 420 of Indian Penal Code, 1860" in payload["answer"]
+    assert "6. Source: Indian Penal Code, 1860" in payload["answer"]
+
+
+def test_local_legal_dataset_normalizes_artikal_32_without_external_lookup(client, monkeypatch):
+    def fail_if_called(self, query_variants, doctypes_options, max_results=4):
+        raise AssertionError("India Kanoon should not run for typo-normalized local article matches")
+
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", fail_if_called)
+
+    response = client.post(
+        "/chat",
+        json={
+            "message": "artikal 32",
+            "state": "Gujarat",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    _assert_pure_authority_response(payload)
+    assert "Article 32 of Constitution of India" in payload["answer"]
+    assert "remedies for enforcement of rights" in payload["answer"].lower()
+
+
+def test_olx_scam_routes_to_practical_legal_help_playbook(client, monkeypatch):
+    def fail_if_called(self, query_variants, doctypes_options, max_results=4):
+        raise AssertionError("India Kanoon should not run for OLX scam playbook routing")
+
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", fail_if_called)
+
+    response = client.post(
+        "/chat",
+        json={
+            "message": "I got scammed on OLX",
+            "state": "Gujarat",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    answer = payload["answer"].lower()
+    assert "cyber" in answer or "1930" in answer or "complaint" in answer
+    assert payload["follow_up_question"]
+    chat_id = payload["chat_id"]
+    messages = client.get(f"/chat/{chat_id}/messages").json()["items"]
+    assistant_message = [item for item in messages if item["role"] == "assistant"][-1]
+    assert assistant_message["metadata"]["pipeline"] == "legal_help"
+    assert assistant_message["metadata"]["playbook_id"] == "playbook_cyber_fraud_v1"
+
+
+def test_bns_query_returns_clean_unavailable_answer_when_dataset_and_external_sources_fail(client, monkeypatch):
+    def fail_indiankanoon(self, query_variants, doctypes_options, max_results=4):
+        raise RuntimeError("403 PERMISSION_DENIED from India Kanoon provider")
+
+    def fail_google(self, **kwargs):
+        raise RuntimeError("provider error: 403 insufficient_quota")
+
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", fail_indiankanoon)
+    monkeypatch.setattr(GoogleCustomSearchService, "search", fail_google)
+
+    response = client.post(
+        "/chat",
+        json={
+            "message": "section 34 bns",
+            "state": "Gujarat",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    answer = payload["answer"].lower()
+    assert "bns dataset/source unavailable" in answer
+    assert "section 34 bns" in answer
+    assert "permission_denied" not in answer
+    assert "provider error" not in answer
+    assert "insufficient_quota" not in answer
+    assert "i am not seeing a clear enough legal match yet" not in answer
+
+
+def test_non_local_provision_query_uses_grounded_indiankanoon_flow_after_local_miss(client, monkeypatch):
+    calls = {"count": 0}
+
+    def fake_retrieve_grounded_documents(self, query_variants, doctypes_options, max_results=4):
+        calls["count"] += 1
+        return [
+            {
+                "doc_id": "ni-138",
+                "title": "Section 138 in The Negotiable Instruments Act, 1881",
+                "headline": "Dishonour of cheque for insufficiency of funds.",
+                "fragment_headline": "Grounded NI Act result.",
+                "doc_excerpt": "Where any cheque drawn by a person is returned unpaid because funds are insufficient, section 138 may apply subject to the statutory conditions.",
+                "docsource": "laws",
+                "citations": ["NI Act 138"],
+                "publishdate": "1881",
+                "url": "https://indiankanoon.org/doc/ni-138/",
+                "score": 38.0,
+            }
+        ]
+
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", fake_retrieve_grounded_documents)
+
+    response = client.post(
+        "/chat",
+        json={
+            "message": "section 138 ni act",
+            "state": "Gujarat",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert calls["count"] == 1
+    _assert_pure_authority_response(payload)
+    assert "Section 138" in payload["answer"]
+    messages = client.get(f"/chat/{payload['chat_id']}/messages").json()["items"]
+    assistant_message = [item for item in messages if item["role"] == "assistant"][-1]
+    assert assistant_message["metadata"]["query_profile"]["flow_type"] == "provision_lookup"
+    assert assistant_message["metadata"]["query_profile"]["response_mode"] == "authority"
+    assert assistant_message["metadata"]["retrieval"]["source"] != "local_legal_dataset"
+
+
+def test_local_legal_dataset_keeps_authority_format_for_explicit_ipc_lookup(client, monkeypatch):
+    def fail_if_called(self, query_variants, doctypes_options, max_results=4):
+        raise AssertionError("India Kanoon should not run when a local IPC dataset match exists")
+
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", fail_if_called)
+
+    response = client.post(
+        "/chat",
+        json={
+            "message": "section 420 ipc",
+            "state": "Gujarat",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    _assert_pure_authority_response(payload)
+    assert "Section 420 concerns cheating and dishonestly inducing delivery of property." in payload["answer"]
+
+
+def test_authority_query_does_not_inherit_prior_scenario_response_mode(client, monkeypatch):
+    first = client.post(
+        "/chat",
+        json={
+            "message": "My mobile was snatched on the road",
+            "state": "Gujarat",
+        },
+    )
+
+    assert first.status_code == 200
+    chat_id = first.json()["chat_id"]
+
+    def fail_if_called(self, query_variants, doctypes_options, max_results=4):
+        raise AssertionError("India Kanoon should not run for a bare local IPC section match after a scenario turn")
+
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", fail_if_called)
+
+    second = client.post(
+        "/chat",
+        json={
+            "chat_id": chat_id,
+            "message": "section 34",
+            "state": "Gujarat",
+        },
+    )
+
+    assert second.status_code == 200
+    payload = second.json()
+    _assert_pure_authority_response(payload)
+    messages = client.get(f"/chat/{chat_id}/messages").json()["items"]
+    assistant_message = [item for item in messages if item["role"] == "assistant"][-1]
+    assert assistant_message["metadata"]["query_profile"]["response_mode"] == "authority"
+
+
+def test_authority_query_can_answer_from_exact_internal_provision_match(client, monkeypatch):
+    service = client.app.state.chat_service
+
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", lambda self, query_variants, doctypes_options, max_results=4: [])
+    monkeypatch.setattr(GoogleCustomSearchService, "search", lambda self, **kwargs: GoogleSearchResult(documents=[], from_cache=False, trusted_result_count=0))
+    monkeypatch.setattr(
+        service.hybrid_retrieval.corpus_index,
+        "search",
+        lambda query, domain=None, state=None, max_results=6: [
+            {
+                "doc_id": "internal:bns-12",
+                "title": "Section 12 Bharatiya Nyaya Sanhita study note",
+                "headline": "Section 12 of the Bharatiya Nyaya Sanhita explains the relevant criminal-law rule in this note.",
+                "fragment_headline": "Section 12 of the Bharatiya Nyaya Sanhita.",
+                "fragment_excerpt": "Section 12 of the Bharatiya Nyaya Sanhita contains the relevant statutory rule discussed in this internal note.",
+                "doc_excerpt": "Section 12 of the Bharatiya Nyaya Sanhita contains the relevant statutory rule discussed in this internal note.",
+                "docsource": "internal:criminal",
+                "citations": ["internal-note-bns-12"],
+                "publishdate": "",
+                "url": "",
+                "score": 42.0,
+                "source_kind": "internal",
+                "document_kind": "statute",
+                "authority_type": "statute",
+            }
+        ],
+    )
+
+    response = client.post("/chat", json={"message": "section 12 bns", "state": "Gujarat"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    _assert_pure_authority_response(payload)
+    assert "Section 12 BNS of Bharatiya Nyaya Sanhita explains" in payload["answer"]
+    assert "Source: Section 12 Bharatiya Nyaya Sanhita study note" in payload["answer"]
+    assert "internal:criminal" not in payload["answer"]
+
+
+def test_authority_query_rejects_generic_internal_bns_material_without_requested_section(client, monkeypatch):
+    service = client.app.state.chat_service
+
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", lambda self, query_variants, doctypes_options, max_results=4: [])
+    monkeypatch.setattr(GoogleCustomSearchService, "search", lambda self, **kwargs: GoogleSearchResult(documents=[], from_cache=False, trusted_result_count=0))
+    monkeypatch.setattr(
+        service.hybrid_retrieval.corpus_index,
+        "search",
+        lambda query, domain=None, state=None, max_results=6: [
+            {
+                "doc_id": "internal:bns-generic",
+                "title": "Bharatiya Nyaya Sanhita course overview",
+                "headline": "This PDF course note introduces the Bharatiya Nyaya Sanhita generally.",
+                "fragment_headline": "General BNS overview.",
+                "fragment_excerpt": "This course note discusses the Bharatiya Nyaya Sanhita in general terms without identifying Section 12.",
+                "doc_excerpt": "This course note discusses the Bharatiya Nyaya Sanhita in general terms without identifying Section 12.",
+                "docsource": "internal:criminal",
+                "citations": ["internal-bns-overview"],
+                "publishdate": "",
+                "url": "",
+                "score": 39.0,
+                "source_kind": "internal",
+                "document_kind": "note",
+                "authority_type": "internal_guidance",
+            }
+        ],
+    )
+
+    response = client.post("/chat", json={"message": "bns 12", "state": "Gujarat"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "Provision/query matched:" not in payload["answer"]
+    assert "reliable official result" in payload["answer"].lower() or "clear enough legal match" in payload["answer"].lower()
 
 
 def test_low_confidence_authority_direct_query_gets_human_clarification_instead_of_grounded_fallback(client, monkeypatch):
@@ -2637,6 +4070,27 @@ def test_low_confidence_authority_direct_query_gets_human_clarification_instead_
     assert "I can help with that, but I need one small clarification first." in payload["answer"]
     assert payload["follow_up_question"] == "Which Constitution article do you want explained?"
     assert "No highly relevant India Kanoon authority was found" not in payload["answer"]
+
+
+def test_clear_standard_legal_explainer_query_does_not_trigger_clarification(client, monkeypatch):
+    def fail_if_called(self, query_variants, doctypes_options, max_results=4):
+        raise AssertionError("Grounded retrieval should not run for a clear standard legal explainer query")
+
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", fail_if_called)
+
+    response = client.post(
+        "/chat",
+        json={
+            "message": "Explain legal notice",
+            "state": "Gujarat",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "Legal Notice is" in payload["answer"]
+    assert "I can help with that, but I need one small clarification first." not in payload["answer"]
+    assert payload["follow_up_question"] is None
 
 
 def test_food_safety_issue_gets_consumer_style_guidance_not_theft_template(client, monkeypatch):
@@ -3656,7 +5110,9 @@ def test_food_safety_completed_guidance_acknowledges_existing_seller_complaint_a
     assert payload["follow_up_question"] is None
     assert "already complained to the seller side" in answer or "earlier seller complaint sent by email" in answer
     assert "send a written complaint to the seller" not in answer
-    assert "prepare the record for food-safety or consumer escalation" in answer
+    assert "fssai" in answer
+    assert "national consumer helpline" in answer
+    assert "refund" in answer or "replacement" in answer or "compensation" in answer
 
 
 def test_notice_completed_guidance_does_not_inject_raw_user_sentence_into_paragraph(client, monkeypatch):

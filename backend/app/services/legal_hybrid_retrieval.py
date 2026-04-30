@@ -12,6 +12,7 @@ import requests
 from backend.app.core.config import DATA_DIR, Settings
 from backend.app.services.google_custom_search_service import GoogleCustomSearchService
 from backend.app.services.indiankanoon_service import IndianKanoonService, SOURCE_AUTHORITY_SCORES
+from backend.app.services.legal_dataset_service import LocalLegalDatasetService
 from backend.app.utils.request_context import get_logger
 from training.embeddings import HashingEmbeddingProvider
 
@@ -22,6 +23,7 @@ DEFAULT_CORPUS_DIR = DATA_DIR / "training_ingestion" / "learning_data_corpus"
 
 @dataclass(slots=True)
 class HybridRetrievalResult:
+    local_dataset_count: int
     documents: list[dict[str, Any]]
     internal_count: int
     live_count: int
@@ -227,11 +229,13 @@ class LegalHybridRetrievalService:
         corpus_index: LegalCorpusIndex | None = None,
         indiankanoon_service: IndianKanoonService | None = None,
         google_search_service: GoogleCustomSearchService | None = None,
+        legal_dataset_service: LocalLegalDatasetService | None = None,
     ) -> None:
         self.settings = settings
         self.corpus_index = corpus_index or LegalCorpusIndex()
         self.indiankanoon_service = indiankanoon_service or IndianKanoonService(settings)
         self.google_search_service = google_search_service or GoogleCustomSearchService(settings)
+        self.legal_dataset_service = legal_dataset_service or LocalLegalDatasetService()
 
     def retrieve(
         self,
@@ -241,82 +245,173 @@ class LegalHybridRetrievalService:
         state: str | None,
         domain: str | None,
         answer_mode: str,
+        query_type: str,
         doctypes_options: list[str | None],
+        curated_google_query: str | None = None,
     ) -> HybridRetrievalResult:
-        curated_google_documents: list[dict[str, Any]] = []
-        curated_google_needed = self._should_query_curated_google_primary(
+        local_dataset_documents = (
+            self._search_local_dataset(query=query, query_variants=query_variants)
+            if query_type == "provision_lookup"
+            else []
+        )
+        if local_dataset_documents:
+            logger.info(
+                "hybrid retrieval source=local_legal_dataset query=%r docs=%s",
+                query[:120],
+                len(local_dataset_documents),
+            )
+            return HybridRetrievalResult(
+                local_dataset_count=len(local_dataset_documents),
+                documents=local_dataset_documents,
+                internal_count=0,
+                live_count=0,
+                google_count=0,
+                curated_google_count=0,
+                general_google_count=0,
+                internal_confidence=1.0,
+                live_used=False,
+                google_used=False,
+                source_summary=self._build_source_summary(local_dataset_documents),
+            )
+
+        google_query = str(curated_google_query or query or "").strip() or query
+        source_order = self._source_order_for_query(
             query=query,
             domain=domain,
             answer_mode=answer_mode,
+            query_type=query_type,
         )
-        if curated_google_needed and self.google_search_service.configured:
-            try:
-                site_restrict = self._google_site_restrict(query)
-                curated_result = self.google_search_service.search(
+        curated_google_documents: list[dict[str, Any]] = []
+        internal_documents: list[dict[str, Any]] = []
+        live_documents: list[dict[str, Any]] = []
+        google_documents: list[dict[str, Any]] = []
+        internal_confidence = 0.0
+        selected_source = ""
+        selected_confidence = 0.0
+        selected_confidence_level = "weak"
+        exhaustive_provision_lookup = query_type == "provision_lookup"
+
+        for source in source_order:
+            documents: list[dict[str, Any]] = []
+            if source == "internal":
+                internal_documents = self._search_internal(
                     query=query,
-                    max_results=min(self.settings.google_search_max_results, 3),
+                    query_variants=query_variants,
+                    state=state,
+                    domain=domain,
+                )
+                internal_confidence = self._internal_confidence(
+                    internal_documents=internal_documents,
+                    answer_mode=answer_mode,
+                    query=query,
+                )
+                documents = internal_documents
+            elif source == "indiankanoon":
+                if not self.indiankanoon_service.configured:
+                    continue
+                try:
+                    live_documents = self.indiankanoon_service.retrieve_grounded_documents(
+                        query_variants=query_variants,
+                        doctypes_options=doctypes_options,
+                        max_results=4,
+                    )
+                except Exception:
+                    logger.exception("hybrid retrieval source=indiankanoon failed query=%r", query[:120])
+                    live_documents = []
+                documents = live_documents
+            elif source == "google":
+                if not self.google_search_service.configured:
+                    continue
+                site_restrict = self._google_site_restrict(google_query)
+                curated_google_documents = self._search_google(
+                    query=google_query,
                     site_restrict=site_restrict,
                     trusted_only=True,
                 )
-                curated_google_documents = curated_result.documents
-            except (requests.RequestException, ValueError):
-                curated_google_documents = []
-
-        internal_documents = self._search_internal(query=query, query_variants=query_variants, state=state, domain=domain)
-        internal_confidence = self._internal_confidence(internal_documents=internal_documents, answer_mode=answer_mode, query=query)
-        live_needed = self._should_query_live(
-            query=query,
-            answer_mode=answer_mode,
-            internal_documents=internal_documents,
-            internal_confidence=internal_confidence,
-        )
-        live_documents: list[dict[str, Any]] = []
-        if live_needed and self.indiankanoon_service.configured:
-            try:
-                live_documents = self.indiankanoon_service.retrieve_grounded_documents(
-                    query_variants=query_variants,
-                    doctypes_options=doctypes_options,
-                    max_results=4,
-                )
-            except (requests.RequestException, ValueError):  # type: ignore[name-defined]
-                live_documents = []
-        google_documents: list[dict[str, Any]] = []
-        google_needed = self._should_query_google(
-            query=query,
-            answer_mode=answer_mode,
-            domain=domain,
-            curated_google_documents=curated_google_documents,
-            internal_documents=internal_documents,
-            internal_confidence=internal_confidence,
-            live_documents=live_documents,
-        )
-        if google_needed and self.google_search_service.configured:
-            try:
-                site_restrict = self._google_site_restrict(query)
-                google_result = self.google_search_service.search(
+                curated_confidence = self._source_confidence(
+                    source="google",
+                    documents=curated_google_documents,
+                    answer_mode=answer_mode,
                     query=query,
-                    max_results=min(self.settings.google_search_max_results, 3),
-                    site_restrict=site_restrict,
-                    trusted_only=False,
                 )
-                google_documents = google_result.documents
-            except (requests.RequestException, ValueError):
-                google_documents = []
+                if self._confidence_level(curated_confidence) == "weak":
+                    google_documents = self._search_google(
+                        query=google_query,
+                        site_restrict=site_restrict,
+                        trusted_only=False,
+                    )
+                documents = [*curated_google_documents, *google_documents]
+            else:
+                continue
 
-        merged_documents = self._merge_documents(curated_google_documents, internal_documents, live_documents, google_documents)
+            confidence = self._source_confidence(
+                source=source,
+                documents=documents,
+                answer_mode=answer_mode,
+                query=query,
+            )
+            confidence_level = self._confidence_level(confidence)
+            self._annotate_source_confidence(
+                documents,
+                source=source,
+                confidence=confidence,
+                confidence_level=confidence_level,
+            )
+            logger.info(
+                "hybrid retrieval source=%s query=%r docs=%s confidence=%.2f level=%s order=%s",
+                source,
+                query[:120],
+                len(documents),
+                confidence,
+                confidence_level,
+                source_order,
+            )
+            if exhaustive_provision_lookup:
+                if not selected_source and documents:
+                    selected_source = source
+                    selected_confidence = confidence
+                    selected_confidence_level = confidence_level
+                continue
+            if documents and confidence_level != "weak":
+                selected_source = source
+                selected_confidence = confidence
+                selected_confidence_level = confidence_level
+                break
+
+        merged_documents = (
+            self._merge_provision_documents(
+                live_documents=live_documents,
+                internal_documents=internal_documents,
+                curated_google_documents=curated_google_documents,
+                google_documents=google_documents,
+            )
+            if exhaustive_provision_lookup
+            else (
+                self._documents_for_selected_source(
+                    selected_source=selected_source,
+                    curated_google_documents=curated_google_documents,
+                    internal_documents=internal_documents,
+                    live_documents=live_documents,
+                    google_documents=google_documents,
+                )
+                if selected_source
+                else self._merge_documents(curated_google_documents, internal_documents, live_documents, google_documents)
+            )
+        )
         logger.info(
-            "hybrid retrieval query=%r curated_google=%s internal=%s live=%s google=%s curated_needed=%s live_needed=%s google_needed=%s confidence=%.2f",
+            "hybrid retrieval query=%r selected_source=%s selected_confidence=%.2f selected_level=%s internal=%s live=%s curated_google=%s google=%s confidence=%.2f",
             query[:120],
-            len(curated_google_documents),
+            selected_source or "none",
+            selected_confidence,
+            selected_confidence_level,
             len(internal_documents),
             len(live_documents),
+            len(curated_google_documents),
             len(google_documents),
-            curated_google_needed,
-            live_needed,
-            google_needed,
             internal_confidence,
         )
         return HybridRetrievalResult(
+            local_dataset_count=0,
             documents=merged_documents,
             internal_count=len(internal_documents),
             live_count=len(live_documents),
@@ -329,23 +424,182 @@ class LegalHybridRetrievalService:
             source_summary=self._build_source_summary(merged_documents),
         )
 
+    def _search_local_dataset(self, *, query: str, query_variants: list[str]) -> list[dict[str, Any]]:
+        variants = query_variants or [query]
+        seen_doc_ids: set[str] = set()
+        documents: list[dict[str, Any]] = []
+        for variant in variants:
+            match = self.legal_dataset_service.lookup_query(variant)
+            if match is None:
+                continue
+            document = match.to_document()
+            doc_id = str(document.get("doc_id") or "")
+            if not doc_id or doc_id in seen_doc_ids:
+                continue
+            seen_doc_ids.add(doc_id)
+            documents.append(document)
+        return documents
+
+    def _search_google(self, *, query: str, site_restrict: str | None, trusted_only: bool) -> list[dict[str, Any]]:
+        try:
+            result = self.google_search_service.search(
+                query=query,
+                max_results=min(self.settings.google_search_max_results, 3),
+                site_restrict=site_restrict,
+                trusted_only=trusted_only,
+            )
+            return result.documents
+        except Exception:
+            logger.exception(
+                "hybrid retrieval source=google failed query=%r trusted_only=%s",
+                query[:120],
+                trusted_only,
+            )
+            return []
+
+    def _source_order_for_query(self, *, query: str, domain: str | None, answer_mode: str, query_type: str) -> list[str]:
+        if query_type == "provision_lookup":
+            return ["indiankanoon", "google"]
+        if query_type == "general_legal_research":
+            return ["indiankanoon", "google"]
+        if query_type == "uploaded_document_query":
+            return ["internal", "indiankanoon", "google"]
+
+        normalized = query.lower()
+        case_or_statute = answer_mode in {"case_first", "statute_first"} or any(
+            token in normalized
+            for token in {
+                "judgment",
+                "judgement",
+                "case law",
+                "precedent",
+                "citation",
+                "legal position",
+                "section ",
+                "article ",
+                "rule ",
+                "act ",
+                "ipc",
+                "bns",
+                "bnss",
+                "constitution",
+            }
+        )
+        latest_or_current = any(token in normalized for token in {"latest", "recent", "current", "updated"})
+        official_portal = self._requires_official_or_latest_external_source(normalized)
+        if case_or_statute or latest_or_current:
+            return ["indiankanoon", "google"]
+        if official_portal:
+            return ["internal", "indiankanoon", "google"]
+        if (domain or "").lower() in {"constitutional", "criminal", "consumer", "civil", "property", "tax", "corporate"}:
+            return ["indiankanoon", "google"]
+        return ["internal", "indiankanoon", "google"]
+
+    def _source_confidence(self, *, source: str, documents: list[dict[str, Any]], answer_mode: str, query: str) -> float:
+        if not documents:
+            return 0.0
+        if source == "internal":
+            return self._internal_confidence(internal_documents=documents, answer_mode=answer_mode, query=query)
+        if source == "indiankanoon":
+            return self._live_confidence(live_documents=documents, answer_mode=answer_mode, query=query)
+        if source == "google":
+            return self._google_confidence(documents=documents, answer_mode=answer_mode, query=query)
+        return 0.0
+
+    @staticmethod
+    def _confidence_level(confidence: float) -> str:
+        if confidence >= 0.72:
+            return "strong"
+        if confidence >= 0.52:
+            return "medium"
+        return "weak"
+
+    @staticmethod
+    def _annotate_source_confidence(
+        documents: list[dict[str, Any]],
+        *,
+        source: str,
+        confidence: float,
+        confidence_level: str,
+    ) -> None:
+        for doc in documents:
+            if source == "indiankanoon" and not doc.get("source_kind"):
+                doc["source_kind"] = "indiankanoon"
+            elif source == "internal" and not doc.get("source_kind"):
+                doc["source_kind"] = "internal"
+            elif source == "google" and not doc.get("source_kind"):
+                doc["source_kind"] = "google_custom_search"
+            doc["retrieval_source"] = source
+            doc["retrieval_confidence"] = round(confidence, 3)
+            doc["retrieval_confidence_level"] = confidence_level
+
+    @staticmethod
+    def _documents_for_selected_source(
+        *,
+        selected_source: str,
+        curated_google_documents: list[dict[str, Any]],
+        internal_documents: list[dict[str, Any]],
+        live_documents: list[dict[str, Any]],
+        google_documents: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        if selected_source == "indiankanoon":
+            return LegalHybridRetrievalService._merge_documents([], [], live_documents, [])
+        if selected_source == "internal":
+            return LegalHybridRetrievalService._merge_documents([], internal_documents, [], [])
+        if selected_source == "google":
+            return LegalHybridRetrievalService._merge_documents(curated_google_documents, [], [], google_documents)
+        return []
+
+    @staticmethod
+    def _merge_provision_documents(
+        *,
+        live_documents: list[dict[str, Any]],
+        internal_documents: list[dict[str, Any]],
+        curated_google_documents: list[dict[str, Any]],
+        google_documents: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        merged: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for group in (
+            sorted(live_documents, key=lambda item: float(item.get("score") or 0.0), reverse=True),
+            sorted(internal_documents, key=lambda item: float(item.get("score") or 0.0), reverse=True),
+            sorted(curated_google_documents, key=lambda item: float(item.get("score") or 0.0), reverse=True),
+            sorted(google_documents, key=lambda item: float(item.get("score") or 0.0), reverse=True),
+        ):
+            for doc in group:
+                source_key = str(doc.get("doc_id") or doc.get("url") or doc.get("title") or "")
+                if not source_key or source_key in seen:
+                    continue
+                seen.add(source_key)
+                merged.append(doc)
+                if len(merged) >= 8:
+                    return merged
+        return merged[:8]
+
     @staticmethod
     def _should_query_curated_google_primary(*, query: str, domain: str | None, answer_mode: str) -> bool:
         normalized = query.lower()
         constitutional_signals = {
             "constitution",
-            "article ",
             "fundamental rights",
             "fundamental duties",
             "directive principles",
             "dpsp",
         }
-        authority_signals = {"section ", "act ", "rule ", "ipc", "bns", "bnss", "ni act"}
+        has_article_marker = bool(re.search(r"\barticle\s+\d+[a-z]?\b", normalized))
+        has_authority_marker = bool(re.search(r"\bsection\s+\d+[a-z]?\b", normalized)) or bool(
+            re.search(r"\brule\s+\d+[a-z]?\b", normalized)
+        ) or any(
+            re.search(rf"\b{re.escape(marker)}\b", normalized)
+            for marker in {"act", "ipc", "bns", "bnss", "ni act"}
+        )
         if domain and domain.lower() == "constitutional":
             return True
-        if answer_mode in {"statute_first", "case_first"} and any(signal in normalized for signal in constitutional_signals | authority_signals):
+        if answer_mode in {"statute_first", "case_first"} and (
+            has_article_marker or has_authority_marker or any(signal in normalized for signal in constitutional_signals)
+        ):
             return True
-        return any(signal in normalized for signal in constitutional_signals)
+        return has_article_marker or any(signal in normalized for signal in constitutional_signals)
 
     def _search_internal(self, *, query: str, query_variants: list[str], state: str | None, domain: str | None) -> list[dict[str, Any]]:
         variants = query_variants or [query]
@@ -365,11 +619,20 @@ class LegalHybridRetrievalService:
         self,
         *,
         query: str,
+        domain: str | None,
         answer_mode: str,
+        curated_google_documents: list[dict[str, Any]],
         internal_documents: list[dict[str, Any]],
         internal_confidence: float,
     ) -> bool:
         normalized = query.lower()
+        if self._trusted_curated_google_authority_documents_available(
+            curated_google_documents=curated_google_documents,
+            query=query,
+            domain=domain,
+            answer_mode=answer_mode,
+        ):
+            return False
         live_signals = [
             "latest",
             "recent",
@@ -400,6 +663,73 @@ class LegalHybridRetrievalService:
         if answer_mode in {"case_first", "statute_first"} and (has_live_signal or authority_query):
             return True
         return internal_missing or weak_internal or outdated_internal or has_live_signal
+
+    @classmethod
+    def _trusted_curated_google_authority_documents_available(
+        cls,
+        *,
+        curated_google_documents: list[dict[str, Any]],
+        query: str,
+        domain: str | None,
+        answer_mode: str,
+    ) -> bool:
+        if not cls._curated_google_is_primary_lookup_query(
+            query=query,
+            domain=domain,
+            answer_mode=answer_mode,
+        ):
+            return False
+        if cls._curated_google_documents_strong(curated_google_documents):
+            return True
+        authoritative_kinds = {"government_portal", "regulator", "court_portal"}
+        return any(
+            str(doc.get("authority_type") or "").strip().lower() in authoritative_kinds
+            and str(doc.get("source_kind") or "").strip().lower() == "google_custom_search"
+            for doc in curated_google_documents
+        )
+
+    @staticmethod
+    def _curated_google_is_primary_lookup_query(*, query: str, domain: str | None, answer_mode: str) -> bool:
+        normalized = query.lower()
+        case_law_markers = {
+            "judgment",
+            "judgement",
+            "case law",
+            "precedent",
+            "citation",
+            "ratio",
+            "ruling",
+            "supreme court",
+            "high court",
+            "latest judgment",
+            "latest case law",
+            "interpretation",
+            "legal position",
+        }
+        if any(re.search(rf"\b{re.escape(marker)}\b", normalized) for marker in case_law_markers):
+            return False
+
+        has_constitutional_marker = any(
+            marker in normalized
+            for marker in {
+                "constitution",
+                "fundamental rights",
+                "fundamental duties",
+                "directive principles",
+                "dpsp",
+            }
+        ) or bool(re.search(r"\barticle\s+\d+[a-z]?\b", normalized))
+        has_statute_marker = bool(re.search(r"\bsection\s+\d+[a-z]?\b", normalized)) or bool(
+            re.search(r"\brule\s+\d+[a-z]?\b", normalized)
+        ) or any(
+            re.search(rf"\b{re.escape(marker)}\b", normalized)
+            for marker in {"act", "ipc", "bns", "bnss", "ni act"}
+        )
+        if (domain or "").lower() == "constitutional":
+            return True
+        if has_statute_marker and answer_mode in {"statute_first", "case_first", "grounded"}:
+            return True
+        return has_constitutional_marker
 
     def _should_query_google(
         self,
@@ -521,12 +851,108 @@ class LegalHybridRetrievalService:
             return 0.0
         top = internal_documents[0]
         score = float(top.get("score") or 0.0)
+        document_kind = str(top.get("document_kind") or "").lower()
+        text = " ".join(
+            [
+                str(top.get("title") or ""),
+                str(top.get("headline") or ""),
+                str(top.get("fragment_headline") or ""),
+                str(top.get("fragment_excerpt") or ""),
+                str(top.get("doc_excerpt") or ""),
+            ]
+        ).lower()
+        query_lower = query.lower()
         confidence = min(score / 70.0, 1.0)
-        if answer_mode == "statute_first" and str(top.get("document_kind") or "").lower() == "statute":
+        if answer_mode == "statute_first" and document_kind == "statute":
             confidence += 0.15
         if answer_mode == "case_first" and str(top.get("source_kind") or "") == "internal" and "judgment" in query.lower():
             confidence += 0.1
+        authority_match = re.search(r"\b(article|section|rule)\s+([0-9]+[a-z]?)\b", query_lower)
+        if answer_mode == "statute_first" and authority_match:
+            exact_reference = f"{authority_match.group(1)} {authority_match.group(2)}"
+            if document_kind not in {"statute", "rule", "judgment", "order"} or exact_reference not in text:
+                confidence = min(confidence, 0.48)
         return min(confidence, 0.99)
+
+    @staticmethod
+    def _live_confidence(*, live_documents: list[dict[str, Any]], answer_mode: str, query: str) -> float:
+        if not live_documents:
+            return 0.0
+        top = live_documents[0]
+        score = float(top.get("score") or 0.0)
+        source = str(top.get("docsource") or "").strip().lower()
+        text = " ".join(
+            [
+                str(top.get("title") or ""),
+                str(top.get("headline") or ""),
+                str(top.get("fragment_headline") or ""),
+                str(top.get("fragment_excerpt") or ""),
+                str(top.get("doc_excerpt") or ""),
+            ]
+        ).lower()
+        query_tokens = {token for token in re.findall(r"[a-zA-Z0-9]+", query.lower()) if len(token) > 2}
+        overlap = len(query_tokens & {token for token in re.findall(r"[a-zA-Z0-9]+", text) if len(token) > 2})
+        confidence = 0.35
+        if source in SOURCE_AUTHORITY_SCORES:
+            confidence += 0.2
+        if answer_mode == "statute_first" and source in {"laws", "constitution"}:
+            confidence += 0.2
+        if answer_mode == "case_first" and source not in {"laws", "constitution"}:
+            confidence += 0.16
+        if score >= 30:
+            confidence += 0.16
+        elif score >= 22:
+            confidence += 0.1
+        elif score >= 16:
+            confidence += 0.05
+        if overlap >= 3:
+            confidence += 0.1
+        elif overlap >= 1:
+            confidence += 0.05
+        return min(confidence, 0.99)
+
+    @staticmethod
+    def _google_confidence(*, documents: list[dict[str, Any]], answer_mode: str, query: str) -> float:
+        if not documents:
+            return 0.0
+        top = documents[0]
+        score = float(top.get("score") or 0.0)
+        authority_type = str(top.get("authority_type") or "").strip().lower()
+        source_text = " ".join(
+            [
+                str(top.get("source_domain") or ""),
+                str(top.get("docsource") or ""),
+                str(top.get("url") or ""),
+            ]
+        ).lower()
+        trusted = bool(top.get("trusted_domain_match")) or any(
+            domain in source_text
+            for domain in {
+                "indiacode.nic.in",
+                "gov.in",
+                "nic.in",
+                "rbi.org.in",
+                "cybercrime.gov.in",
+                "sci.gov.in",
+            }
+        )
+        scope = str(top.get("google_scope") or "").strip().lower()
+        confidence = 0.32
+        if authority_type in {"government_portal", "regulator", "court_portal"}:
+            confidence += 0.24
+        if trusted:
+            confidence += 0.12
+        if trusted and any(domain in source_text for domain in {"indiacode.nic.in", "gov.in", "nic.in"}):
+            confidence += 0.12
+        if scope == "curated":
+            confidence += 0.05
+        if answer_mode in {"statute_first", "case_first"}:
+            confidence += 0.04
+        if score >= 16:
+            confidence += 0.12
+        elif score >= 12:
+            confidence += 0.07
+        return min(confidence, 0.95)
 
     @staticmethod
     def _merge_documents(

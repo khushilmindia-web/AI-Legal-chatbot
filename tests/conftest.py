@@ -64,7 +64,7 @@ def anonymous_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
     monkeypatch.setattr(config_module, "DB_PATH", tmp_path / "lawyer_ai_test.db")
     monkeypatch.setattr(config_module, "KNOWLEDGE_DIR", knowledge_dir)
-    monkeypatch.setattr(config_module, "TEMP_DIR", tmp_path / "temp_uploads")
+    monkeypatch.setattr(config_module, "TEMP_DIR", tmp_path / "tmp")
     config_module.TEMP_DIR.mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setenv("OPENAI_MODEL", "gpt-4.1-mini")

@@ -6,6 +6,7 @@ import difflib
 from datetime import datetime, timezone
 from time import monotonic
 from typing import Any
+from urllib.parse import urlparse
 
 import requests
 
@@ -14,22 +15,23 @@ from backend.app.models.schemas import ChatRequest, ChatUploadResponse, Conversa
 from backend.app.services.file_extractor import FileExtractionService
 from backend.app.services.domain_packs import LegalDomainPackService
 from backend.app.services.google_custom_search_service import GoogleCustomSearchService
+
 from backend.app.services.indiankanoon_service import IndianKanoonService, SOURCE_AUTHORITY_SCORES
+from backend.app.services.legal_dataset_service import LegalProvisionMatch, LocalLegalDatasetService
 from backend.app.services.legal_hybrid_retrieval import LegalHybridRetrievalService
 from backend.app.services.intent_service import IntentRoutingService
 from backend.app.services.legal_domain_classifier import LegalDomainClassifier
+
 from backend.app.services.local_ml import LocalSemanticSupportChecker, LocalTextSimilarityService
 from backend.app.services.openai_service import OpenAIResponsesService
+
 from backend.app.services.session_store import SessionStore
 from backend.app.utils.request_context import get_logger
 
-
 logger = get_logger("lawyer_ai.chat_service")
-
 
 DIRECT_ANSWER_CACHE_TTL_SECONDS = 300.0
 DIRECT_ANSWER_CACHE_MAX_ENTRIES = 256
-
 
 FAST_AUTHORITY_LOOKUPS: dict[str, dict[str, Any]] = {
     "constitution_article_14": {
@@ -45,6 +47,7 @@ FAST_AUTHORITY_LOOKUPS: dict[str, dict[str, Any]] = {
         "caution": "How Article 14 applies depends heavily on the facts, the public action challenged, and the latest court interpretation.",
         "disclaimer_mode": "medium_risk",
     },
+    
     "constitution_article_19": {
         "title": "Article 19 of the Constitution of India",
         "summary": "Article 19 protects key freedoms such as speech and expression, assembly, association, movement, residence, and profession, subject to constitutionally permitted restrictions.",
@@ -58,6 +61,7 @@ FAST_AUTHORITY_LOOKUPS: dict[str, dict[str, Any]] = {
         "caution": "Article 19 issues are clause-specific, so the exact sub-clause and restriction ground should be checked carefully.",
         "disclaimer_mode": "medium_risk",
     },
+    
     "constitution_article_21": {
         "title": "Article 21 of the Constitution of India",
         "summary": "Article 21 protects life and personal liberty except according to procedure established by law.",
@@ -71,6 +75,7 @@ FAST_AUTHORITY_LOOKUPS: dict[str, dict[str, Any]] = {
         "caution": "The real effect of Article 21 depends on the exact facts and the latest constitutional case law on the issue.",
         "disclaimer_mode": "medium_risk",
     },
+    
     "constitution_article_22": {
         "title": "Article 22 of the Constitution of India",
         "summary": "Article 22 provides protections in arrest and detention matters.",
@@ -84,6 +89,7 @@ FAST_AUTHORITY_LOOKUPS: dict[str, dict[str, Any]] = {
         "caution": "Article 22 questions are highly fact-sensitive and can differ between ordinary arrest and preventive detention.",
         "disclaimer_mode": "high_risk",
     },
+    
     "constitution_article_32": {
         "title": "Article 32 of the Constitution of India",
         "summary": "Article 32 gives the right to move the Supreme Court for enforcement of fundamental rights.",
@@ -97,6 +103,7 @@ FAST_AUTHORITY_LOOKUPS: dict[str, dict[str, Any]] = {
         "caution": "A constitutional remedy under Article 32 is forum-sensitive, so the exact maintainability position should be checked carefully.",
         "disclaimer_mode": "high_risk",
     },
+    
     "constitution_article_226": {
         "title": "Article 226 of the Constitution of India",
         "summary": "Article 226 empowers High Courts to issue writs and directions in appropriate cases.",
@@ -110,6 +117,21 @@ FAST_AUTHORITY_LOOKUPS: dict[str, dict[str, Any]] = {
         "caution": "Article 226 remedies are forum- and fact-sensitive, so the territorial and maintainability position should be checked before acting.",
         "disclaimer_mode": "high_risk",
     },
+    
+    "constitution_article_300a": {
+        "title": "Article 300A of the Constitution of India",
+        "summary": "Article 300A protects a person from being deprived of property except by authority of law.",
+        "legal_position": "In simple terms, property can be taken away only under a valid law and through a legally supported process. It is not framed like a Fundamental Right, but it remains an important constitutional protection against unlawful deprivation of property.",
+        "next_steps": "Read the exact article text, then compare it with the acquisition notice, order, mutation action, demolition step, or other property-related action affecting you before taking the next legal step.",
+        "source": "Constitution of India | Article 300A",
+        "authority": "Constitution of India",
+        "domain": "constitutional",
+        "likely_forum": "Constitution of India",
+        "documents_to_keep": ["order or notice copy", "property records", "title documents", "supporting records"],
+        "caution": "Article 300A questions are fact-sensitive and often depend on the statutory process, notice, hearing, and remedy structure involved.",
+        "disclaimer_mode": "medium_risk",
+    },
+    
     "ipc_section_420": {
         "title": "Section 420 of the Indian Penal Code, 1860",
         "summary": "Section 420 IPC deals with cheating and dishonestly inducing delivery of property.",
@@ -123,6 +145,7 @@ FAST_AUTHORITY_LOOKUPS: dict[str, dict[str, Any]] = {
         "caution": "Section 420 questions are fact-sensitive, and the precise criminal framing should be checked against the full incident record and current law.",
         "disclaimer_mode": "high_risk",
     },
+    
     "ipc_section_406": {
         "title": "Section 406 of the Indian Penal Code, 1860",
         "summary": "Section 406 IPC concerns punishment for criminal breach of trust.",
@@ -136,6 +159,7 @@ FAST_AUTHORITY_LOOKUPS: dict[str, dict[str, Any]] = {
         "caution": "The distinction between a civil dispute and criminal breach of trust depends on the facts and the original entrustment record.",
         "disclaimer_mode": "high_risk",
     },
+    
     "ipc_section_498a": {
         "title": "Section 498A of the Indian Penal Code, 1860",
         "summary": "Section 498A IPC addresses cruelty by the husband or his relatives toward a married woman.",
@@ -149,6 +173,7 @@ FAST_AUTHORITY_LOOKUPS: dict[str, dict[str, Any]] = {
         "caution": "Matrimonial-cruelty matters are highly fact-sensitive and should be matched carefully to the complaint record and current legal position.",
         "disclaimer_mode": "high_risk",
     },
+    
     "ni_act_section_138": {
         "title": "Section 138 of the Negotiable Instruments Act, 1881",
         "summary": "Section 138 NI Act concerns cheque dishonour for insufficiency of funds or related banking reasons, subject to the statutory conditions in the provision.",
@@ -170,6 +195,7 @@ CONSTITUTIONAL_EXPLAINER_LOOKUPS: dict[str, dict[str, Any]] = {
         "summary": "Fundamental Rights are the core constitutional rights that protect individual liberty, equality, freedom, and legal safeguards against improper State action.",
         "legal_position": "In simple terms, they are enforceable constitutional protections. They broadly cover equality rights, freedom rights, protections in criminal-law situations, freedom of religion, cultural and educational rights, and constitutional remedies.",
         "next_steps": "If you only need the concept, start with the constitutional grouping of the rights and the article ranges. If you need to act on a violation, identify the exact right affected, the State action involved, and the relevant documents or timeline first.",
+    
         "article_breakdown": [
             "Articles 12-13: define the State for Part III and make laws inconsistent with Fundamental Rights vulnerable to challenge.",
             "Articles 14-18: Right to Equality, including equality before law, non-discrimination, equality of opportunity, abolition of untouchability, and abolition of titles.",
@@ -180,6 +206,7 @@ CONSTITUTIONAL_EXPLAINER_LOOKUPS: dict[str, dict[str, Any]] = {
             "Article 32: Right to Constitutional Remedies before the Supreme Court.",
             "Articles 33-35: special provisions on modification, application, and implementation of certain Fundamental Rights.",
         ],
+    
         "sources": "Constitution of India | Fundamental Rights overview",
         "domain": "constitutional",
         "likely_forum": "Constitution of India",
@@ -187,11 +214,13 @@ CONSTITUTIONAL_EXPLAINER_LOOKUPS: dict[str, dict[str, Any]] = {
         "caution": "The exact remedy depends on which specific right is involved and the facts of the alleged violation.",
         "disclaimer_mode": "medium_risk",
     },
+    
     "fundamental_duties": {
         "title": "Fundamental Duties under the Constitution of India",
         "summary": "Fundamental Duties are constitutional expectations placed on citizens to uphold constitutional values, public spirit, and civic responsibility.",
         "legal_position": "In simple terms, they are not usually framed like ordinary personal claims against the State, but they remain an important constitutional guide to civic conduct and constitutional interpretation.",
         "next_steps": "If you need a basic explanation, focus on their role as citizen duties under the Constitution. If your question is tied to a dispute, identify the exact policy, restriction, or public issue involved before going further.",
+    
         "article_breakdown": [
             "Article 51A(a): respect the Constitution, its ideals and institutions, the National Flag, and the National Anthem.",
             "Article 51A(b): cherish and follow the ideals of the freedom struggle.",
@@ -205,6 +234,7 @@ CONSTITUTIONAL_EXPLAINER_LOOKUPS: dict[str, dict[str, Any]] = {
             "Article 51A(j): strive toward excellence in all spheres of individual and collective activity.",
             "Article 51A(k): parent or guardian duty to provide education opportunities to children between six and fourteen years.",
         ],
+    
         "sources": "Constitution of India | Fundamental Duties overview",
         "domain": "constitutional",
         "likely_forum": "Constitution of India",
@@ -212,11 +242,13 @@ CONSTITUTIONAL_EXPLAINER_LOOKUPS: dict[str, dict[str, Any]] = {
         "caution": "A general explanation of fundamental duties is different from a case-specific constitutional remedy analysis.",
         "disclaimer_mode": "medium_risk",
     },
+    
     "directive_principles": {
         "title": "Directive Principles of State Policy under the Constitution of India",
         "summary": "Directive Principles of State Policy are constitutional principles meant to guide governance and public policy in India.",
         "legal_position": "In simple terms, they are constitutional governance goals rather than ordinary directly enforceable personal rights. They often help explain the social-welfare and policy direction of the State under the Constitution.",
         "next_steps": "If you need only the concept, read them as constitutional policy principles. If your issue concerns a government action or challenge, identify the exact policy, scheme, or constitutional question involved first.",
+    
         "article_breakdown": [
             "Articles 36-37: define the DPSP framework and clarify that these principles guide governance even though they are not directly enforceable in court like Fundamental Rights.",
             "Articles 38-39: promote social justice, welfare, adequate livelihood, equal pay, and prevention of concentration of wealth.",
@@ -237,6 +269,7 @@ CONSTITUTIONAL_EXPLAINER_LOOKUPS: dict[str, dict[str, Any]] = {
             "Article 50: separation of judiciary from executive in public services.",
             "Article 51: promotion of international peace and security.",
         ],
+    
         "sources": "Constitution of India | Directive Principles of State Policy overview",
         "domain": "constitutional",
         "likely_forum": "Constitution of India",
@@ -246,6 +279,52 @@ CONSTITUTIONAL_EXPLAINER_LOOKUPS: dict[str, dict[str, Any]] = {
     },
 }
 
+GENERAL_LEGAL_EXPLAINER_LOOKUPS: dict[str, dict[str, Any]] = {
+    "arbitration": {
+        "title": "Arbitration",
+        "summary": "a private dispute-resolution process where the parties agree to have their dispute decided by an arbitrator instead of going through a full court trial.",
+        "legal_position": "In practice, it usually depends on an arbitration clause or a later agreement between the parties. The arbitrator hears both sides and gives an award, which can be binding subject to the limited court challenge framework under arbitration law.",
+        "next_steps": "If you are checking whether arbitration applies to your dispute, start by reading the contract for an arbitration clause and identifying the seat, forum, and procedure mentioned there.",
+        "domain": "civil",
+        "disclaimer_mode": "low_risk",
+    },
+    
+    "fir": {
+        "title": "First Information Report (FIR)",
+        "summary": "the formal police record of information about a cognizable offence that sets the criminal process in motion.",
+        "legal_position": "In practice, it is the starting point for police investigation in cognizable criminal matters. Its exact significance depends on the offence category, the facts disclosed, and the later investigation record.",
+        "next_steps": "If you are dealing with a real incident, first organize the date, place, people involved, and any supporting evidence before approaching the police or reviewing the FIR text.",
+        "domain": "criminal",
+        "disclaimer_mode": "low_risk",
+    },
+    
+    "bail": {
+        "title": "Bail",
+        "summary": "the legal release of an accused person from custody subject to the conditions imposed by the court or the law.",
+        "legal_position": "In broad terms, bail is about liberty during the criminal process, not a final decision on guilt. Whether it is granted depends on the offence, the stage of the case, statutory limits, and the facts placed before the court.",
+        "next_steps": "If your question is practical, first identify the offence sections, the arrest or notice stage, and the court handling the matter before deciding the next bail step.",
+        "domain": "criminal",
+        "disclaimer_mode": "medium_risk",
+    },
+    
+    "anticipatory_bail": {
+        "title": "Anticipatory Bail",
+        "summary": "the pre-arrest bail protection a court may grant where a person reasonably expects arrest in a non-bailable matter.",
+        "legal_position": "In practice, it is a preventive liberty remedy. The result depends on the offence, the facts alleged, the need for custodial interrogation, and the court's view of the case at that stage.",
+        "next_steps": "If this relates to a real dispute, first identify the likely offence sections, the police station or complaint stage, and the documents you would rely on before taking the next step.",
+        "domain": "criminal",
+        "disclaimer_mode": "medium_risk",
+    },
+    
+    "legal_notice": {
+        "title": "Legal Notice",
+        "summary": "a formal written communication used to state a legal demand, allegation, or proposed action before the dispute moves further.",
+        "legal_position": "In practice, it helps set out the claim clearly, preserve the sender's position, and give the other side a chance to respond before litigation or another formal step.",
+        "next_steps": "If you are dealing with an actual notice, read the demand, timeline, and supporting documents carefully before replying or sending one.",
+        "domain": "civil",
+        "disclaimer_mode": "low_risk",
+    },
+}
 
 class ChatService:
     def __init__(self, settings: Settings, store: SessionStore) -> None:
@@ -258,6 +337,7 @@ class ChatService:
         self._indiankanoon: IndianKanoonService | None = None
         self._hybrid_retrieval: LegalHybridRetrievalService | None = None
         self._google_search: GoogleCustomSearchService | None = None
+        self._legal_dataset: LocalLegalDatasetService | None = None
         self._local_similarity: LocalTextSimilarityService | None = None
         self._semantic_support_checker: LocalSemanticSupportChecker | None = None
         self._openai: OpenAIResponsesService | None = None
@@ -265,39 +345,53 @@ class ChatService:
 
     @property
     def indiankanoon(self) -> IndianKanoonService:
+
         if self._indiankanoon is None:
             self._indiankanoon = IndianKanoonService(self.settings)
         return self._indiankanoon
 
     @property
     def hybrid_retrieval(self) -> LegalHybridRetrievalService:
+
         if self._hybrid_retrieval is None:
             self._hybrid_retrieval = LegalHybridRetrievalService(self.settings, indiankanoon_service=self.indiankanoon)
         return self._hybrid_retrieval
 
     @property
     def google_search(self) -> GoogleCustomSearchService:
+
         if self._google_search is None:
             self._google_search = GoogleCustomSearchService(self.settings)
         return self._google_search
 
     @property
+    def legal_dataset(self) -> LocalLegalDatasetService:
+
+        if self._legal_dataset is None:
+            self._legal_dataset = LocalLegalDatasetService()
+        return self._legal_dataset
+
+    @property
     def local_similarity(self) -> LocalTextSimilarityService:
+
         if self._local_similarity is None:
             self._local_similarity = LocalTextSimilarityService(self.settings)
         return self._local_similarity
 
     @property
     def semantic_support_checker(self) -> LocalSemanticSupportChecker:
+
         if self._semantic_support_checker is None:
             self._semantic_support_checker = LocalSemanticSupportChecker(
                 self.settings,
                 similarity_service=self.local_similarity,
             )
+
         return self._semantic_support_checker
 
     @property
     def openai(self) -> OpenAIResponsesService:
+
         if self._openai is None:
             self._openai = OpenAIResponsesService(self.settings)
         return self._openai
@@ -305,40 +399,50 @@ class ChatService:
     def _build_direct_answer_cache_key(self, *, kind: str, normalized_query: str) -> str | None:
         clean_kind = str(kind or "").strip().lower()
         clean_query = re.sub(r"\s+", " ", str(normalized_query or "").strip().lower())
+
         if not clean_kind or not clean_query:
             return None
         return f"{clean_kind}::{clean_query}"
 
     def _get_direct_answer_cache_entry(self, cache_key: str | None) -> InternalChatResult | None:
+
         if not cache_key:
             return None
         cached = self._direct_answer_cache.get(cache_key)
+
         if not cached:
             return None
+
         if float(cached.get("expires_at") or 0.0) <= monotonic():
             self._direct_answer_cache.pop(cache_key, None)
             return None
+
         # Refresh recency for bounded eviction.
         self._direct_answer_cache.pop(cache_key, None)
         self._direct_answer_cache[cache_key] = cached
         return cached["internal"].model_copy(deep=True)
 
     def _set_direct_answer_cache_entry(self, cache_key: str | None, internal: InternalChatResult) -> None:
+
         if not cache_key:
             return
+
         cached_raw_json = dict(internal.raw_json or {})
         cached_raw_json.pop("cache_hit", None)
         cached_internal = internal.model_copy(
             deep=True,
+
             update={
                 "warnings": [],
                 "raw_json": cached_raw_json,
             },
         )
+
         self._direct_answer_cache[cache_key] = {
             "expires_at": monotonic() + DIRECT_ANSWER_CACHE_TTL_SECONDS,
             "internal": cached_internal,
         }
+
         while len(self._direct_answer_cache) > DIRECT_ANSWER_CACHE_MAX_ENTRIES:
             oldest_key = next(iter(self._direct_answer_cache))
             self._direct_answer_cache.pop(oldest_key, None)
@@ -349,6 +453,7 @@ class ChatService:
         raw_json["cache_hit"] = cache_hit
         return internal.model_copy(
             deep=True,
+
             update={
                 "warnings": list(warnings),
                 "raw_json": raw_json,
@@ -369,15 +474,18 @@ class ChatService:
 
         chat_id = request.chat_id
         is_new_chat = chat_id is None
+
         if is_new_chat:
             session = self.store.create_session(self._generate_title(message), user_id=user_id)
             chat_id = session["id"]
+
         elif self.store.get_session(chat_id, user_id=user_id) is None:
             raise ValueError("Chat session not found")
 
         if is_new_chat:
             conversation_state = ConversationState()
             previous_messages: list[dict[str, Any]] = []
+
         else:
             conversation_state = ConversationState.model_validate(
                 self.store.get_conversation_state(chat_id, user_id=user_id)
@@ -389,11 +497,13 @@ class ChatService:
             fallback_state=fallback_state,
             uploaded_texts=uploaded_texts or [],
         )
+
         retrieval_query = self._retrieval_query_for_turn(message=message, conversation_state=conversation_state)
         domain = self._classify_domain_for_turn(
             message=retrieval_query,
             conversation_state=conversation_state,
         )
+
         if not domain and conversation_state.legal_domain:
             domain = conversation_state.legal_domain
         resolved_state = conversation_state.case_state or self.settings.default_state
@@ -410,6 +520,7 @@ class ChatService:
                 conversation_state=conversation_state,
                 uploaded_texts=uploaded_texts or [],
             )
+
         except Exception:
             logger.exception("chat response generation failed query=%r domain=%s", retrieval_query[:120], domain)
             internal = self._build_safe_fallback_result(
@@ -418,6 +529,7 @@ class ChatService:
                 warnings=warnings,
                 query=message,
             )
+
             next_state = conversation_state.model_copy(
                 update={
                     "conversation_started": True,
@@ -433,13 +545,18 @@ class ChatService:
             message=next_state.last_user_issue or message,
             domain=domain,
             conversation_state=next_state,
+            uploaded_texts=uploaded_texts or [],
         )
+
         route_classification = self._classify_pipeline_path(
             message=message,
             domain=domain,
             conversation_state=conversation_state,
+            uploaded_texts=uploaded_texts or [],
         )
+
         existing_validation_flags = [str(flag) for flag in (internal.raw_json.get("validation_flags") or []) if str(flag)]
+
         if self._should_use_strict_grounded_validation(strategy=output_strategy, raw_json=internal.raw_json):
             validated_answer, validation_flags = self._validate_final_output(
                 answer=internal.answer,
@@ -448,15 +565,21 @@ class ChatService:
                 citations=internal.citations,
                 authorities=internal.authorities,
             )
+
         else:
             validated_answer, validation_flags = internal.answer, []
         merged_validation_flags = list(dict.fromkeys([*existing_validation_flags, *validation_flags]))
+        response_mode = str((internal.raw_json or {}).get("response_mode") or output_strategy.get("response_mode") or "").strip().lower()
         internal = internal.model_copy(
+
             update={
-                "answer": self._apply_disclaimer_mode(
+                "answer": validated_answer
+                if response_mode == "authority"
+                else self._apply_disclaimer_mode(
                     answer=validated_answer,
                     mode=str((internal.raw_json or {}).get("disclaimer_mode") or "medium_risk"),
                 ),
+
                 "citations": self._filter_criminal_reference_strings(internal.citations, strategy=output_strategy),
                 "authorities": self._filter_criminal_reference_strings(internal.authorities, strategy=output_strategy),
                 "raw_json": {
@@ -492,6 +615,7 @@ class ChatService:
                 chat_id,
                 "user",
                 message,
+
                 metadata={
                     "domain": domain,
                     "legal_domain_label": domain,
@@ -501,16 +625,20 @@ class ChatService:
                     "pipeline": next_state.active_intent or "indiankanoon_rag",
                     "route_classification": route_classification,
                 },
+
                 user_id=user_id,
             )
+
             self.store.add_message(chat_id, "assistant", internal.answer, metadata=assistant_metadata, user_id=user_id)
             self.store.update_conversation_state(chat_id, next_state.model_dump(), user_id=user_id)
+
         except Exception:
             logger.exception("chat persistence failed chat_id=%s user_id=%s", chat_id, user_id)
 
         session = self.store.get_session(chat_id, user_id=user_id)
         created_at = datetime.fromisoformat(session["updated_at"]) if session is not None else datetime.now(timezone.utc)
         title = session["title"] if session is not None else self._generate_title(message)
+
         return ChatUploadResponse(
             chat_id=chat_id,
             title=title,
@@ -529,13 +657,17 @@ class ChatService:
     @staticmethod
     def _summarize_uploaded_texts(uploaded_texts: list[str]) -> list[str]:
         summaries: list[str] = []
+
         for text in uploaded_texts:
             cleaned = re.sub(r"\s+", " ", str(text or "").strip())
+
             if not cleaned:
                 continue
             summary = cleaned[:160].strip()
+
             if len(cleaned) > 160:
                 summary = f"{summary}..."
+
             if summary not in summaries:
                 summaries.append(summary)
         return summaries[:5]
@@ -553,10 +685,14 @@ class ChatService:
         request_case_stage = (request.case_stage or "").strip() or None
         case_state = request_state or current_state.case_state or fallback_state or self.settings.default_state
         uploaded_summaries = list(current_state.uploaded_document_summaries or [])
+
         for summary in self._summarize_uploaded_texts(uploaded_texts):
+
             if summary not in uploaded_summaries:
                 uploaded_summaries.append(summary)
+
         return current_state.model_copy(
+
             update={
                 "case_state": case_state,
                 "district": request_district or current_state.district,
@@ -580,12 +716,59 @@ class ChatService:
     ) -> tuple[InternalChatResult, ConversationState]:
         understanding_profile = self._understand_legal_query(user_message)
         normalized_user_message = str(understanding_profile.get("normalized_query") or user_message).strip() or user_message
+        query_flow = self._classify_query_flow(
+            message=user_message,
+            domain=domain,
+            conversation_state=conversation_state,
+            uploaded_texts=uploaded_texts,
+        )
+
+        local_match = self.legal_dataset.lookup_query(normalized_user_message)
+        direct_authority_key = self._fast_authority_lookup_key(normalized_user_message)
+
+        if query_flow["flow_type"] == "provision_lookup" and self._should_use_local_legal_dataset_fast_path(
+            normalized_query=normalized_user_message,
+            authority_key=direct_authority_key,
+            local_match=local_match,
+        ):
+
+            logger.info(
+                "chat pipeline stage=start query=%r domain=%s state=%s previous_messages=%s route_class=%s route_reason=%s",
+                message[:160],
+                domain,
+                resolved_state,
+                len(previous_messages),
+                "fast",
+                "local_legal_dataset_fast_path",
+            )
+
+            local_fast_path_result = self._route_fast_authority_lookup(
+                message=user_message,
+                domain=domain,
+                warnings=warnings,
+                conversation_state=conversation_state,
+                query_profile={
+                    "flow_type": str(query_flow["flow_type"]),
+                    "response_mode": self._response_mode_for_flow(str(query_flow["flow_type"])),
+                },
+
+                strategy={},
+                understanding_profile=understanding_profile,
+            )
+
+            if local_fast_path_result is not None:
+                internal, next_state = local_fast_path_result
+                logger.info("chat pipeline stage=authority_fast_path authority_key=%s", (internal.raw_json or {}).get("authority_key"))
+                return internal, next_state
+
         route_classification = self._classify_pipeline_path(
             message=normalized_user_message,
             domain=domain,
             conversation_state=conversation_state,
+            uploaded_texts=uploaded_texts,
             understanding_profile=understanding_profile,
         )
+
         if route_classification["path"] == "fast":
             logger.info(
                 "chat pipeline stage=start query=%r domain=%s state=%s previous_messages=%s route_class=%s route_reason=%s",
@@ -596,34 +779,45 @@ class ChatService:
                 route_classification["path"],
                 route_classification["reason"],
             )
+
             fast_path_result = self._route_fast_authority_lookup(
                 message=user_message,
                 domain=domain,
                 warnings=warnings,
                 conversation_state=conversation_state,
-                query_profile={},
+                query_profile={
+                    "flow_type": str(query_flow["flow_type"]),
+                    "response_mode": self._response_mode_for_flow(str(query_flow["flow_type"])),
+                },
+
                 strategy={},
                 understanding_profile=understanding_profile,
             )
+
             if fast_path_result is not None:
                 internal, next_state = fast_path_result
                 logger.info(
                     "chat pipeline stage=authority_fast_path authority_key=%s",
                     (internal.raw_json or {}).get("authority_key"),
                 )
+
                 return internal, next_state
 
         strategy = self._classify_legal_query(
             message=user_message,
             domain=domain,
             conversation_state=conversation_state,
+            uploaded_texts=uploaded_texts,
         )
+
         query_profile = self._build_query_profile(
             message=user_message,
             domain=domain,
             conversation_state=conversation_state,
             strategy=strategy,
+            uploaded_texts=uploaded_texts,
         )
+
         logger.info(
             "chat pipeline stage=start query=%r domain=%s state=%s previous_messages=%s strategy=%s query_type=%s route=%s urgency=%s route_class=%s route_reason=%s",
             message[:160],
@@ -637,6 +831,7 @@ class ChatService:
             route_classification["path"],
             route_classification["reason"],
         )
+
         direct_result = self._route_direct_response(
             message=user_message,
             domain=domain,
@@ -645,6 +840,7 @@ class ChatService:
             query_profile=query_profile,
             understanding_profile=understanding_profile,
         )
+
         if direct_result is not None:
             internal, next_state = direct_result
             logger.info(
@@ -661,12 +857,14 @@ class ChatService:
             domain=domain,
             answer_mode=strategy["answer_mode"],
         )
+
         logger.info(
             "chat pipeline stage=query_normalization query=%r variants=%s doctypes=%s",
             message[:160],
             query_variants,
             doctypes_options,
         )
+
         documents = self._retrieve_grounded_documents(
             query=message,
             query_variants=query_variants,
@@ -674,24 +872,30 @@ class ChatService:
             state=resolved_state,
             domain=domain,
             answer_mode=strategy["answer_mode"],
+            query_type=str(query_profile.get("flow_type") or "general_legal_research"),
+            understanding_profile=understanding_profile,
         )
+
         documents = self._filter_grounded_documents_for_query(
             documents=documents,
             query=message,
             answer_mode=strategy["answer_mode"],
         )
+
         documents = self._annotate_grounded_documents(
             documents=documents,
             query=message,
             domain=domain,
             state=resolved_state,
         )
+
         documents = sorted(documents, key=lambda item: float(item.get("score") or 0.0), reverse=True)
         documents = self._select_primary_authorities(
             documents,
             query=message,
             answer_mode=strategy["answer_mode"],
         )
+
         documents = self._rerank_grounded_documents(
             documents=documents,
             query=message,
@@ -700,6 +904,7 @@ class ChatService:
             answer_mode=strategy["answer_mode"],
             query_profile=query_profile,
         )
+
         uploaded_documents = self._build_uploaded_documents(uploaded_texts)
         context_documents = [*documents, *uploaded_documents]
         retrieval_confidence = self._grounded_retrieval_confidence(
@@ -707,11 +912,13 @@ class ChatService:
             query=message,
             answer_mode=strategy["answer_mode"],
         )
+
         retrieval_confidence_level = self._classify_retrieval_confidence_level(
             confidence=retrieval_confidence,
             documents=documents,
             answer_mode=strategy["answer_mode"],
         )
+
         source_sufficiency = self._assess_source_sufficiency(
             documents=documents,
             retrieval_confidence=retrieval_confidence,
@@ -719,17 +926,32 @@ class ChatService:
             query_profile=query_profile,
             state=resolved_state,
         )
+
+        trusted_curated_google_authority_context = self._has_trusted_curated_google_authority_context(
+            documents=documents,
+            query=message,
+            answer_mode=strategy["answer_mode"],
+        )
+
+        google_retrieval_context = any(
+            str(doc.get("source_kind") or "").strip().lower() == "google_custom_search"
+            for doc in documents
+        )
+
         has_live_documents = any(
             str(doc.get("source_kind") or "").strip().lower() != "internal" for doc in documents
         )
+
         if not context_documents:
             logger.warning("chat pipeline stage=retrieval no_documents query=%r", message[:160])
+
             if self._should_prefer_practical_guidance(
                 query_profile=query_profile,
                 strategy=strategy,
                 message=message,
                 domain=domain,
             ):
+
                 logger.info("chat pipeline stage=retrieval reroute_to_legal_intake query=%r", message[:160])
                 return self._handle_legal_help_interview(
                     message=user_message,
@@ -738,6 +960,7 @@ class ChatService:
                     conversation_state=conversation_state,
                     is_continuation=conversation_state.active_intent == "legal_help" and conversation_state.conversation_started,
                 )
+
             return self._build_safe_fallback_result(
                 kind="no_relevant_authority",
                 domain=domain,
@@ -750,7 +973,9 @@ class ChatService:
                 last_user_issue=user_message,
                 last_grounded_query=message,
             )
-        if documents and source_sufficiency["label"] == "weak":
+
+        if documents and source_sufficiency["label"] == "weak" and not trusted_curated_google_authority_context:
+
             logger.warning(
                 "chat pipeline stage=retrieval low_confidence query=%r confidence=%.2f answer_mode=%s has_live=%s sufficiency=%s",
                 message[:160],
@@ -759,12 +984,14 @@ class ChatService:
                 has_live_documents,
                 source_sufficiency["label"],
             )
+
             if self._should_prefer_practical_guidance(
                 query_profile=query_profile,
                 strategy=strategy,
                 message=message,
                 domain=domain,
             ):
+
                 return self._handle_legal_help_interview(
                     message=user_message,
                     domain=domain,
@@ -772,12 +999,14 @@ class ChatService:
                     conversation_state=conversation_state,
                     is_continuation=conversation_state.active_intent == "legal_help" and conversation_state.conversation_started,
                 )
+
             low_confidence_result = self._build_safe_fallback_result(
                 kind="low_confidence",
                 query=user_message,
                 domain=domain,
                 warnings=warnings,
             )
+
             return low_confidence_result, ConversationState(
                 conversation_started=True,
                 active_intent="indiankanoon_rag",
@@ -801,8 +1030,10 @@ class ChatService:
             query_profile=query_profile,
             source_sufficiency=source_sufficiency,
         )
+
         grounded_context = self._build_grounded_context(context_documents)
         grounded_context = self._trim_grounded_context(grounded_context)
+
         logger.info(
             "chat pipeline stage=context docs=%s uploaded_docs=%s citations=%s authorities=%s context_chars=%s disclaimer_mode=%s sufficiency=%s",
             len(documents),
@@ -813,6 +1044,7 @@ class ChatService:
             evidence_packet["disclaimer_mode"],
             source_sufficiency["label"],
         )
+
         llm_payload = self._generate_grounded_answer(
             query=message,
             domain=domain,
@@ -822,24 +1054,59 @@ class ChatService:
             conversation=self._conversation_for_llm(previous_messages),
             documents=context_documents,
             evidence_packet=evidence_packet,
+            response_mode=str(strategy.get("response_mode") or "research"),
         )
+
         answer = str(llm_payload.get("answer") or "").strip()
+
         if not answer:
             logger.warning("chat pipeline stage=llm empty_answer query=%r", message[:160])
+        response_mode = str(strategy.get("response_mode") or "research").strip().lower()
+
+        if not answer and response_mode == "authority":
+            fallback = self._build_safe_fallback_result(
+                kind="no_relevant_authority",
+                domain=domain,
+                warnings=warnings,
+                query=user_message,
+            )
+
+            return fallback, ConversationState(
+                conversation_started=True,
+                active_intent="indiankanoon_rag",
+                legal_domain=domain,
+                last_user_issue=user_message,
+                last_grounded_query=message,
+                awaiting_details=bool(fallback.follow_up_question),
+                last_follow_up_question=fallback.follow_up_question,
+            )
+
+        if not answer:
             llm_payload = self._build_structured_grounded_payload(
                 query=message,
                 domain=domain,
                 documents=context_documents,
                 citations=citations,
+                response_mode=response_mode,
             )
+
             answer = str(llm_payload.get("answer") or "").strip()
-        answer = self._normalize_final_answer(answer, citations=citations)
-        answer = self._ensure_upload_context_reflected(answer, uploaded_documents)
-        answer = self._ensure_scope_notes_reflected(answer, evidence_packet)
+
+        if response_mode != "authority":
+            answer = self._normalize_final_answer(answer, citations=citations)
+            answer = self._ensure_upload_context_reflected(answer, uploaded_documents)
+            answer = self._ensure_scope_notes_reflected(answer, evidence_packet)
         strict_grounded_validation = self._should_use_strict_grounded_validation(
             strategy=strategy,
             raw_json={"query_profile": query_profile},
         )
+
+        if trusted_curated_google_authority_context:
+            strict_grounded_validation = False
+
+        if self._is_deterministic_grounded_payload(llm_payload):
+            strict_grounded_validation = False
+
         if strict_grounded_validation:
             answer, validation_flags = self._validate_final_output(
                 answer=answer,
@@ -848,12 +1115,14 @@ class ChatService:
                 citations=citations,
                 authorities=authorities,
             )
+
             semantic_support = self._run_semantic_support_check(
                 answer=answer,
                 query=user_message,
                 documents=context_documents,
                 source_sufficiency=source_sufficiency,
             )
+
             if semantic_support["status"] == "unsupported" and source_sufficiency["label"] != "strong":
                 validation_flags = list(dict.fromkeys([*validation_flags, "semantic_support_failed", "unsupported_output_fallback"]))
                 fallback = self._build_safe_fallback_result(
@@ -862,19 +1131,22 @@ class ChatService:
                     warnings=warnings,
                     query=user_message,
                 )
+
                 answer = fallback.answer
                 llm_payload["follow_up_question"] = fallback.follow_up_question
                 llm_payload["likely_forum"] = fallback.likely_forum
                 llm_payload["caution"] = fallback.caution
                 llm_payload["documents_to_keep"] = fallback.documents_to_keep
+
         else:
             validation_flags = []
             semantic_support = {
-                "status": "skipped_non_grounded_practical",
+                "status": "skipped_trusted_curated_google_authority" if trusted_curated_google_authority_context else "skipped_non_grounded_practical",
                 "score": None,
-                "backend": "bypass",
+                "backend": "trusted_curated_google_authority_bypass" if trusted_curated_google_authority_context else "bypass",
                 "details": [],
             }
+
         llm_payload["answer"] = answer
         llm_payload["validation_flags"] = validation_flags
         llm_payload["semantic_support"] = semantic_support
@@ -888,11 +1160,17 @@ class ChatService:
             citations=citations,
             authorities=authorities,
             documents_to_keep=self._coerce_string_list(llm_payload.get("documents_to_keep")),
-            likely_forum=self._optional_string(llm_payload.get("likely_forum")) or (authorities[0] if authorities else None),
+            likely_forum=None
+
+            if response_mode == "authority"
+
+            else (self._optional_string(llm_payload.get("likely_forum")) or (authorities[0] if authorities else None)),
             caution=self._optional_string(llm_payload.get("caution")),
             warnings=warnings,
+
             raw_json={
                 "pipeline": "indiankanoon_rag",
+                "response_mode": response_mode,
                 "strategy": strategy,
                 "query_profile": query_profile,
                 "retrieval_confidence": retrieval_confidence,
@@ -909,8 +1187,11 @@ class ChatService:
                 "validation_flags": validation_flags,
                 "disclaimer_mode": evidence_packet["disclaimer_mode"],
                 "semantic_support": semantic_support,
+                "source": str(llm_payload.get("source") or ("curated_google_authority_lookup" if google_retrieval_context else "indiankanoon_rag")),
+                "retrieval_source": "curated_google_authority_lookup" if google_retrieval_context else "indiankanoon_rag",
             },
         )
+
         next_state = conversation_state.model_copy(
             update={
                 "conversation_started": True,
@@ -939,8 +1220,11 @@ class ChatService:
         understanding_profile = understanding_profile or self._understand_legal_query(message)
         normalized = str(understanding_profile.get("normalized_query") or "").strip().lower()
         answer_intent = str(understanding_profile.get("answer_intent") or "").strip().lower()
+        response_mode = str(query_profile.get("response_mode") or self._response_mode_for_flow(query_profile.get("flow_type") or "")).strip().lower()
+
         if not normalized:
             return None
+
         if answer_intent == "mixed_direct":
             mixed_constitutional_result = self._route_mixed_constitutional_simple_query(
                 message=message,
@@ -949,8 +1233,22 @@ class ChatService:
                 conversation_state=conversation_state,
                 understanding_profile=understanding_profile,
             )
+
             if mixed_constitutional_result is not None:
                 return mixed_constitutional_result
+
+        if answer_intent == "general_explainer":
+            general_explainer_result = self._route_general_legal_explainer(
+                message=message,
+                domain=domain,
+                warnings=warnings,
+                conversation_state=conversation_state,
+                understanding_profile=understanding_profile,
+            )
+
+            if general_explainer_result is not None:
+                return general_explainer_result
+
         if answer_intent in {"explainer", "authority_explainer", "mixed_direct", ""}:
             constitutional_explainer_result = self._route_constitutional_explainer(
                 message=message,
@@ -959,9 +1257,18 @@ class ChatService:
                 conversation_state=conversation_state,
                 understanding_profile=understanding_profile,
             )
+
             if constitutional_explainer_result is not None:
                 return constitutional_explainer_result
         clarification_hint = understanding_profile.get("clarification_hint")
+
+        if self._should_try_curated_google_before_clarification(
+            normalized_query=normalized,
+            domain=domain,
+            clarification_hint=clarification_hint,
+        ):
+            return None
+
         if clarification_hint:
             direct_clarification_result = self._build_direct_answer_clarification_result(
                 domain=domain,
@@ -970,11 +1277,17 @@ class ChatService:
                 raw_message=message,
                 clarification_hint=clarification_hint,
             )
+
             if direct_clarification_result is not None:
                 return direct_clarification_result
         routing = self._classify_routing_precedence(normalized, domain=domain)
 
-        if conversation_state.conversation_started and conversation_state.active_intent == "legal_help":
+        if (
+            response_mode == "scenario"
+            and conversation_state.conversation_started
+            and conversation_state.active_intent == "legal_help"
+        ):
+
             return self._handle_legal_help_interview(
                 message=message,
                 domain=domain,
@@ -994,6 +1307,7 @@ class ChatService:
             conversation_started=conversation_state.conversation_started,
             active_intent=conversation_state.active_intent,
         )
+
         if intent_decision.intent == "technical_redirect" and intent_decision.handled:
             internal = self._build_intent_result(intent_decision.answer, domain, warnings)
             next_state = conversation_state.model_copy(
@@ -1005,9 +1319,19 @@ class ChatService:
                     "legal_domain": domain,
                 }
             )
+
             return internal, next_state
 
-        if routing["prefer_playbook"] or query_profile.get("route_target") == "playbook" or intent_decision.intent == "legal_help":
+        if (
+            response_mode == "scenario"
+
+            and (
+                routing["prefer_playbook"]
+                or query_profile.get("route_target") == "playbook"
+                or intent_decision.intent == "legal_help"
+            )
+        ):
+
             return self._handle_legal_help_interview(
                 message=message,
                 domain=domain,
@@ -1017,10 +1341,13 @@ class ChatService:
             )
 
         if intent_decision.handled and intent_decision.intent in {"greeting", "thanks", "goodbye", "advice"}:
+
             if routing["prefer_grounded_authority"]:
                 return None
+
             internal = self._build_intent_result(intent_decision.answer, domain, warnings)
             next_state = conversation_state.model_copy(
+
                 update={
                     "conversation_started": True,
                     "active_intent": intent_decision.intent,
@@ -1029,6 +1356,7 @@ class ChatService:
                     "legal_domain": domain,
                 }
             )
+
             return internal, next_state
         return None
 
@@ -1038,24 +1366,63 @@ class ChatService:
         message: str,
         domain: str,
         conversation_state: ConversationState,
+        uploaded_texts: list[str] | None = None,
         understanding_profile: dict[str, Any] | None = None,
     ) -> dict[str, str]:
         understanding_profile = understanding_profile or self._understand_legal_query(message)
         normalized = re.sub(r"\s+", " ", str(message or "").strip())
         normalized_lower = normalized.lower()
+        flow = self._classify_query_flow(
+            message=message,
+            domain=domain,
+            conversation_state=conversation_state,
+            uploaded_texts=uploaded_texts or [],
+        )
+
         answer_intent = str(understanding_profile.get("answer_intent") or "").strip().lower()
-        if answer_intent == "authority_explainer":
+
+        if flow["flow_type"] == "scenario_practical_legal_issue":
+            return {"path": "medium", "reason": "practical_guidance"}
+
+        if flow["flow_type"] == "uploaded_document_query":
+            return {"path": "heavy", "reason": "uploaded_document_grounded"}
+
+        if flow["flow_type"] == "provision_lookup" and answer_intent == "authority_explainer":
             return {"path": "fast", "reason": "authority_fast_path"}
+
+        if self._should_prefer_curated_google_authority_route(
+            normalized_query=normalized_lower,
+            understanding_profile=understanding_profile,
+        ):
+            return {"path": "heavy", "reason": "confidence_based_authority_retrieval"}
+
         if answer_intent == "mixed_direct" and understanding_profile.get("all_components_direct"):
             return {"path": "medium", "reason": "constitutional_mixed_direct"}
+
         if answer_intent == "explainer":
             return {"path": "medium", "reason": "constitutional_explainer"}
+
+        if answer_intent == "general_explainer":
+            return {"path": "medium", "reason": "general_legal_explainer"}
+
         if understanding_profile.get("clarification_hint"):
+
+            if self._should_try_curated_google_before_clarification(
+                normalized_query=normalized_lower,
+                domain=domain,
+                clarification_hint=understanding_profile.get("clarification_hint"),
+            ):
+
+                return {"path": "heavy", "reason": "confidence_based_authority_retrieval"}
             return {"path": "medium", "reason": "direct_answer_clarification"}
 
         routing = self._classify_routing_precedence(normalized_lower, domain=domain)
+
         if conversation_state.active_intent == "legal_help" or routing["prefer_playbook"]:
             return {"path": "medium", "reason": "practical_guidance"}
+
+        if flow["flow_type"] in {"provision_lookup", "general_legal_research"}:
+            return {"path": "heavy", "reason": "grounded_authority"}
 
         if routing["prefer_grounded_authority"] or self._is_statute_query(normalized_lower) or self._looks_like_grounded_authority_query(normalized_lower):
             return {"path": "heavy", "reason": "grounded_authority"}
@@ -1074,16 +1441,21 @@ class ChatService:
         understanding_profile = understanding_profile or self._understand_legal_query(message)
         normalized_query = str(understanding_profile.get("normalized_query") or message)
         explainer_key = self._constitutional_explainer_key(normalized_query)
+
         if not explainer_key:
             return None
+
         cache_key = self._build_direct_answer_cache_key(
             kind="constitutional_explainer",
             normalized_query=normalized_query,
         )
+
         cached_internal = self._get_direct_answer_cache_entry(cache_key)
+
         if cached_internal is not None:
             internal = self._with_direct_cache_metadata(cached_internal, cache_hit=True, warnings=warnings)
             next_state = conversation_state.model_copy(
+
                 update={
                     "conversation_started": True,
                     "active_intent": "constitutional_explainer",
@@ -1095,11 +1467,14 @@ class ChatService:
             )
             return internal, next_state
         payload = CONSTITUTIONAL_EXPLAINER_LOOKUPS.get(explainer_key)
+
         if not payload:
             return None
+
         format_profile = dict(understanding_profile.get("direct_answer_format") or {})
         preferences = dict(format_profile.get("detail_instructions") or {})
         curated_google_documents = self._lookup_curated_google_direct_documents(normalized_query)
+
         answer = self._format_constitutional_explainer_answer(
             title=str(payload.get("title") or "Constitutional explainer"),
             summary=str(payload.get("summary") or ""),
@@ -1109,16 +1484,20 @@ class ChatService:
             article_breakdown=[str(item).strip() for item in (payload.get("article_breakdown") or []) if str(item).strip()],
             format_profile=format_profile,
         )
+
         citation_values = self._preferred_direct_citations(
             google_documents=curated_google_documents,
             fallback_citations=[str(payload.get("sources") or "").strip()],
         )
+
         likely_forum = str(payload.get("likely_forum") or "Constitution of India") if preferences["practical_context"] else None
         documents_to_keep = (
             [str(item) for item in (payload.get("documents_to_keep") or []) if str(item).strip()]
+
             if preferences["practical_context"]
             else []
         )
+
         internal = InternalChatResult(
             answer=answer,
             domain=str(payload.get("domain") or domain or conversation_state.legal_domain or "constitutional"),
@@ -1129,6 +1508,7 @@ class ChatService:
             likely_forum=likely_forum,
             caution=str(payload.get("caution") or "").strip() or None,
             warnings=warnings,
+
             raw_json={
                 "source": "constitutional_explainer",
                 "pipeline": "constitutional_explainer",
@@ -1139,9 +1519,11 @@ class ChatService:
                 "disclaimer_mode": str(payload.get("disclaimer_mode") or "medium_risk"),
             },
         )
+
         internal = self._with_direct_cache_metadata(internal, cache_hit=False, warnings=warnings)
         self._set_direct_answer_cache_entry(cache_key, internal)
         next_state = conversation_state.model_copy(
+
             update={
                 "conversation_started": True,
                 "active_intent": "constitutional_explainer",
@@ -1152,6 +1534,238 @@ class ChatService:
             }
         )
         return internal, next_state
+
+    def _route_general_legal_explainer(
+        self,
+        *,
+        message: str,
+        domain: str,
+        warnings: list[str],
+        conversation_state: ConversationState,
+        understanding_profile: dict[str, Any] | None = None,
+    ) -> tuple[InternalChatResult, ConversationState] | None:
+        understanding_profile = understanding_profile or self._understand_legal_query(message)
+        normalized_query = str(understanding_profile.get("normalized_query") or message)
+        explainer_key = self._general_legal_explainer_key(normalized_query)
+
+        if not explainer_key:
+            return None
+        cache_key = self._build_direct_answer_cache_key(
+            kind="general_legal_explainer",
+            normalized_query=normalized_query,
+        )
+
+        cached_internal = self._get_direct_answer_cache_entry(cache_key)
+
+        if cached_internal is not None:
+            internal = self._with_direct_cache_metadata(cached_internal, cache_hit=True, warnings=warnings)
+            next_state = conversation_state.model_copy(
+
+                update={
+                    "conversation_started": True,
+                    "active_intent": "general_legal_explainer",
+                    "awaiting_details": False,
+                    "last_user_issue": message,
+                    "legal_domain": internal.domain,
+                    "last_follow_up_question": None,
+                }
+            )
+
+            return internal, next_state
+        payload = GENERAL_LEGAL_EXPLAINER_LOOKUPS.get(explainer_key)
+
+        if not payload:
+            return None
+
+        format_profile = dict(understanding_profile.get("direct_answer_format") or {})
+        answer = self._format_general_legal_explainer_answer(
+            title=str(payload.get("title") or "Legal explainer"),
+            summary=str(payload.get("summary") or ""),
+            legal_position=str(payload.get("legal_position") or ""),
+            next_steps=str(payload.get("next_steps") or ""),
+            format_profile=format_profile,
+        )
+
+        internal = InternalChatResult(
+            answer=answer,
+            domain=str(payload.get("domain") or domain or conversation_state.legal_domain or "general"),
+            follow_up_question=None,
+            citations=[],
+            authorities=[],
+            documents_to_keep=[],
+            likely_forum=None,
+            caution=None,
+            warnings=warnings,
+
+            raw_json={
+                "source": "general_legal_explainer",
+                "pipeline": "general_legal_explainer",
+                "explainer_key": explainer_key,
+                "direct_answer_format": format_profile,
+                "disclaimer_mode": str(payload.get("disclaimer_mode") or "low_risk"),
+            },
+        )
+
+        internal = self._with_direct_cache_metadata(internal, cache_hit=False, warnings=warnings)
+        self._set_direct_answer_cache_entry(cache_key, internal)
+        next_state = conversation_state.model_copy(
+
+            update={
+                "conversation_started": True,
+                "active_intent": "general_legal_explainer",
+                "awaiting_details": False,
+                "last_user_issue": message,
+                "legal_domain": internal.domain,
+                "last_follow_up_question": None,
+            }
+        )
+
+        return internal, next_state
+
+    def _route_curated_google_authority_variant(
+        self,
+        *,
+        message: str,
+        domain: str,
+        warnings: list[str],
+        conversation_state: ConversationState,
+        understanding_profile: dict[str, Any] | None = None,
+    ) -> tuple[InternalChatResult, ConversationState] | None:
+        understanding_profile = understanding_profile or self._understand_legal_query(message)
+        variant = understanding_profile.get("authority_lookup_variant")
+
+        if not isinstance(variant, dict):
+            return None
+        normalized_query = str(understanding_profile.get("normalized_query") or message)
+        google_query = str(variant.get("google_query") or "").strip()
+
+        if not google_query:
+            return None
+        variant_domain = str(variant.get("domain") or domain or conversation_state.legal_domain or "civil")
+        cache_key = self._build_direct_answer_cache_key(
+            kind="curated_google_authority_variant",
+            normalized_query=normalized_query,
+        )
+
+        cached_internal = self._get_direct_answer_cache_entry(cache_key)
+
+        if cached_internal is not None:
+            internal = self._with_direct_cache_metadata(cached_internal, cache_hit=True, warnings=warnings)
+            next_state = conversation_state.model_copy(
+
+                update={
+                    "conversation_started": True,
+                    "active_intent": "curated_google_authority_lookup",
+                    "awaiting_details": bool(internal.follow_up_question),
+                    "last_user_issue": message,
+                    "last_grounded_query": google_query,
+                    "legal_domain": internal.domain,
+                    "last_follow_up_question": internal.follow_up_question,
+                }
+            )
+            return internal, next_state
+
+        google_documents = self._lookup_curated_google_authority_variant_documents(
+            google_query=google_query,
+            authority_query=normalized_query,
+        )
+
+        if google_documents:
+            citations = self._build_citations(google_documents)
+            authorities = self._build_authorities(google_documents)
+            source_sufficiency = {
+                "label": "strong",
+                "jurisdiction_note": "",
+                "recency_note": "",
+            }
+
+            evidence_packet = self._build_evidence_packet(
+                query=message,
+                retrieval_query=google_query,
+                domain=variant_domain,
+                state=None,
+                documents=google_documents,
+                citations=citations,
+                authorities=authorities,
+                query_profile={
+                    "query_type": "statute_lookup",
+                    "route_target": "grounded",
+                    "urgency": "low",
+                    "issue_type": "",
+                },
+
+                source_sufficiency=source_sufficiency,
+            )
+
+            grounded_context = self._trim_grounded_context(self._build_grounded_context(google_documents))
+
+            logger.info(
+                "curated google authority route context authority_query=%r google_query=%r docs=%s citations=%s authorities=%s context_chars=%s evidence_top_sources=%s",
+                normalized_query[:160],
+                google_query[:160],
+                len(google_documents),
+                len(citations),
+                authorities,
+                len(grounded_context),
+                evidence_packet.get("top_sources"),
+            )
+
+            payload = self._generate_grounded_answer(
+                query=message,
+                domain=variant_domain,
+                state=None,
+                context=grounded_context,
+                citations=citations,
+                conversation=[],
+                documents=google_documents,
+                evidence_packet=evidence_packet,
+                response_mode="authority",
+            )
+            answer = str(payload.get("answer") or "").strip()
+            internal = InternalChatResult(
+                answer=answer,
+                domain=variant_domain,
+                follow_up_question=None,
+                citations=citations,
+                authorities=authorities,
+                documents_to_keep=self._coerce_string_list(payload.get("documents_to_keep")),
+                likely_forum=None,
+                caution=self._optional_string(payload.get("caution")),
+                warnings=warnings,
+
+                raw_json={
+                    "source": "curated_google_authority_lookup",
+                    "pipeline": "curated_google_authority_lookup",
+                    "google_query": google_query,
+                    "variant_kind": str(variant.get("kind") or "authority_variant"),
+                    "documents": google_documents,
+                    "disclaimer_mode": "none",
+                    "response_mode": "authority",
+                },
+            )
+
+            internal = self._with_direct_cache_metadata(internal, cache_hit=False, warnings=warnings)
+            self._set_direct_answer_cache_entry(cache_key, internal)
+            next_state = conversation_state.model_copy(
+
+                update={
+                    "conversation_started": True,
+                    "active_intent": "curated_google_authority_lookup",
+                    "awaiting_details": False,
+                    "last_user_issue": message,
+                    "last_grounded_query": google_query,
+                    "legal_domain": internal.domain,
+                    "last_follow_up_question": None,
+                }
+            )
+            return internal, next_state
+
+        logger.info(
+            "curated google authority route fallback authority_query=%r google_query=%r reason=no_documents_after_filter action=defer_to_grounded_retrieval",
+            normalized_query[:160],
+            google_query[:160],
+        )
+        return None
 
     def _route_mixed_constitutional_simple_query(
         self,
@@ -1165,17 +1779,22 @@ class ChatService:
         understanding_profile = understanding_profile or self._understand_legal_query(message)
         normalized_query = str(understanding_profile.get("normalized_query") or message)
         components = understanding_profile.get("mixed_components") or self._mixed_constitutional_components(normalized_query)
+
         if not components:
             return None
+
         curated_google_documents = self._lookup_curated_google_direct_documents(normalized_query)
         cache_key = self._build_direct_answer_cache_key(
             kind="constitutional_mixed_direct",
             normalized_query=normalized_query,
         )
+
         cached_internal = self._get_direct_answer_cache_entry(cache_key)
+
         if cached_internal is not None:
             internal = self._with_direct_cache_metadata(cached_internal, cache_hit=True, warnings=warnings)
             next_state = conversation_state.model_copy(
+
                 update={
                     "conversation_started": True,
                     "active_intent": "constitutional_explainer",
@@ -1186,17 +1805,37 @@ class ChatService:
                 }
             )
             return internal, next_state
+
         format_profile = dict(understanding_profile.get("direct_answer_format") or {})
         preferences = dict(format_profile.get("detail_instructions") or {})
         answer_parts: list[str] = []
         citations: list[str] = []
+        authorities: list[str] = []
+        component_domains: list[str] = []
+        authority_only = True
+        constitutional_only = True
         for component in components:
+
             if component["kind"] == "authority":
                 payload = FAST_AUTHORITY_LOOKUPS.get(component["key"])
+
                 if not payload:
                     return None
+
                 citations.append(str(payload.get("source") or "").strip())
+                authority = str(payload.get("authority") or "").strip()
+
+                if authority:
+                    authorities.append(authority)
+
+                    if authority != "Constitution of India":
+                        constitutional_only = False
+                component_domain = str(payload.get("domain") or "").strip()
+
+                if component_domain:
+                    component_domains.append(component_domain)
                 answer_parts.append(
+
                     self._format_constitutional_authority_explainer_answer(
                         title=str(payload.get("title") or ""),
                         summary=str(payload.get("summary") or ""),
@@ -1204,11 +1843,20 @@ class ChatService:
                         format_profile=format_profile,
                     )
                 )
+
                 continue
             payload = CONSTITUTIONAL_EXPLAINER_LOOKUPS.get(component["key"])
+
             if not payload:
                 return None
+            authority_only = False
             citations.append(str(payload.get("sources") or "").strip())
+            authorities.append("Constitution of India")
+            component_domain = str(payload.get("domain") or "").strip()
+
+            if component_domain:
+                component_domains.append(component_domain)
+
             answer_parts.append(
                 self._format_constitutional_explainer_answer(
                     title=str(payload.get("title") or "Constitutional explainer"),
@@ -1220,22 +1868,32 @@ class ChatService:
                     format_profile=format_profile,
                 )
             )
+
+        unique_authorities = [item for item in dict.fromkeys(authorities) if item]
+        derived_domain = component_domains[0] if component_domains else str(domain or conversation_state.legal_domain or "constitutional")
+        retrieval_source = "constitutional_mixed_direct"
+
+        if authority_only and not constitutional_only:
+            retrieval_source = "authority_mixed_direct"
+
         internal = InternalChatResult(
             answer="\n\n".join(part for part in answer_parts if part.strip()),
-            domain=str(domain or conversation_state.legal_domain or "constitutional"),
+            domain=derived_domain,
             follow_up_question=None,
             citations=self._preferred_direct_citations(
                 google_documents=curated_google_documents,
                 fallback_citations=[citation for citation in dict.fromkeys(citations) if citation],
             ),
-            authorities=["Constitution of India"],
+
+            authorities=unique_authorities,
             documents_to_keep=["relevant order or notice", "timeline", "supporting records"] if preferences["practical_context"] else [],
-            likely_forum="Constitution of India" if preferences["practical_context"] else None,
+            likely_forum=unique_authorities[0] if preferences["practical_context"] and unique_authorities else None,
             caution=None,
             warnings=warnings,
+
             raw_json={
-                "source": "constitutional_mixed_direct",
-                "pipeline": "constitutional_explainer",
+                "source": retrieval_source,
+                "pipeline": "constitutional_explainer" if retrieval_source == "constitutional_mixed_direct" else "authority_fast_path",
                 "component_keys": [component["key"] for component in components],
                 "curated_google_used": bool(curated_google_documents),
                 "curated_google_count": len(curated_google_documents),
@@ -1243,9 +1901,11 @@ class ChatService:
                 "disclaimer_mode": "medium_risk",
             },
         )
+
         internal = self._with_direct_cache_metadata(internal, cache_hit=False, warnings=warnings)
         self._set_direct_answer_cache_entry(cache_key, internal)
         next_state = conversation_state.model_copy(
+
             update={
                 "conversation_started": True,
                 "active_intent": "constitutional_explainer",
@@ -1278,21 +1938,27 @@ class ChatService:
             "practical_context": False,
             **(format_config.get("detail_instructions") or {}),
         }
+
         lead = ChatService._format_conversational_lead(title=title, summary=summary, conversational=layout != "definition")
+
         if preferences["include_articles"] and article_breakdown:
             formatter = ChatService._format_numbered_lines if preferences["step_by_step"] else ChatService._format_bulleted_lines
             article_lines = formatter(article_breakdown)
             practical_line = f"If you later need the practical side, {next_steps.strip()}" if next_steps.strip() else ""
             return "\n\n".join(
+
                 part
+
                 for part in [
                     lead,
                     ("Here is the article-wise breakdown:\n" if not preferences["step_by_step"] else "Here it is step by step with the article-wise breakdown:\n") + article_lines,
                     ChatService._format_human_legal_position(legal_position),
                     practical_line,
                 ]
+
                 if part
             )
+
         if preferences["in_points"]:
             point_lines = ChatService._build_structured_explainer_point_lines(
                 title=title,
@@ -1302,25 +1968,32 @@ class ChatService:
                 article_breakdown=article_breakdown,
                 practical_context=preferences["practical_context"],
             )
+          
             return "\n\n".join(
                 part for part in [lead, "Here are the key points:\n" + ChatService._format_bulleted_lines(point_lines)] if part
             )
+        
         if preferences["step_by_step"] and article_breakdown:
             return "\n\n".join(
                 part
+        
                 for part in [
                     lead,
                     "Here it is step by step:\n" + ChatService._format_numbered_lines(article_breakdown),
                     ChatService._format_human_legal_position(legal_position),
                 ]
+        
                 if part
             )
+        
         if preferences["concise"]:
             parts = [
                 lead,
                 ChatService._format_human_legal_position(legal_position),
             ]
+        
             return "\n\n".join(part for part in parts if part)
+        
         explanation = ChatService._format_human_legal_position(legal_position)
         closing_parts = [next_steps.strip(), caution.strip()]
         closing = " ".join(part for part in closing_parts if part)
@@ -1331,12 +2004,16 @@ class ChatService:
     def _format_conversational_lead(*, title: str, summary: str, conversational: bool) -> str:
         clean_title = title.strip()
         clean_summary = ChatService._polish_direct_answer_text(summary)
+        
         if not clean_title:
             return clean_summary
+        
         if not clean_summary:
             return clean_title
+        
         if not conversational:
             return ChatService._format_sentence_style_authority_lead(title=clean_title, summary=clean_summary)
+        
         summary_lower = clean_summary.lower()
         title_lower = clean_title.lower()
         repeated_subject_patterns = {
@@ -1347,58 +2024,197 @@ class ChatService:
                 "directive principles of state policy ",
             ),
         }
+        
         for subject, prefixes in repeated_subject_patterns.items():
             if subject in title_lower:
+        
                 for prefix in prefixes:
                     if summary_lower.startswith(prefix):
                         clean_summary = clean_summary[len(prefix):].strip()
                         summary_lower = clean_summary.lower()
                         break
+        
         if clean_summary[:1].isupper():
             clean_summary = clean_summary[:1].lower() + clean_summary[1:]
         plural_markers = ("fundamental duties", "fundamental rights", "directive principles")
         verb = "are" if any(marker in title_lower for marker in plural_markers) else "is"
+        
         return f"{clean_title} {verb} {clean_summary}"
 
     @staticmethod
     def _format_sentence_style_authority_lead(*, title: str, summary: str) -> str:
         clean_title = title.strip()
         clean_summary = ChatService._polish_direct_answer_text(summary)
+        
         if not clean_title:
             return clean_summary
+        
         if not clean_summary:
             return clean_title
+        
         summary_lower = clean_summary.lower()
         duplicate_prefix_patterns = [
             r"^article\s+\d+[a-z]?\s+",
             r"^section\s+\d+[a-z]?\s+(?:ipc|bns|bnss|ni act)?\s*",
         ]
+        
         for pattern in duplicate_prefix_patterns:
+        
             if re.match(pattern, summary_lower):
                 clean_summary = re.sub(pattern, "", clean_summary, flags=re.IGNORECASE).strip()
                 summary_lower = clean_summary.lower()
                 break
+        
         if clean_summary[:1].isupper():
             clean_summary = clean_summary[:1].lower() + clean_summary[1:]
+        
         return f"{clean_title} {clean_summary}".strip()
 
     @staticmethod
     def _format_human_legal_position(text: str, *, prefix: str = "In practice, ") -> str:
         clean_text = ChatService._polish_direct_answer_text(text)
+        
         if not clean_text:
             return ""
         lower_text = clean_text.lower()
+        
         if lower_text.startswith(("in practice,", "practically speaking,", "put simply,", "this means")):
             return clean_text
+        
         if lower_text.startswith(("courts ", "the courts ", "they ", "it ", "this ", "these ")):
+        
             if clean_text[:1].isupper():
                 clean_text = clean_text[:1].lower() + clean_text[1:]
             return f"{prefix}{clean_text}".strip()
+        
         return clean_text
+
+    @staticmethod
+    def _format_general_legal_explainer_answer(
+        *,
+        title: str,
+        summary: str,
+        legal_position: str,
+        next_steps: str,
+        format_profile: dict[str, Any] | None = None,
+    ) -> str:
+        format_config = format_profile or {}
+        layout = str(format_config.get("layout") or "conversational").strip().lower()
+        preferences = {
+            "concise": False,
+            "step_by_step": False,
+            "in_points": False,
+            "practical_context": False,
+            **(format_config.get("detail_instructions") or {}),
+        }
+        
+        lead = ChatService._format_conversational_lead(title=title, summary=summary, conversational=layout != "definition")
+        explanation = ChatService._format_human_legal_position(legal_position)
+        clean_next_steps = next_steps.strip()
+        
+        if layout == "points" or preferences["in_points"]:
+            point_lines = ChatService._build_structured_general_explainer_point_lines(
+                summary=summary,
+                legal_position=legal_position,
+                next_steps=next_steps,
+                practical_context=preferences["practical_context"],
+            )
+        
+            return "\n\n".join(
+                part for part in [title.strip(), "Here are the key points:\n" + ChatService._format_bulleted_lines(point_lines)] if part
+            )
+        
+        if layout == "step_by_step" or preferences["step_by_step"]:
+            numbered_lines = [line for line in [ChatService._polish_direct_answer_text(summary), explanation] if line]
+        
+            if preferences["practical_context"] and clean_next_steps:
+                numbered_lines.append(clean_next_steps)
+        
+            return "\n\n".join(
+                part for part in [title.strip(), "Here it is step by step:\n" + ChatService._format_numbered_lines(numbered_lines)] if part
+            )
+        
+        if layout == "concise" or preferences["concise"]:
+            return lead
+        
+        closing = clean_next_steps if preferences["practical_context"] and clean_next_steps else ""
+        
+        return "\n\n".join(part for part in [lead, explanation, closing] if part)
+
+    @staticmethod
+    def _looks_like_ambiguous_article_prompt(normalized_query: str) -> bool:
+        compact = re.sub(r"\s+", " ", str(normalized_query or "").strip().lower())
+        
+        if not compact:
+            return False
+        
+        if re.search(r"\b(?:article|art)\s+\d+[a-z]?\b", compact):
+            return False
+        
+        ambiguous_patterns = (
+            r"^(?:article|art)$",
+            r"^(?:article|art)\s+in\s+(?:the\s+)?constitution$",
+            r"^(?:constitution|constitutional)\s+article$",
+            r"^(?:which|what)\s+(?:article|art)$",
+            r"^(?:which|what)\s+(?:constitution|constitutional)\s+article$",
+            r"^(?:tell me about|explain)\s+(?:article|art)$",
+        )
+        
+        return any(re.fullmatch(pattern, compact) for pattern in ambiguous_patterns)
+
+    @staticmethod
+    def _looks_like_ambiguous_section_prompt(normalized_query: str) -> bool:
+        compact = re.sub(r"\s+", " ", str(normalized_query or "").strip().lower())
+        
+        if not compact:
+            return False
+        
+        if re.search(r"\bsection\s+\d+[a-z]?\b", compact):
+            return False
+        
+        ambiguous_patterns = (
+            r"^section$",
+            r"^section\s+in\s+(?:the\s+)?(?:act|code|ipc|bns|bnss|constitution)$",
+            r"^(?:which|what)\s+section$",
+            r"^(?:tell me about|explain)\s+section$",
+        )
+        
+        return any(re.fullmatch(pattern, compact) for pattern in ambiguous_patterns)
+
+    @staticmethod
+    def _looks_like_complete_authority_reference_prompt(normalized_query: str) -> bool:
+        compact = re.sub(r"\s+", " ", str(normalized_query or "").strip().lower())
+        
+        if not compact:
+            return False
+        
+        if re.search(r"\b(?:article|art)\s+\d+[a-z]?\b", compact):
+            return True
+        section_match = re.search(r"\bsection\s+\d+[a-z]?\b", compact)
+        
+        if not section_match:
+            return False
+        
+        statute_markers = {
+            "bns",
+            "bnss",
+            "ipc",
+            "indian penal code",
+            "bharatiya nyaya sanhita",
+            "bharatiya nagarik suraksha sanhita",
+            "negotiable instruments act",
+            "ni act",
+            "act",
+            "code",
+            "constitution",
+        }
+        
+        return any(marker in compact for marker in statute_markers)
 
     @staticmethod
     def _polish_direct_answer_text(text: str) -> str:
         clean_text = str(text or "").strip()
+        
         if not clean_text:
             return ""
         clean_text = re.sub(r"\bIn simple terms,\s*", "", clean_text, flags=re.IGNORECASE)
@@ -1410,8 +2226,10 @@ class ChatService:
 
     def _lookup_curated_google_direct_documents(self, normalized_query: str) -> list[dict[str, Any]]:
         query = re.sub(r"\s+", " ", str(normalized_query or "").strip())
+        
         if not query or not self.google_search.configured:
             return []
+        
         try:
             result = self.google_search.search(
                 query=query,
@@ -1419,22 +2237,319 @@ class ChatService:
                 site_restrict=LegalHybridRetrievalService._google_site_restrict(query),
                 trusted_only=True,
             )
+        
         except (requests.RequestException, ValueError):
             return []
+        
         if not LegalHybridRetrievalService._curated_google_documents_strong(result.documents):
             return []
+        
         return list(result.documents)
+
+    def _lookup_curated_google_authority_variant_documents(
+        self,
+        *,
+        google_query: str,
+        authority_query: str,
+    ) -> list[dict[str, Any]]:
+        query = re.sub(r"\s+", " ", str(google_query or "").strip())
+        
+        if not query or not self.google_search.configured:
+            return []
+        logger.info(
+            "curated google authority lookup rewrite authority_query=%r google_query=%r",
+            authority_query[:160],
+            query[:160],
+        )
+        
+        try:
+            result = self.google_search.search(
+                query=query,
+                max_results=min(self.settings.google_search_max_results, 2),
+                site_restrict=LegalHybridRetrievalService._google_site_restrict(query),
+                trusted_only=True,
+            )
+        
+        except (requests.RequestException, ValueError):
+            return []
+        
+        documents = list(result.documents)
+        logger.info(
+            "curated google authority lookup post_search authority_query=%r google_query=%r trusted_result_count=%s documents=%s",
+            authority_query[:160],
+            query[:160],
+            int(result.trusted_result_count),
+            [
+        
+                {
+                    "title": str(doc.get("title") or "")[:140],
+                    "docsource": str(doc.get("docsource") or ""),
+                    "authority_type": str(doc.get("authority_type") or ""),
+                    "score": float(doc.get("score") or 0.0),
+                }
+        
+                for doc in documents[:3]
+            ],
+        )
+        
+        if not documents:
+            logger.info(
+                "curated google authority lookup outcome authority_query=%r google_query=%r decision=no_documents",
+                authority_query[:160],
+                query[:160],
+            )
+        
+            return []
+        
+        if LegalHybridRetrievalService._curated_google_documents_strong(documents):
+            logger.info(
+                "curated google authority lookup outcome authority_query=%r google_query=%r decision=strong_documents",
+                authority_query[:160],
+                query[:160],
+            )
+            return documents
+        
+        trusted_documents = [
+            doc
+            for doc in documents
+            if self._document_matches_trusted_google_domain(document=doc)
+        ]
+        
+        authoritative_documents = [
+            doc
+            for doc in documents
+            if self._curated_google_authority_variant_document_authoritative(document=doc)
+        ]
+        
+        relevant_documents = [
+            doc
+            for doc in documents
+        
+            if self._curated_google_authority_variant_document_relevant(
+                authority_query=authority_query,
+                document=doc,
+            )
+        ]
+        
+        filtered_document_logs = [
+            {
+                "title": str(doc.get("title") or "")[:140],
+                "domain": self._google_document_domain(document=doc),
+                "rejected_from_authoritative": self._curated_google_authority_variant_authoritative_reject_reasons(document=doc),
+                "rejected_from_relevant": self._curated_google_authority_variant_relevance_reject_reasons(
+                    authority_query=authority_query,
+                    document=doc,
+                ),
+            }
+        
+            for doc in documents[:3]
+        ]
+        
+        logger.info(
+            "curated google authority lookup filtering authority_query=%r trusted_hits=%s authoritative_hits=%s relevant_hits=%s authoritative_titles=%s relevant_titles=%s filtered=%s",
+            authority_query[:160],
+            len(trusted_documents),
+            len(authoritative_documents),
+            len(relevant_documents),
+            [str(doc.get('title') or '')[:140] for doc in authoritative_documents[:3]],
+            [str(doc.get('title') or '')[:140] for doc in relevant_documents[:3]],
+            filtered_document_logs,
+        )
+        
+        if relevant_documents:
+            return relevant_documents[:2]
+        return authoritative_documents[:2]
+
+    def _curated_google_authority_variant_document_relevant(
+        self,
+        *,
+        authority_query: str,
+        document: dict[str, Any],
+    ) -> bool:
+        
+        if self._curated_google_authority_variant_authoritative_reject_reasons(document=document):
+            return False
+        
+        return not self._curated_google_authority_variant_relevance_reject_reasons(
+            authority_query=authority_query,
+            document=document,
+        )
+
+    def _curated_google_authority_variant_document_authoritative(self, *, document: dict[str, Any]) -> bool:
+        
+        return not self._curated_google_authority_variant_authoritative_reject_reasons(document=document)
+
+    def _curated_google_authority_variant_authoritative_reject_reasons(
+        self,
+        *,
+        document: dict[str, Any],
+    ) -> list[str]:
+        reasons: list[str] = []
+        source_kind = str(document.get("source_kind") or "").strip().lower()
+        authority_type = str(document.get("authority_type") or "").strip().lower()
+        
+        if source_kind != "google_custom_search":
+            reasons.append("not_google_custom_search")
+        
+        if authority_type not in {"government_portal", "regulator", "court_portal"} and not self._document_matches_trusted_google_domain(document=document):
+            reasons.append("not_authoritative_or_trusted_domain")
+        
+        return reasons
+
+    def _curated_google_authority_variant_relevance_reject_reasons(
+        self,
+        *,
+        authority_query: str,
+        document: dict[str, Any],
+    ) -> list[str]:
+        reasons = self._curated_google_authority_variant_authoritative_reject_reasons(document=document)
+        
+        if reasons:
+            return reasons
+        
+        if self._looks_like_exact_authority_match_for_response(query=authority_query, document=document):
+            return []
+        
+        if self._looks_like_relaxed_authority_match_for_response(query=authority_query, document=document):
+            return []
+        
+        return ["no_exact_or_relaxed_authority_match"]
+
+    def _document_matches_trusted_google_domain(self, *, document: dict[str, Any]) -> bool:
+        explicit_flag = document.get("trusted_domain_match")
+        
+        if isinstance(explicit_flag, bool):
+            return explicit_flag
+        domain = self._google_document_domain(document=document)
+        
+        if not domain:
+            return False
+        trusted_domains = self.settings.google_search_trusted_domains
+        return any(domain == trusted or domain.endswith(f".{trusted}") for trusted in trusted_domains)
+
+    @staticmethod
+    def _google_document_domain(*, document: dict[str, Any]) -> str:
+        source_domain = str(document.get("source_domain") or "").strip().lower()
+        
+        if source_domain:
+            return source_domain
+        docsource = str(document.get("docsource") or "").strip().lower()
+        
+        if docsource.startswith("google:"):
+            candidate = docsource.split(":", 1)[1].strip()
+        
+            if candidate:
+                return candidate
+        
+        url = str(document.get("url") or "").strip()
+        host = urlparse(url).netloc.lower().strip()
+        
+        if host.startswith("www."):
+            host = host[4:]
+        return host
+
+    def _looks_like_relaxed_authority_match_for_response(self, *, query: str, document: dict[str, Any]) -> bool:
+        normalized_query = str(query or "").lower()
+        text = " ".join(
+        
+            [
+                str(document.get("title") or ""),
+                str(document.get("headline") or ""),
+                str(document.get("fragment_headline") or ""),
+                str(document.get("fragment_excerpt") or ""),
+                str(document.get("doc_excerpt") or ""),
+            ]
+        ).lower()
+        
+        article_match = re.search(r"\barticle\s+([0-9]+[a-z]?)\b", normalized_query, re.IGNORECASE)
+        
+        if article_match and "constitution" in normalized_query:
+            article_value = article_match.group(1).lower()
+            return "constitution" in text and f"article {article_value}" in text
+        
+        section_match = re.search(r"\bsection\s+([0-9]+[a-z]?)\b", normalized_query, re.IGNORECASE)
+        
+        if not section_match:
+            return False
+        
+        section_value = section_match.group(1).lower()
+        
+        if "bns" in normalized_query or "bharatiya nyaya sanhita" in normalized_query:
+            return "bharatiya nyaya sanhita" in text and f"section {section_value}" in text
+        
+        if "bnss" in normalized_query or "bharatiya nagarik suraksha sanhita" in normalized_query:
+            return "bharatiya nagarik suraksha sanhita" in text and f"section {section_value}" in text
+        
+        if "ipc" in normalized_query or "indian penal code" in normalized_query:
+            return "indian penal code" in text and f"section {section_value}" in text
+        
+        return f"section {section_value}" in text
+
+    def _should_prefer_curated_google_authority_route(
+        self,
+        *,
+        normalized_query: str,
+        understanding_profile: dict[str, Any] | None,
+    ) -> bool:
+        
+        if not self.google_search.configured:
+            return False
+        profile = understanding_profile or {}
+        
+        if isinstance(profile.get("authority_lookup_variant"), dict):
+            return True
+        compact = re.sub(r"\s+", " ", str(normalized_query or "").strip().lower())
+        
+        if not compact:
+            return False
+        return self._looks_like_complete_authority_reference_prompt(compact)
 
     @staticmethod
     def _preferred_direct_citations(*, google_documents: list[dict[str, Any]], fallback_citations: list[str]) -> list[str]:
+        
         google_citations = [
             str(doc.get("title") or doc.get("source_domain") or "").strip()
             for doc in google_documents
             if str(doc.get("title") or doc.get("source_domain") or "").strip()
         ]
+        
         if google_citations:
             return [citation for citation in dict.fromkeys(google_citations) if citation][:3]
         return [citation for citation in dict.fromkeys(fallback_citations) if citation]
+
+    def _should_try_curated_google_before_clarification(
+        self,
+        *,
+        normalized_query: str,
+        domain: str,
+        clarification_hint: dict[str, str] | Any,
+    ) -> bool:
+        
+        if not isinstance(clarification_hint, dict):
+            return False
+        
+        if not self.google_search.configured:
+            return False
+        compact = re.sub(r"\s+", " ", str(normalized_query or "").strip().lower())
+        
+        if not compact:
+            return False
+        kind = str(clarification_hint.get("kind") or "").strip().lower()
+        
+        if kind == "authority_article":
+            return bool(re.search(r"\b(?:article|art)\s+\d+[a-z]?\b", compact))
+        
+        if kind == "authority_section":
+            has_section_identifier = bool(re.search(r"\bsection\s+\d+[a-z]?\b", compact))
+            has_statute_hint = any(
+                token in compact
+                for token in {" act", " ipc", " bns", " bnss", " ni act", " constitution", " code"}
+            )
+            return has_section_identifier and has_statute_hint
+        
+        if kind == "constitutional_topic":
+            return False
+        return False
 
     @staticmethod
     def _understand_legal_query(message: str) -> dict[str, Any]:
@@ -1442,19 +2557,28 @@ class ChatService:
         normalized_query, corrected_terms = ChatService._normalize_legal_query_text(raw_query)
         detail_instructions = ChatService._extract_query_detail_instructions(normalized_query)
         mixed_components = ChatService._decompose_direct_answer_components(normalized_query)
+        authority_lookup_variant = ChatService._detect_curated_google_authority_target(
+            raw_query=raw_query,
+            normalized_query=normalized_query,
+            corrected_terms=corrected_terms,
+        )
+        
         answer_intent = ChatService._classify_direct_answer_intent(
             normalized_query=normalized_query,
             mixed_components=mixed_components,
         )
+        
         direct_answer_format = ChatService._build_direct_answer_format_profile(
             answer_intent=answer_intent,
             detail_instructions=detail_instructions,
             mixed_components=mixed_components,
         )
+        
         clarification_hint = ChatService._detect_direct_answer_clarification_hint(
             normalized_query=normalized_query,
             answer_intent=answer_intent,
         )
+        
         return {
             "raw_query": raw_query,
             "normalized_query": normalized_query,
@@ -1463,6 +2587,7 @@ class ChatService:
             "answer_intent": answer_intent,
             "mixed_components": mixed_components,
             "all_components_direct": bool(mixed_components),
+            "authority_lookup_variant": authority_lookup_variant,
             "direct_answer_format": direct_answer_format,
             "clarification_hint": clarification_hint,
         }
@@ -1474,24 +2599,35 @@ class ChatService:
         mixed_components: list[dict[str, str]] | None = None,
     ) -> str:
         components = mixed_components or []
+        
         if components:
             return "mixed_direct"
+        
         if ChatService._fast_authority_lookup_key(normalized_query):
             return "authority_explainer"
+        
+        if ChatService._looks_like_complete_authority_reference_prompt(normalized_query):
+            return "authority_explainer"
+        
         if ChatService._constitutional_explainer_key(normalized_query):
             return "explainer"
+        
+        if ChatService._general_legal_explainer_key(normalized_query):
+            return "general_explainer"
+        
         return "other"
 
     @staticmethod
     def _decompose_direct_answer_components(normalized_query: str) -> list[dict[str, str]]:
         components: list[dict[str, str]] = []
         seen: set[tuple[str, str]] = set()
+        
         if not normalized_query:
             return components
 
-        for article_number in re.findall(r"\b(?:article|art)\s+(14|19|21|22|32|226)\b", normalized_query):
-            key = f"constitution_article_{article_number}"
+        for key in ChatService._extract_grouped_authority_keys(normalized_query):
             marker = ("authority", key)
+        
             if marker not in seen:
                 seen.add(marker)
                 components.append({"kind": "authority", "key": key})
@@ -1501,11 +2637,14 @@ class ChatService:
             "directive_principles": {"directive principles", "directive principles of state policy", "dpsp"},
             "fundamental_rights": {"fundamental rights", "basic rights in constitution", "rights under constitution"},
         }.items():
+        
             if any(phrase in normalized_query for phrase in phrases):
                 marker = ("explainer", explainer_key)
+        
                 if marker not in seen:
                     seen.add(marker)
                     components.append({"kind": "explainer", "key": explainer_key})
+        
         return components if len(components) >= 2 else []
 
     @staticmethod
@@ -1515,6 +2654,7 @@ class ChatService:
         detail_instructions: dict[str, bool] | None = None,
         mixed_components: list[dict[str, str]] | None = None,
     ) -> dict[str, Any]:
+        
         preferences = {
             "include_articles": False,
             "concise": False,
@@ -1523,30 +2663,41 @@ class ChatService:
             "practical_context": False,
             **(detail_instructions or {}),
         }
+        
         explainer_layout = "conversational"
+        
         if preferences["include_articles"]:
             explainer_layout = "article_breakdown"
+        
         elif preferences["in_points"]:
             explainer_layout = "points"
+        
         elif preferences["step_by_step"]:
             explainer_layout = "step_by_step"
+        
         elif preferences["concise"]:
             explainer_layout = "concise"
         authority_layout = "definition"
+        
         if preferences["in_points"]:
             authority_layout = "points"
+        
         elif preferences["step_by_step"]:
             authority_layout = "step_by_step"
 
         component_kinds = [str(component.get("kind") or "").strip().lower() for component in (mixed_components or [])]
+        
         if answer_intent == "authority_explainer":
+        
             return {
                 "family": "authority",
                 "layout": authority_layout,
                 "detail_instructions": preferences,
                 "component_kinds": [],
             }
+        
         if answer_intent == "mixed_direct":
+        
             return {
                 "family": "mixed",
                 "layout": "mixed_direct",
@@ -1555,13 +2706,35 @@ class ChatService:
                 "authority_layout": authority_layout,
                 "explainer_layout": explainer_layout,
             }
+        
         if answer_intent == "explainer":
+        
             return {
                 "family": "explainer",
                 "layout": explainer_layout,
                 "detail_instructions": preferences,
                 "component_kinds": [],
             }
+        
+        if answer_intent == "general_explainer":
+            general_layout = "conversational"
+        
+            if preferences["in_points"]:
+                general_layout = "points"
+        
+            elif preferences["step_by_step"]:
+                general_layout = "step_by_step"
+        
+            elif preferences["concise"]:
+                general_layout = "concise"
+        
+            return {
+                "family": "general_explainer",
+                "layout": general_layout,
+                "detail_instructions": preferences,
+                "component_kinds": [],
+            }
+        
         return {
             "family": "other",
             "layout": "none",
@@ -1571,13 +2744,16 @@ class ChatService:
 
     @staticmethod
     def _detect_direct_answer_clarification_hint(
+        
         *,
         normalized_query: str,
         answer_intent: str,
     ) -> dict[str, str] | None:
+        
         if answer_intent != "other":
             return None
         compact = re.sub(r"\s+", " ", str(normalized_query or "").strip().lower())
+        
         if not compact:
             return None
 
@@ -1597,17 +2773,25 @@ class ChatService:
             "interpretation",
             "ruling",
         }
+        
         if any(marker in compact for marker in heavy_authority_markers):
             return None
 
-        if "article" in compact or re.search(r"\bart\b", compact):
+        if ChatService._resolve_direct_constitutional_authority_alias(compact):
+            return None
+        
+        if ChatService._looks_like_complete_authority_reference_prompt(compact):
+            return None
+
+        if ChatService._looks_like_ambiguous_article_prompt(compact):
+        
             return {
                 "kind": "authority_article",
                 "question": "Which Constitution article do you want explained?",
                 "answer": "I can help with that, but I need one small clarification first.\nWhich Constitution article do you want explained?",
             }
 
-        if "section" in compact:
+        if ChatService._looks_like_ambiguous_section_prompt(compact):
             return {
                 "kind": "authority_section",
                 "question": "Which exact section and statute do you want explained?",
@@ -1624,23 +2808,29 @@ class ChatService:
             "directive principles",
             "constitutional principles",
         }
+        
         if any(marker in compact for marker in constitutional_topic_markers) or (
             "constitution" in compact and any(token in compact for token in {"rights", "duties", "principles"})
         ):
+        
             return {
                 "kind": "constitutional_topic",
                 "question": "Do you want Fundamental Rights, Fundamental Duties, or DPSP?",
                 "answer": "I can help with that. I just need one quick clarification first.\nDo you want Fundamental Rights, Fundamental Duties, or DPSP?",
             }
+
         return None
 
     @staticmethod
+
     def _normalize_legal_query_text(message: str) -> tuple[str, list[str]]:
         normalized = re.sub(r"[+/]", " and ", str(message or ""))
         normalized = re.sub(r"[^a-zA-Z0-9() \-]+", " ", normalized)
         normalized = re.sub(r"\s+", " ", normalized).strip().lower()
+
         if not normalized:
             return "", []
+
         corrections = {
             "fundamantal": "fundamental",
             "fundemental": "fundamental",
@@ -1659,42 +2849,144 @@ class ChatService:
             "principels": "principles",
             "priciples": "principles",
             "art ": "article "}
+
         corrected_terms: list[str] = []
+        normalized, alias_corrections = ChatService._normalize_authority_alias_phrases(normalized)
+        corrected_terms.extend(alias_corrections)
         for wrong, right in corrections.items():
+
             if wrong in normalized:
                 normalized = normalized.replace(wrong, right)
                 corrected_terms.append(f"{wrong}->{right}")
+
         normalized, authority_corrections = ChatService._normalize_authority_lookup_tokens(normalized)
         corrected_terms.extend(authority_corrections)
         normalized, direct_answer_corrections = ChatService._normalize_direct_answer_legal_terms(normalized)
         corrected_terms.extend(direct_answer_corrections)
+        normalized, order_corrections = ChatService._normalize_authority_word_order(normalized)
+        corrected_terms.extend(order_corrections)
         normalized = re.sub(r"\s+", " ", normalized).strip()
         return normalized, corrected_terms
 
     @staticmethod
+
+    def _normalize_authority_alias_phrases(message: str) -> tuple[str, list[str]]:
+        normalized = re.sub(r"\s+", " ", str(message or "").strip().lower())
+
+        if not normalized:
+            return "", []
+
+        replacements = [
+            (r"\bbandharan\b", "constitution", "bandharan->constitution"),
+            (r"\bbandhran\b", "constitution", "bandhran->constitution"),
+            (r"\bsamvidhan\b", "constitution", "samvidhan->constitution"),
+            (r"\bkalam\b", "article", "kalam->article"),
+            (r"\bartical\b", "article", "artical->article"),
+            (r"\barticale\b", "article", "articale->article"),
+            (r"\barticl\b", "article", "articl->article"),
+            (r"\barticel\b", "article", "articel->article"),
+            (r"\batricle\b", "article", "atricle->article"),
+            (r"\bartikal\b", "article", "artikal->article"),
+            (r"\bdhara\b", "section", "dhara->section"),
+            (r"\bsekshan\b", "section", "sekshan->section"),
+            (r"\bsektion\b", "section", "sektion->section"),
+            (r"\bsectin\b", "section", "sectin->section"),
+            (r"\bsectoin\b", "section", "sectoin->section"),
+            (r"\bsecn\b", "section", "secn->section"),
+            (r"\bsec\b", "section", "sec->section"),
+            (r"\bipcc\b", "ipc", "ipcc->ipc"),
+            (r"\bbharatiya nyaya sanhita\b", "bns", "bharatiya nyaya sanhita->bns"),
+            (r"\bbharatiya nyaaya sanhita\b", "bns", "bharatiya nyaaya sanhita->bns"),
+            (r"\bbharatiya nagarik suraksha sanhita\b", "bnss", "bharatiya nagarik suraksha sanhita->bnss"),
+            (r"\bbharatiya nagrik suraksha sanhita\b", "bnss", "bharatiya nagrik suraksha sanhita->bnss"),
+        ]
+
+        corrected_terms: list[str] = []
+
+        for pattern, replacement, label in replacements:
+            updated = re.sub(pattern, replacement, normalized)
+
+            if updated != normalized:
+                normalized = updated
+                corrected_terms.append(label)
+        normalized = re.sub(r"\s+", " ", normalized).strip()
+
+        return normalized, corrected_terms
+
+    @staticmethod
+    def _normalize_authority_word_order(message: str) -> tuple[str, list[str]]:
+        normalized = re.sub(r"\s+", " ", str(message or "").strip().lower())
+        if not normalized:
+            return "", []
+
+        corrected_terms: list[str] = []
+        patterns = [
+            (
+                r"\b([0-9]+[a-z]?)\s+(ipc|indian penal code|bns|bnss|ni act|negotiable instruments act)\s+section\b",
+                r"section \1 \2",
+            ),
+            (
+                r"\b([0-9]+[a-z]?)\s+(constitution)\s+article\b",
+                r"article \1 \2",
+            ),
+        ]
+
+        for pattern, replacement in patterns:
+            updated = re.sub(pattern, replacement, normalized)
+            if updated != normalized:
+                corrected_terms.append(f"{normalized}->{updated}")
+                normalized = updated
+        return normalized, corrected_terms
+
+    @staticmethod
+
     def _normalize_authority_lookup_tokens(message: str) -> tuple[str, list[str]]:
         tokens = str(message or "").split()
+
         if not tokens:
             return "", []
-        controlled_vocabulary = ("article", "section", "constitution", "ipc", "code")
+
+        controlled_vocabulary = (
+            "article",
+            "art",
+            "section",
+            "constitution",
+            "bns",
+            "bnss",
+            "ipc",
+            "code",
+            "notice",
+            "legal",
+            "bail",
+            "fir",
+            "arbitration",
+        )
+
         corrected_terms: list[str] = []
         normalized_tokens: list[str] = []
+
         for token in tokens:
+
             if len(token) < 4 or token.isdigit() or token in controlled_vocabulary:
                 normalized_tokens.append(token)
                 continue
+
             matches = difflib.get_close_matches(token, controlled_vocabulary, n=1, cutoff=0.6)
             replacement = matches[0] if matches else token
+
             if replacement != token:
                 corrected_terms.append(f"{token}->{replacement}")
             normalized_tokens.append(replacement)
+
         return " ".join(normalized_tokens), corrected_terms
 
     @staticmethod
     def _normalize_direct_answer_legal_terms(message: str) -> tuple[str, list[str]]:
         tokens = str(message or "").split()
+
         if not tokens:
             return "", []
+
         controlled_vocabulary = (
             "article",
             "section",
@@ -1713,23 +3005,159 @@ class ChatService:
             "ipc",
             "code",
         )
+
         corrected_terms: list[str] = []
         normalized_tokens: list[str] = []
+
         for token in tokens:
+
             if len(token) < 4 or not token.isalpha() or token in controlled_vocabulary:
                 normalized_tokens.append(token)
                 continue
+
             matches = difflib.get_close_matches(token, controlled_vocabulary, n=1, cutoff=0.78)
             replacement = matches[0] if matches else token
+
             if replacement != token:
                 corrected_terms.append(f"{token}->{replacement}")
             normalized_tokens.append(replacement)
+
         return " ".join(normalized_tokens), corrected_terms
+
+    @staticmethod
+    def _detect_curated_google_authority_target(
+        *,
+        raw_query: str,
+        normalized_query: str,
+        corrected_terms: list[str],
+    ) -> dict[str, str] | None:
+        raw_lower = re.sub(r"\s+", " ", str(raw_query or "").strip().lower())
+        normalized = re.sub(r"\s+", " ", str(normalized_query or "").strip().lower())
+
+        if not normalized:
+            return None
+
+        variant_signal = any(
+            marker in raw_lower
+
+            for marker in {
+                "bandharan",
+                "bandhran",
+                "samvidhan",
+                "kalam",
+                "dhara",
+                "artical",
+                "articale",
+                "articl",
+                "articel",
+                "atricle",
+                "sekshan",
+                "sektion",
+                " sec ",
+            }
+        ) or bool(re.search(r"\b(?:bns|bnss)\b", raw_lower)) or any(
+            "->" in correction
+
+            and any(token in correction for token in {"article", "section", "constitution", "bns", "bnss"})
+            for correction in (corrected_terms or [])
+        )
+
+        article_match = re.search(
+            r"\b(?:constitution\s+)?(?:article|art)\s+([0-9]+[a-z]?)\b|\b([0-9]+[a-z]?)\s+(?:article|art)\s+(?:constitution)\b",
+            normalized,
+        )
+
+        if article_match and ("constitution" in normalized or variant_signal):
+            article_value = article_match.group(1) or article_match.group(2)
+            article_value = str(article_value or "").upper()
+
+            if article_value:
+                return {
+                    "kind": "constitutional_article_authority",
+                    "google_query": f"Article {article_value} Constitution of India explanation",
+                    "domain": "constitutional",
+                }
+
+        if article_match and ChatService._looks_like_complete_authority_reference_prompt(normalized):
+            article_value = article_match.group(1) or article_match.group(2)
+            article_value = str(article_value or "").upper()
+
+            if article_value:
+                return {
+                    "kind": "constitutional_article_authority",
+                    "google_query": f"Article {article_value} Constitution of India explanation",
+                    "domain": "constitutional",
+                }
+
+        section_patterns = [
+            re.search(r"\bbnss\s+section\s+([0-9]+[a-z]?)\b", normalized),
+            re.search(r"\bsection\s+([0-9]+[a-z]?)\s+bnss\b", normalized),
+            re.search(r"\bbns\s+section\s+([0-9]+[a-z]?)\b", normalized),
+            re.search(r"\bsection\s+([0-9]+[a-z]?)\s+bns\b", normalized),
+        ]
+
+        bnss_match = section_patterns[0] or section_patterns[1]
+
+        if bnss_match:
+            section_value = str(bnss_match.group(1) or "").upper()
+
+            return {
+                "kind": "bnss_section_variant",
+                "google_query": f"Section {section_value} Bharatiya Nagarik Suraksha Sanhita explanation",
+                "domain": "criminal",
+            }
+
+        bns_match = section_patterns[2] or section_patterns[3]
+
+        if bns_match:
+            section_value = str(bns_match.group(1) or "").upper()
+
+            return {
+                "kind": "bns_section_variant",
+                "google_query": f"Section {section_value} Bharatiya Nyaya Sanhita explanation",
+                "domain": "criminal",
+            }
+
+        section_match = re.search(r"\bsection\s+([0-9]+[a-z]?)\b", normalized)
+
+        if section_match and ChatService._looks_like_complete_authority_reference_prompt(normalized):
+            section_value = str(section_match.group(1) or "").upper()
+
+            if "ipc" in normalized or "indian penal code" in normalized:
+
+                return {
+                    "kind": "ipc_section_authority",
+                    "google_query": f"Section {section_value} Indian Penal Code explanation",
+                    "domain": "criminal",
+                }
+
+            if "ni act" in normalized or "negotiable instruments act" in normalized:
+
+                return {
+                    "kind": "ni_act_section_authority",
+                    "google_query": f"Section {section_value} Negotiable Instruments Act explanation",
+                    "domain": "civil",
+                }
+
+            act_match = re.search(r"\bsection\s+[0-9]+[a-z]?\s+((?:[a-z]+\s+){0,5}act)\b", normalized)
+
+            if act_match:
+                act_name = " ".join(word.capitalize() for word in act_match.group(1).split())
+
+                return {
+                    "kind": "generic_act_section_authority",
+                    "google_query": f"Section {section_value} {act_name} explanation",
+                    "domain": "civil",
+                }
+
+        return None
 
     @staticmethod
     def _extract_query_detail_instructions(message: str) -> dict[str, bool]:
         lowered = re.sub(r"\s+", " ", str(message or "").strip().lower())
+
         if not lowered:
+
             return {
                 "include_articles": False,
                 "concise": False,
@@ -1737,6 +3165,7 @@ class ChatService:
                 "in_points": False,
                 "practical_context": False,
             }
+
         return {
             "include_articles": any(
                 phrase in lowered
@@ -1749,8 +3178,10 @@ class ChatService:
                     "article-wise",
                     "which articles",
                     "what articles",
+
                 }
             ),
+
             "concise": any(
                 phrase in lowered
                 for phrase in {
@@ -1763,6 +3194,7 @@ class ChatService:
                     "simple summary",
                 }
             ),
+
             "step_by_step": any(
                 phrase in lowered
                 for phrase in {
@@ -1770,6 +3202,7 @@ class ChatService:
                     "step-by-step",
                 }
             ),
+
             "in_points": any(
                 phrase in lowered
                 for phrase in {
@@ -1780,6 +3213,7 @@ class ChatService:
                     "as points",
                 }
             ),
+
             "practical_context": any(
                 phrase in lowered
                 for phrase in {
@@ -1807,9 +3241,12 @@ class ChatService:
         format_profile: dict[str, Any] | None = None,
     ) -> str:
         layout = str((format_profile or {}).get("authority_layout") or (format_profile or {}).get("layout") or "definition").strip().lower()
+
         if layout == "points":
+
             return "\n\n".join(
                 part
+
                 for part in [
                     title.strip(),
                     ChatService._format_bulleted_lines(
@@ -1819,31 +3256,42 @@ class ChatService:
                         )
                     ),
                 ]
+
                 if part
             )
+
         if layout == "step_by_step":
             return "\n\n".join(
+
                 part
+
                 for part in [
                     title.strip(),
+
                     ChatService._format_numbered_lines(
                         [
                             line
+
                             for line in [
                                 summary.strip(),
                                 ChatService._format_human_legal_position(legal_position),
                             ]
+
                             if line
                         ]
                     ),
                 ]
+
                 if part
             )
+
         lead = (
             ChatService._format_sentence_style_authority_lead(title=title, summary=summary)
+
             if layout == "definition"
             else " ".join(part for part in [title.strip(), summary.strip()] if part)
         )
+
         parts = [lead, ChatService._format_human_legal_position(legal_position)]
         return "\n\n".join(part for part in parts if part)
 
@@ -1870,18 +3318,20 @@ class ChatService:
         practical_context: bool,
     ) -> list[str]:
         point_lines: list[str] = []
-        clean_title = title.strip()
         clean_summary = ChatService._polish_direct_answer_text(summary)
         clean_legal_position = ChatService._polish_direct_answer_text(legal_position)
         clean_next_steps = next_steps.strip()
-        if clean_title and clean_summary:
-            point_lines.append(f"{clean_title}: {clean_summary}")
-        elif clean_summary:
-            point_lines.append(clean_summary)
+
+        if clean_summary:
+            point_lines.append(f"Overview: {clean_summary}")
+
         if article_breakdown:
+            point_lines.append("Article-wise breakdown:")
             point_lines.extend(article_breakdown)
+
         if clean_legal_position:
             point_lines.append(f"Legal position: {clean_legal_position}")
+
         if practical_context and clean_next_steps:
             point_lines.append(f"Practical use: {clean_next_steps}")
         return point_lines
@@ -1891,10 +3341,36 @@ class ChatService:
         point_lines: list[str] = []
         clean_summary = ChatService._polish_direct_answer_text(summary)
         clean_legal_position = ChatService._polish_direct_answer_text(legal_position)
+
         if clean_summary:
-            point_lines.append(f"Provision: {clean_summary}")
+            point_lines.append(f"Overview: {clean_summary}")
+
         if clean_legal_position:
             point_lines.append(f"Legal position: {clean_legal_position}")
+
+        return point_lines
+
+    @staticmethod
+    def _build_structured_general_explainer_point_lines(
+        *,
+        summary: str,
+        legal_position: str,
+        next_steps: str,
+        practical_context: bool,
+    ) -> list[str]:
+        point_lines: list[str] = []
+        clean_summary = ChatService._polish_direct_answer_text(summary)
+        clean_legal_position = ChatService._polish_direct_answer_text(legal_position)
+        clean_next_steps = next_steps.strip()
+
+        if clean_summary:
+            point_lines.append(f"Overview: {clean_summary}")
+
+        if clean_legal_position:
+            point_lines.append(f"Legal position: {clean_legal_position}")
+
+        if practical_context and clean_next_steps:
+            point_lines.append(f"Practical use: {clean_next_steps}")
         return point_lines
 
     def _route_fast_authority_lookup(
@@ -1908,21 +3384,33 @@ class ChatService:
         strategy: dict[str, str | bool],
         understanding_profile: dict[str, Any] | None = None,
     ) -> tuple[InternalChatResult, ConversationState] | None:
-        del domain, query_profile, strategy
+
+        del domain, strategy
         understanding_profile = understanding_profile or self._understand_legal_query(message)
         normalized_query = str(understanding_profile.get("normalized_query") or message)
+        local_match = self.legal_dataset.lookup_query(normalized_query)
         authority_key = self._fast_authority_lookup_key(normalized_query)
-        if not authority_key:
+        flow_type = str(query_profile.get("flow_type") or "")
+        use_local_dataset = self._should_use_local_legal_dataset_fast_path(
+            normalized_query=normalized_query,
+            authority_key=authority_key,
+            local_match=local_match,
+        )
+
+        if local_match is None and (not authority_key or flow_type == "provision_lookup"):
             return None
-        curated_google_documents = self._lookup_curated_google_direct_documents(normalized_query)
+
         cache_key = self._build_direct_answer_cache_key(
-            kind="authority_fast_path",
+            kind="local_legal_dataset_fast_path" if use_local_dataset else "authority_fast_path",
             normalized_query=normalized_query,
         )
+
         cached_internal = self._get_direct_answer_cache_entry(cache_key)
+
         if cached_internal is not None:
             internal = self._with_direct_cache_metadata(cached_internal, cache_hit=True, warnings=warnings)
             next_state = conversation_state.model_copy(
+
                 update={
                     "conversation_started": True,
                     "active_intent": "authority_fast_path",
@@ -1934,19 +3422,75 @@ class ChatService:
                 }
             )
             return internal, next_state
+
+        if use_local_dataset and local_match is not None:
+            response_mode = str(query_profile.get("response_mode") or "authority")
+            internal = InternalChatResult(
+                answer=self._format_local_legal_dataset_answer(local_match),
+                domain=local_match.domain,
+                follow_up_question=None,
+                citations=[local_match.source],
+                authorities=[local_match.answer_title],
+                documents_to_keep=[],
+                likely_forum=None,
+                caution=None,
+                warnings=warnings,
+
+                raw_json={
+                    "source": "local_legal_dataset",
+                    "pipeline": "local_legal_dataset_fast_path",
+                    "authority_key": None,
+                    "local_dataset_match": {
+                        "dataset": local_match.dataset,
+                        "provision_number": local_match.provision_number,
+                        "title": local_match.title,
+                        "source": local_match.source,
+                    },
+
+                    "query_profile": {
+                        **query_profile,
+                        "response_mode": response_mode,
+                    },
+
+                    "response_mode": response_mode,
+                    "direct_answer_format": {"family": "authority", "layout": "structured"},
+                    "disclaimer_mode": "none",
+                },
+            )
+
+            internal = self._with_direct_cache_metadata(internal, cache_hit=False, warnings=warnings)
+            self._set_direct_answer_cache_entry(cache_key, internal)
+            next_state = conversation_state.model_copy(
+
+                update={
+                    "conversation_started": True,
+                    "active_intent": "local_legal_dataset_fast_path",
+                    "awaiting_details": False,
+                    "last_user_issue": message,
+                    "last_grounded_query": message,
+                    "legal_domain": internal.domain,
+                    "last_follow_up_question": None,
+                }
+            )
+
+            return internal, next_state
+        curated_google_documents = self._lookup_curated_google_direct_documents(normalized_query)
         payload = FAST_AUTHORITY_LOOKUPS.get(authority_key)
+
         if not payload:
             return None
         authority = str(payload.get("authority") or payload.get("title") or "").strip()
         fast_format_profile = self._resolve_fast_authority_format_profile(
             dict(understanding_profile.get("direct_answer_format") or {})
         )
+
         answer = self._format_fast_authority_answer(
             title=str(payload.get("title") or ""),
             summary=str(payload.get("summary") or ""),
             legal_position=str(payload.get("legal_position") or ""),
             format_profile=fast_format_profile,
         )
+
         internal = InternalChatResult(
             answer=answer,
             domain=str(payload.get("domain") or conversation_state.legal_domain or "civil"),
@@ -1955,11 +3499,13 @@ class ChatService:
                 google_documents=curated_google_documents,
                 fallback_citations=[str(payload.get("source") or payload.get("title") or "").strip()],
             ),
+
             authorities=[authority] if authority else [],
             documents_to_keep=[],
             likely_forum=None,
             caution=None,
             warnings=warnings,
+
             raw_json={
                 "source": "authority_fast_path",
                 "pipeline": "authority_fast_path",
@@ -1970,9 +3516,11 @@ class ChatService:
                 "disclaimer_mode": str(payload.get("disclaimer_mode") or "medium_risk"),
             },
         )
+
         internal = self._with_direct_cache_metadata(internal, cache_hit=False, warnings=warnings)
         self._set_direct_answer_cache_entry(cache_key, internal)
         next_state = conversation_state.model_copy(
+
             update={
                 "conversation_started": True,
                 "active_intent": "authority_fast_path",
@@ -1983,6 +3531,7 @@ class ChatService:
                 "last_follow_up_question": None,
             }
         )
+
         return internal, next_state
 
     @staticmethod
@@ -1994,9 +3543,11 @@ class ChatService:
         format_profile: dict[str, Any] | None = None,
     ) -> str:
         layout = str((format_profile or {}).get("authority_layout") or (format_profile or {}).get("layout") or "definition").strip().lower()
+
         if layout == "points":
             return "\n\n".join(
                 part
+
                 for part in [
                     title.strip(),
                     ChatService._format_bulleted_lines(
@@ -2006,35 +3557,742 @@ class ChatService:
                         )
                     ),
                 ]
+
                 if part
             )
+
         if layout == "step_by_step":
             return "\n\n".join(
                 part
+
                 for part in [
                     title.strip(),
                     ChatService._format_numbered_lines(
                         [
                             line
+
                             for line in [
                                 summary.strip(),
                                 ChatService._format_human_legal_position(legal_position),
                             ]
+
                             if line
                         ]
                     ),
                 ]
+
                 if part
             )
+
         if layout == "concise":
             return ChatService._format_sentence_style_authority_lead(title=title, summary=summary)
+
         lead = (
             ChatService._format_sentence_style_authority_lead(title=title, summary=summary)
+
             if layout == "definition"
+
             else " ".join(part for part in [title.strip(), summary.strip()] if part)
         )
+
         parts = [lead, ChatService._format_human_legal_position(legal_position)]
+
         return "\n\n".join(part for part in parts if part)
+
+    @staticmethod
+
+    def _format_local_legal_dataset_answer(match: LegalProvisionMatch) -> str:
+        return ChatService._format_authority_structured_answer(
+            matched_query=match.provision_number,
+            title=match.title,
+            text=match.text,
+            explanation=match.explanation,
+            source=match.source,
+        )
+
+    @staticmethod
+
+    def _response_mode_for_flow(flow_type: str) -> str:
+        normalized = str(flow_type or "").strip().lower()
+
+        if normalized == "provision_lookup":
+            return "authority"
+
+        if normalized == "scenario_practical_legal_issue":
+            return "scenario"
+
+        return "research"
+
+    @staticmethod
+    def _format_authority_structured_answer(
+        *,
+        matched_query: str,
+        title: str,
+        text: str,
+        explanation: str,
+        source: str,
+    ) -> str:
+        cleaned_match = ChatService._sanitize_section_value(matched_query, fallback="The requested provision")
+        cleaned_title = ChatService._sanitize_section_value(title, fallback="the relevant legal topic")
+        cleaned_text = ChatService._sanitize_section_value(text, fallback="The exact text was not fully available in the retrieved material.")
+        cleaned_explanation = ChatService._sanitize_section_value(
+            explanation,
+            fallback="This is the closest grounded explanation available for the provision you asked about.",
+        )
+        cleaned_source = ChatService._sanitize_sources(source)
+        act_name = ChatService._authority_act_name(source=cleaned_source, title=cleaned_title, matched_query=cleaned_match)
+        what_it_is = ChatService._build_authority_opening(
+            matched_query=cleaned_match,
+            act_name=act_name,
+            title=cleaned_title,
+        )
+        meaning = ChatService._polish_authority_explanation(
+            explanation=cleaned_explanation,
+            title=cleaned_title,
+        )
+        key_points = ChatService._derive_key_points(cleaned_title, meaning)
+        punishment = ChatService._derive_punishment_text(cleaned_text, meaning, cleaned_title)
+        practical_use = ChatService._authority_practical_use(
+            matched_query=cleaned_match,
+            act_name=act_name,
+            title=cleaned_title,
+        )
+        return ChatService._format_numbered_legal_answer(
+            what_it_is=what_it_is,
+            meaning=meaning,
+            key_points=key_points,
+            punishment=punishment,
+            practical_use=practical_use,
+            source=cleaned_source,
+            disclaimer=ChatService._default_brief_disclaimer(),
+        )
+
+    @staticmethod
+    def _build_authority_opening(*, matched_query: str, act_name: str, title: str) -> str:
+        cleaned_match = ChatService._sanitize_section_value(matched_query, fallback="This provision")
+        cleaned_act = ChatService._sanitize_section_value(act_name, fallback="the relevant law")
+        cleaned_title = ChatService._sanitize_section_value(title, fallback="the issue in question")
+        return f"{cleaned_match} of {cleaned_act} deals with {cleaned_title.lower()}."
+
+    @staticmethod
+    def _polish_authority_explanation(*, explanation: str, title: str) -> str:
+        cleaned = ChatService._sanitize_section_value(
+            explanation,
+            fallback="In plain terms, this provision should be read in light of its wording, conditions, and practical use.",
+        )
+        normalized_title = ChatService._sanitize_section_value(title, fallback="the issue in question").lower()
+        substitutions = [
+            (
+                r"^this\s+is\s+the\s+constitutional\s+provision\s+dealing\s+with\s+.+",
+                f"In plain terms, it sets out the constitutional position on {normalized_title}.",
+            ),
+            (
+                r"^this\s+is\s+the\s+ipc\s+provision\s+dealing\s+with\s+.+",
+                f"In plain terms, it addresses {normalized_title}.",
+            ),
+            (
+                r"^this\s+is\s+the\s+bns\s+provision\s+dealing\s+with\s+.+",
+                f"In plain terms, it covers {normalized_title}.",
+            ),
+            (
+                r"^this\s+is\s+the\s+bnss\s+provision\s+dealing\s+with\s+.+",
+                f"In plain terms, it sets out the procedural rule on {normalized_title}.",
+            ),
+            (
+                r"^this\s+is\s+the\s+statutory\s+provision\s+dealing\s+with\s+.+",
+                f"In plain terms, it explains the legal rule on {normalized_title}.",
+            ),
+            (
+                r"^(?:article|section|rule)\s+[0-9a-z()/-]+\s+is\s+the\s+constitutional\s+provision\s+dealing\s+with\s+.+",
+                f"In plain terms, it sets out the constitutional position on {normalized_title}.",
+            ),
+            (
+                r"^(?:article|section|rule)\s+[0-9a-z()/-]+\s+is\s+the\s+ipc\s+provision\s+dealing\s+with\s+.+",
+                f"In plain terms, it addresses {normalized_title}.",
+            ),
+            (
+                r"^(?:article|section|rule)\s+[0-9a-z()/-]+\s+is\s+the\s+bns\s+provision\s+dealing\s+with\s+.+",
+                f"In plain terms, it covers {normalized_title}.",
+            ),
+            (
+                r"^(?:article|section|rule)\s+[0-9a-z()/-]+\s+is\s+the\s+bnss\s+provision\s+dealing\s+with\s+.+",
+                f"In plain terms, it sets out the procedural rule on {normalized_title}.",
+            ),
+            (
+                r"^(?:article|section|rule)\s+[0-9a-z()/-]+\s+is\s+the\s+statutory\s+provision\s+dealing\s+with\s+.+",
+                f"In plain terms, it explains the legal rule on {normalized_title}.",
+            ),
+        ]
+        lowered = cleaned.lower()
+        for pattern, replacement in substitutions:
+            if re.match(pattern, lowered, flags=re.IGNORECASE):
+                remainder = ""
+                sentence_parts = re.split(r"(?<=[.!?])\s+", cleaned, maxsplit=1)
+                if len(sentence_parts) > 1:
+                    remainder = sentence_parts[1].strip()
+                cleaned = replacement if not remainder else f"{replacement} {remainder}"
+                break
+        if cleaned and cleaned[0].islower():
+            cleaned = cleaned[0].upper() + cleaned[1:]
+        return cleaned
+
+    @staticmethod
+    def _derive_key_points(*values: str, limit: int = 3) -> list[str]:
+        points: list[str] = []
+        seen: set[str] = set()
+        for value in values:
+            cleaned = ChatService._sanitize_text_block(value)
+            if not cleaned:
+                continue
+            for sentence in re.split(r"(?<=[.!?])\s+", cleaned):
+                point = ChatService._sanitize_section_value(sentence, fallback="").strip(" .")
+                point = re.sub(r"^(?:the relevant text says|in plain terms|practically)\s*:\s*", "", point, flags=re.IGNORECASE)
+                if re.search(r"\b(?:punish(?:ed|ment)?|imprisonment|fine|penalty|liable|sentence)\b", point, flags=re.IGNORECASE):
+                    continue
+                if len(point) < 18:
+                    continue
+                point = re.sub(r"^it\s+", "", point, flags=re.IGNORECASE)
+                point = re.sub(r"\s+", " ", point).strip(" .")
+                if len(point) > 140:
+                    point = point[:140].rsplit(" ", 1)[0].strip(" .")
+                lowered = point.lower()
+                if lowered in seen:
+                    continue
+                seen.add(lowered)
+                points.append(point)
+                if len(points) >= limit:
+                    return points
+        return points or ["Read the exact provision with the facts and stage of the matter before relying on it."]
+
+    @staticmethod
+    def _derive_punishment_text(*values: str) -> str:
+        punishment_markers = r"\b(?:punish(?:ed|ment)?|imprisonment|fine|penalty|liable|sentence)\b"
+        for value in values:
+            cleaned = ChatService._sanitize_text_block(value)
+            if not cleaned:
+                continue
+            for sentence in re.split(r"(?<=[.!?])\s+", cleaned):
+                if not re.search(punishment_markers, sentence, flags=re.IGNORECASE):
+                    continue
+                snippet_match = re.search(
+                    r"(shall be punished[^.]*|punishment[^.]*|imprisonment[^.]*|fine[^.]*|liable to fine[^.]*)",
+                    sentence,
+                    flags=re.IGNORECASE,
+                )
+                snippet = snippet_match.group(1) if snippet_match else sentence
+                point = ChatService._sanitize_section_value(snippet, fallback="").strip(" .")
+                point = re.sub(r"^(?:the relevant text says)\s*:\s*", "", point, flags=re.IGNORECASE)
+                if point:
+                    return point
+        return "No specific punishment is stated in the material I relied on."
+
+    @staticmethod
+    def _authority_practical_use(*, matched_query: str, act_name: str, title: str) -> str:
+        combined = f"{matched_query} {act_name} {title}".lower()
+        if "constitution" in combined:
+            domain = "constitutional"
+        elif "nagarik suraksha sanhita" in combined or "bnss" in combined:
+            domain = "procedure"
+        elif any(token in combined for token in {"penal code", "nyaya sanhita", "ni act", "negotiable instruments"}):
+            domain = "criminal"
+        else:
+            domain = "general"
+        provision_label = f"{matched_query} of {act_name}"
+        return ChatService._grounded_statute_next_steps(domain=domain, title=provision_label)
+
+    @staticmethod
+    def _format_numbered_legal_answer(
+        *,
+        what_it_is: str,
+        meaning: str,
+        key_points: list[str] | str | None,
+        punishment: str,
+        practical_use: str,
+        source: str,
+        disclaimer: str,
+    ) -> str:
+        cleaned_what = ChatService._sanitize_section_value(what_it_is, fallback="Relevant legal material was identified.")
+        cleaned_meaning = ChatService._sanitize_section_value(
+            meaning,
+            fallback="This is the closest grounded explanation available from the material I relied on.",
+        )
+        if isinstance(key_points, str):
+            key_point_items = ChatService._derive_key_points(key_points)
+        else:
+            key_point_items = [ChatService._sanitize_section_value(item, fallback="").strip(" .") for item in (key_points or []) if str(item).strip()]
+        key_point_items = [item for item in key_point_items if item][:3] or ["Read the exact provision with the facts and stage of the matter before relying on it."]
+        cleaned_punishment = ChatService._sanitize_section_value(
+            punishment,
+            fallback="No specific punishment is stated in the material I relied on.",
+        )
+        cleaned_practical = ChatService._sanitize_section_value(
+            practical_use,
+            fallback="Use the provision only after matching it with the actual facts and stage of the matter.",
+        )
+        cleaned_source = ChatService._sanitize_sources(source)
+        cleaned_disclaimer = ChatService._sanitize_section_value(
+            disclaimer,
+            fallback=ChatService._default_brief_disclaimer(),
+        )
+        lines = [
+            f"1. What it is: {cleaned_what}",
+            f"2. Meaning: {cleaned_meaning}",
+            "3. Key points / elements:",
+            *[f"- {item}" for item in key_point_items],
+            f"4. Punishment: {cleaned_punishment}",
+            f"5. Practical use: {cleaned_practical}",
+            f"6. Source: {cleaned_source}",
+            f"Note: {cleaned_disclaimer}",
+        ]
+        return "\n".join(lines)
+
+    @staticmethod
+    def _authority_act_name(*, source: str, title: str, matched_query: str) -> str:
+        cleaned_source = ChatService._sanitize_section_value(source, fallback="the relevant law")
+        cleaned_source = re.sub(r"\s*\(.*?(local dataset|dataset).*?\)\s*", "", cleaned_source, flags=re.IGNORECASE).strip(" .")
+        combined = f"{cleaned_source} {title}".strip()
+        known_laws = [
+            "Constitution of India",
+            "Indian Penal Code, 1860",
+            "Indian Penal Code",
+            "Bharatiya Nyaya Sanhita",
+            "Bharatiya Nagarik Suraksha Sanhita",
+            "Negotiable Instruments Act, 1881",
+        ]
+        for law in known_laws:
+            if law.lower() in combined.lower():
+                return law
+        if cleaned_source and ":" not in cleaned_source and "|" not in cleaned_source:
+            return cleaned_source
+        title_text = f"{matched_query} in {title}"
+        match = re.search(r"\b(?:Article|Section|Rule)\s+[0-9A-Z()/-]+\s+(?:of|in)\s+(.+)$", title_text, flags=re.IGNORECASE)
+        if match:
+            candidate = ChatService._sanitize_section_value(match.group(1), fallback="the relevant law").strip(" .")
+            if candidate:
+                return candidate
+        return "the relevant law"
+
+    def _build_grounded_authority_payload(
+        self,
+        *,
+        query: str,
+        documents: list[dict[str, Any]],
+        citations: list[str],
+    ) -> dict[str, Any] | None:
+        match = self._select_best_authority_document_match(query=query, documents=documents)
+
+        if match is None:
+            return None
+        primary_document = match["document"]
+        matched_query = str(match["matched_query"] or self._derive_authority_provision_number(query=query, document=primary_document))
+        title = self._derive_authority_title(document=primary_document, matched_query=matched_query)
+        text = self._derive_authority_text(document=primary_document)
+        explanation = self._derive_authority_explanation(
+            query=query,
+            document=primary_document,
+            matched_query=matched_query,
+            title=title,
+            match_level=str(match["match_level"]),
+        )
+
+        source = self._derive_authority_source(document=primary_document, citations=citations)
+        answer = self._format_authority_structured_answer(
+            matched_query=matched_query,
+            title=title,
+            text=text,
+            explanation=explanation,
+            source=source,
+        )
+
+        return {
+            "answer": answer,
+            "follow_up_question": None,
+            "likely_forum": None,
+            "caution": None,
+            "documents_to_keep": [],
+            "source": "deterministic_grounded_authority",
+            "authority_match_level": str(match["match_level"]),
+            "llm_failed": False,
+        }
+
+    def _select_best_authority_document_match(self, *, query: str, documents: list[dict[str, Any]]) -> dict[str, Any] | None:
+
+        if not documents:
+            return None
+        assessments = [
+            self._assess_authority_document_relevance(doc=doc, query=query, rank=index)
+
+            for index, doc in enumerate(documents)
+        ]
+        exact_matches = [item for item in assessments if item["match_level"] == "exact"]
+
+        if exact_matches:
+            exact_matches.sort(
+                key=lambda item: (
+                    int(item["source_rank"]),
+                    -float(item["score"]),
+                    int(item["rank"]),
+                )
+            )
+            return exact_matches[0]
+
+        partial_matches = [item for item in assessments if item["match_level"] == "partial"]
+
+        if partial_matches:
+            partial_matches.sort(
+                key=lambda item: (
+                    int(item["source_rank"]),
+                    -float(item["score"]),
+                    int(item["rank"]),
+                )
+            )
+            return partial_matches[0]
+
+        return None
+
+    def _assess_authority_document_relevance(self, *, doc: dict[str, Any], query: str, rank: int) -> dict[str, Any]:
+        reference = self._parse_authority_reference(query)
+        text = self._document_authority_text(doc)
+        title = str(doc.get("title") or "").strip()
+        source_rank = self._authority_source_rank(doc)
+        exact = self._document_supports_requested_authority(doc=doc, query=query)
+        partial = False
+
+        score = float(doc.get("score") or 0.0)
+        matched_query = reference["label"]
+
+        if not exact:
+            normalized_text = text.lower()
+            statute_aliases = reference["statute_aliases"]
+            statute_hit = any(alias in normalized_text for alias in statute_aliases) if statute_aliases else False
+            identifier = str(reference["identifier"] or "").lower()
+            negated_label = bool(identifier) and (
+                re.search(rf"\b(?:without|not|no)\b[^.:\n]{{0,40}}\bsection\s+{re.escape(identifier)}\b", normalized_text) is not None
+                or re.search(rf"\b(?:without|not|no)\b[^.:\n]{{0,40}}\barticle\s+{re.escape(identifier)}\b", normalized_text) is not None
+                or re.search(rf"\b(?:without|not|no)\b[^.:\n]{{0,40}}\brule\s+{re.escape(identifier)}\b", normalized_text) is not None
+            )
+
+            identifier_hit = bool(identifier) and (
+                f"section {identifier}" in normalized_text
+                or f"article {identifier}" in normalized_text
+                or f"rule {identifier}" in normalized_text
+                or re.search(rf"\b{re.escape(identifier)}\b", normalized_text) is not None
+            )
+
+            if negated_label:
+                identifier_hit = False
+            meaningful_overlap = len(self._meaningful_query_tokens(query.lower()) & self._meaningful_query_tokens(normalized_text))
+
+            partial = (
+                (statute_hit and meaningful_overlap >= 1)
+                or (identifier_hit and meaningful_overlap >= 1)
+                or (reference["kind"] == "query" and meaningful_overlap >= 2)
+            )
+
+            if reference["kind"] in {"section", "article", "rule"} and statute_aliases and not statute_hit and not identifier_hit:
+                partial = False
+
+            if negated_label and reference["kind"] in {"section", "article", "rule"}:
+                partial = False
+        match_level = "exact" if exact else ("partial" if partial else "none")
+
+        if match_level == "partial" and reference["label"]:
+            matched_query = reference["label"]
+
+        elif not matched_query:
+            matched_query = self._clean_search_snippet(title) or "Requested provision/query"
+
+        return {
+            "document": doc,
+            "match_level": match_level,
+            "matched_query": matched_query,
+            "rank": rank,
+            "score": score,
+            "source_rank": source_rank,
+        }
+
+    @staticmethod
+    def _authority_source_rank(doc: dict[str, Any]) -> int:
+        source_kind = str(doc.get("source_kind") or "").strip().lower()
+        source = str(doc.get("docsource") or "").strip().lower()
+
+        if source_kind == "local_legal_dataset":
+            return 0
+
+        if source in {"laws", "constitution", "supremecourt"} or source_kind == "indiankanoon":
+            return 1
+
+        if source_kind == "internal":
+            return 2
+
+        if source == "user_upload" or source_kind == "user_upload":
+            return 3
+
+        if source_kind == "google_custom_search" or source.startswith("google:"):
+            return 4
+
+        return 5
+
+    def _parse_authority_reference(self, query: str) -> dict[str, Any]:
+        normalized = re.sub(r"\s+", " ", str(query or "").strip().lower())
+        label = re.sub(r"\s+", " ", str(query or "").strip()) or "Requested provision/query"
+
+        statute_alias_map = {
+            "constitution": ("constitution", "constitution of india"),
+            "ipc": ("ipc", "indian penal code"),
+            "bns": ("bns", "bharatiya nyaya sanhita"),
+            "bnss": ("bnss", "bharatiya nagarik suraksha sanhita"),
+            "crpc": ("crpc", "code of criminal procedure"),
+            "cpc": ("cpc", "code of civil procedure"),
+            "ni act": ("ni act", "negotiable instruments act"),
+        }
+
+        for kind in ("article", "section", "rule"):
+            match = re.search(rf"\b{kind}\s+([0-9]+[a-z]?)\b", normalized)
+
+            if match:
+                identifier = match.group(1).upper()
+                statute_key = ""
+                statute_aliases: tuple[str, ...] = ()
+
+                for candidate_key, aliases in statute_alias_map.items():
+
+                    if any(re.search(rf"\b{re.escape(alias)}\b", normalized) for alias in aliases):
+                        statute_key = candidate_key
+                        statute_aliases = aliases
+                        break
+
+                label = f"{kind.title()} {identifier}" + (f" {statute_key.upper()}" if statute_key in {"ipc", "bns", "bnss", "crpc", "cpc"} else "")
+
+                return {
+                    "kind": kind,
+                    "identifier": identifier,
+                    "statute_key": statute_key,
+                    "statute_aliases": statute_aliases,
+                    "label": label,
+                }
+
+        for statute_key, aliases in statute_alias_map.items():
+            match = re.search(
+                rf"\b(?:{'|'.join(re.escape(alias) for alias in aliases)})\s+(?:section\s+)?([0-9]+[a-z]?)\b",
+                normalized,
+            )
+
+            if match:
+                identifier = match.group(1).upper()
+                return {
+                    "kind": "section",
+                    "identifier": identifier,
+                    "statute_key": statute_key,
+                    "statute_aliases": aliases,
+                    "label": f"Section {identifier} {statute_key.upper()}" if statute_key in {"ipc", "bns", "bnss", "crpc", "cpc"} else f"Section {identifier} {statute_key.title()}",
+                }
+
+        return {
+            "kind": "query",
+            "identifier": "",
+            "statute_key": "",
+            "statute_aliases": (),
+            "label": label,
+        }
+
+    def _derive_authority_provision_number(self, *, query: str, document: dict[str, Any] | None) -> str:
+        normalized_query = re.sub(r"\s+", " ", str(query or "").strip().lower())
+
+        for label in ("article", "section", "rule"):
+            match = re.search(rf"\b{label}\s+([0-9]+[a-z]?)\b", normalized_query)
+
+            if match:
+                return f"{label.title()} {match.group(1).upper()}"
+        raw_text = self._document_authority_text(document or {})
+
+        for label in ("article", "section", "rule"):
+            match = re.search(rf"\b{label}\s+([0-9]+[a-z]?)\b", raw_text)
+
+            if match:
+                return f"{label.title()} {match.group(1).upper()}"
+        title = str((document or {}).get("title") or "Requested provision").strip()
+
+        return self._clean_search_snippet(title) or "Requested provision"
+
+    def _derive_authority_title(self, *, document: dict[str, Any] | None, matched_query: str) -> str:
+
+        candidates = [
+            str((document or {}).get("headline") or "").strip(),
+            str((document or {}).get("fragment_headline") or "").strip(),
+            str((document or {}).get("fragment_title") or "").strip(),
+            str((document or {}).get("title") or "").strip(),
+        ]
+
+        for candidate in candidates:
+            cleaned = self._clean_search_snippet(candidate).strip(" .")
+
+            if not cleaned:
+                continue
+
+            cleaned = re.sub(
+                rf"^{re.escape(matched_query)}\s+(?:in|of)\s+",
+                "",
+                cleaned,
+                flags=re.IGNORECASE,
+            ).strip(" .")
+            cleaned = re.sub(
+                r"^(?:Article|Section|Rule)\s+[0-9A-Z()/-]+\s+(?:of|in)\s+.+?\s+(?:explains|contains|provides|covers|sets out)\s+",
+                "",
+                cleaned,
+                flags=re.IGNORECASE,
+            ).strip(" .")
+
+            if cleaned:
+                return cleaned
+
+        return "Statutory text"
+
+    def _derive_authority_text(self, *, document: dict[str, Any] | None) -> str:
+
+        candidates = [
+            str((document or {}).get("doc_excerpt") or "").strip(),
+            str((document or {}).get("fragment_excerpt") or "").strip(),
+            str((document or {}).get("headline") or "").strip(),
+            str((document or {}).get("fragment_headline") or "").strip(),
+            str((document or {}).get("title") or "").strip(),
+        ]
+
+        for candidate in candidates:
+            cleaned = self._clean_search_snippet(candidate)
+
+            if cleaned:
+                return cleaned
+
+        return "No grounded statutory text excerpt was available in the retrieved authority material."
+
+    def _derive_authority_explanation(
+        self,
+        *,
+        query: str,
+        document: dict[str, Any] | None,
+        matched_query: str,
+        title: str,
+        match_level: str,
+    ) -> str:
+        normalized_query = str(query or "").strip().lower()
+        normalized_title = title.strip().rstrip(".").lower() or "the requested legal subject"
+        authority_type = str((document or {}).get("authority_type") or "").strip().lower()
+
+        if match_level == "partial":
+            return (
+                f"I found material on a related point, but not a clean exact match for the provision you named. "
+                f"The closest grounded result discusses {normalized_title}, so it should be treated cautiously until the exact section or article is checked."
+            )
+
+        if matched_query.lower().startswith("article"):
+            return (
+                f"In plain terms, it sets out the constitutional position on {normalized_title}. "
+                "How far it helps in a real matter depends on the facts, the context in which it is invoked, and the way courts have interpreted it."
+            )
+
+        if "ipc" in normalized_query or "indian penal code" in normalized_query:
+            return (
+                f"In plain terms, it addresses {normalized_title}. "
+                "It is usually invoked when the legal ingredients of the offence are present, and it does not automatically apply just because the dispute sounds similar."
+            )
+
+        if "bns" in normalized_query or "bharatiya nyaya sanhita" in normalized_query:
+            return (
+                f"In plain terms, it covers {normalized_title}. "
+                "In practice, it applies only when the facts fit the statutory ingredients and the allegation is properly supported in the complaint or case record."
+            )
+
+        if "bnss" in normalized_query or "bharatiya nagarik suraksha sanhita" in normalized_query:
+            return (
+                f"In plain terms, it sets out the procedural rule for {normalized_title}. "
+                "Its effect usually depends on the stage of the case, the forum involved, and whether the procedural conditions have been met."
+            )
+
+        if authority_type == "statute":
+            return (
+                f"In plain terms, it explains the legal rule on {normalized_title}. "
+                "The practical effect depends on the exact wording, any built-in conditions or exceptions, and any later judicial interpretation."
+            )
+
+        return (
+            f"In plain terms, the retrieved material addresses {normalized_title}. "
+            "Its weight depends on the source, the wording used, and how closely it matches the facts you are dealing with."
+        )
+
+    def _derive_authority_source(self, *, document: dict[str, Any] | None, citations: list[str]) -> str:
+        title = str((document or {}).get("title") or "Retrieved authority").strip()
+        source = str((document or {}).get("docsource") or "authority_source").strip()
+        source_kind = str((document or {}).get("source_kind") or "").strip().lower()
+        if citations and not str(citations[0]).strip().lower().startswith("internal"):
+            return self._clean_visible_authority_source(citations[0])
+        if source_kind == "internal" or source.startswith("internal:"):
+            cleaned_title = self._clean_search_snippet(title).strip(" .")
+            return cleaned_title or "Internal legal dataset"
+        url = str((document or {}).get("url") or "").strip()
+        if "indiankanoon.org" in url.lower():
+            cleaned_title = self._clean_search_snippet(title).strip(" .")
+            return cleaned_title or "India Kanoon"
+        cleaned_source = self._clean_visible_authority_source(source)
+        if cleaned_source and cleaned_source != "authority_source":
+            return cleaned_source
+        cleaned_title = self._clean_search_snippet(title).strip(" .")
+        return cleaned_title or "Retrieved legal source"
+
+    @staticmethod
+    def _clean_visible_authority_source(text: str) -> str:
+        cleaned = ChatService._sanitize_section_value(text, fallback="Retrieved legal source")
+        lowered = cleaned.lower()
+        if lowered.startswith("internal:"):
+            return "Internal legal dataset"
+        cleaned = re.sub(r"\s*\|\s*internal:[^|]+$", "", cleaned, flags=re.IGNORECASE).strip(" .")
+        cleaned = re.sub(r"\s*\(local dataset:\s*[^)]+\)", "", cleaned, flags=re.IGNORECASE).strip(" .")
+        cleaned = re.sub(r"\bAIR\s+\d{4}[^;,.|]*", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\(\d{4}\)\s*\d+\s*SCC\s*\d+\b", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\b\d+\s*SCC\s*\d+\b", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\b\d+\s*CriLJ\s*\d+\b", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\.pdf\b", "", cleaned, flags=re.IGNORECASE)
+        cleaned = cleaned.replace("google:indiacode.nic.in", "India Code").replace("google:indiankanoon.org", "India Kanoon")
+        if lowered in {"authority_source", "internal"}:
+            return "Internal legal dataset"
+        cleaned = re.sub(r"\s{2,}", " ", cleaned).strip(" .;,-|")
+        return cleaned or "Retrieved legal source"
+
+    @staticmethod
+    def _should_use_local_legal_dataset_fast_path(
+        *,
+        normalized_query: str,
+        authority_key: str | None,
+        local_match: LegalProvisionMatch | None,
+    ) -> bool:
+
+        if local_match is None:
+            return False
+        compact = re.sub(r"\s+", " ", str(normalized_query or "").strip().lower())
+
+        if not compact:
+            return False
+
+        formatting_tail = r"(?:\s+(?:in short|briefly|short|step by step|in points|pointwise))?"
+
+        if re.fullmatch(rf"article\s+[0-9]+[a-z]?{formatting_tail}", compact):
+            return True
+
+        if re.fullmatch(rf"section\s+[0-9]+[a-z]?{formatting_tail}", compact):
+            return True
+
+        if re.fullmatch(rf"(?:ipc|indian penal code)\s+[0-9]+[a-z]?{formatting_tail}", compact):
+            return True
+
+        if re.fullmatch(rf"section\s+[0-9]+[a-z]?\s+(?:ipc|indian penal code){formatting_tail}", compact):
+            return True
+
+        if re.search(r"\b(?:explain|what is|tell me about)\s+article\s+[0-9]+[a-z]?\b", compact):
+            return True
+
+        return bool(
+            re.search(r"\b(?:explain|what is|tell me about)\s+section\s+[0-9]+[a-z]?\s+(?:ipc|indian penal code)\b", compact)
+        )
 
     @staticmethod
     def _resolve_fast_authority_format_profile(format_profile: dict[str, Any]) -> dict[str, Any]:
@@ -2042,16 +4300,22 @@ class ChatService:
         detail_instructions = dict(resolved.get("detail_instructions") or {})
         authority_layout = str(resolved.get("authority_layout") or "").strip().lower()
         if not authority_layout:
+
             if detail_instructions.get("in_points"):
                 authority_layout = "points"
+
             elif detail_instructions.get("step_by_step"):
                 authority_layout = "step_by_step"
+
             elif detail_instructions.get("concise"):
                 authority_layout = "concise"
+
             else:
                 authority_layout = str(resolved.get("layout") or "definition").strip().lower()
+
         resolved["authority_layout"] = authority_layout or "definition"
         resolved["layout"] = resolved["authority_layout"]
+
         return resolved
 
     def _build_direct_answer_clarification_result(
@@ -2063,17 +4327,22 @@ class ChatService:
         raw_message: str,
         clarification_hint: dict[str, str] | Any,
     ) -> tuple[InternalChatResult, ConversationState] | None:
+
         if not isinstance(clarification_hint, dict):
             return None
+
         normalized_query, _ = self._normalize_legal_query_text(raw_message)
         cache_key = self._build_direct_answer_cache_key(
             kind="direct_answer_clarification",
             normalized_query=normalized_query,
         )
+
         cached_internal = self._get_direct_answer_cache_entry(cache_key)
+
         if cached_internal is not None:
             internal = self._with_direct_cache_metadata(cached_internal, cache_hit=True, warnings=warnings)
             next_state = conversation_state.model_copy(
+
                 update={
                     "conversation_started": True,
                     "active_intent": "direct_answer_clarification",
@@ -2084,11 +4353,15 @@ class ChatService:
                 }
             )
             return internal, next_state
+
         answer = str(clarification_hint.get("answer") or "").strip()
+
         question = str(clarification_hint.get("question") or "").strip()
         clarification_kind = str(clarification_hint.get("kind") or "direct_answer").strip()
+
         if not answer or not question:
             return None
+
         internal = InternalChatResult(
             answer=answer,
             domain=str(domain or conversation_state.legal_domain or "constitutional"),
@@ -2099,6 +4372,7 @@ class ChatService:
             likely_forum=None,
             caution=None,
             warnings=warnings,
+
             raw_json={
                 "source": "direct_answer_clarification",
                 "pipeline": "direct_answer_clarification",
@@ -2106,9 +4380,11 @@ class ChatService:
                 "disclaimer_mode": "medium_risk",
             },
         )
+
         internal = self._with_direct_cache_metadata(internal, cache_hit=False, warnings=warnings)
         self._set_direct_answer_cache_entry(cache_key, internal)
         next_state = conversation_state.model_copy(
+
             update={
                 "conversation_started": True,
                 "active_intent": "direct_answer_clarification",
@@ -2129,7 +4405,11 @@ class ChatService:
         state: str | None,
         domain: str | None,
         answer_mode: str,
+        query_type: str,
+        understanding_profile: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
+        authority_lookup_target = (understanding_profile or {}).get("authority_lookup_variant")
+
         try:
             result = self.hybrid_retrieval.retrieve(
                 query=query,
@@ -2137,17 +4417,27 @@ class ChatService:
                 state=state,
                 domain=domain,
                 answer_mode=answer_mode,
+                query_type=query_type,
                 doctypes_options=doctypes_options,
+                curated_google_query=str(authority_lookup_target.get("google_query") or "").strip()
+
+                if isinstance(authority_lookup_target, dict)
+
+                else None,
             )
+
             logger.info(
-                "chat pipeline stage=retrieval internal=%s live=%s google=%s confidence=%.2f documents=%s",
+                "chat pipeline stage=retrieval local=%s internal=%s live=%s google=%s confidence=%.2f documents=%s",
+                result.local_dataset_count,
                 result.internal_count,
                 result.live_count,
                 result.google_count,
                 result.internal_confidence,
                 len(result.documents),
             )
+
             return result.documents
+
         except (requests.RequestException, ValueError) as exc:
             logger.warning("chat pipeline stage=retrieval error=%s", exc)
             return []
@@ -2163,7 +4453,31 @@ class ChatService:
         conversation: list[dict[str, str]],
         documents: list[dict[str, Any]],
         evidence_packet: dict[str, Any],
+        response_mode: str,
     ) -> dict[str, Any]:
+
+        if str(response_mode).strip().lower() == "authority":
+            payload = self._build_grounded_authority_payload(
+                query=query,
+                documents=documents,
+                citations=citations,
+            )
+
+            if payload is None:
+                return {
+                    "answer": "",
+                    "follow_up_question": None,
+                    "likely_forum": None,
+                    "caution": None,
+                    "documents_to_keep": [],
+                    "source": "deterministic_grounded_authority",
+                    "authority_match_level": "none",
+                    "llm_failed": False,
+                }
+
+            payload["source"] = "deterministic_grounded_authority"
+            return payload
+
         prompt = self._build_grounded_prompt(
             query=query,
             domain=domain,
@@ -2172,13 +4486,19 @@ class ChatService:
             citations=citations,
             evidence_packet=evidence_packet,
         )
+
         logger.info(
-            "chat pipeline stage=llm_request query=%r citations=%s history=%s prompt_chars=%s",
+            "chat pipeline stage=llm_request query=%r citations=%s history=%s prompt_chars=%s context_chars=%s context_non_empty=%s docs=%s top_doc_titles=%s",
             query[:160],
             len(citations),
             len(conversation),
             len(prompt),
+            len(context),
+            bool(str(context or "").strip()),
+            len(documents),
+            [str(doc.get("title") or "")[:120] for doc in documents[:3]],
         )
+
         try:
             payload = self.openai.generate_json(prompt, conversation)
             normalized_payload = self._normalize_llm_payload(
@@ -2187,27 +4507,38 @@ class ChatService:
                 domain=domain,
                 documents=documents,
                 citations=citations,
+                response_mode=response_mode,
             )
+
             logger.info(
                 "chat pipeline stage=llm_response keys=%s answer_chars=%s",
                 sorted(normalized_payload.keys()),
                 len(str(normalized_payload.get("answer") or "")),
             )
             return normalized_payload
+
         except Exception as exc:
             logger.warning("chat pipeline stage=llm_error query=%r error=%s", query[:160], exc)
-            return self._build_structured_grounded_payload(
+            payload = self._build_structured_grounded_payload(
                 query=query,
                 domain=domain,
                 documents=documents,
                 citations=citations,
+                response_mode=response_mode,
             )
+
+            payload["source"] = "deterministic_grounded_fallback"
+            payload["llm_error"] = str(exc)
+            payload["llm_failed"] = True
+            return payload
 
     def _retrieval_query_for_turn(self, *, message: str, conversation_state: ConversationState) -> str:
         cleaned = re.sub(r"\s+", " ", message.strip())
+
         if not cleaned:
             return ""
         prior_grounded_query = conversation_state.last_grounded_query or conversation_state.last_user_issue
+
         if (
             conversation_state.conversation_started
             and conversation_state.active_intent == "indiankanoon_rag"
@@ -2215,18 +4546,24 @@ class ChatService:
             and prior_grounded_query
         ):
             return self._merge_text(prior_grounded_query, cleaned)
+
         return cleaned
 
     @staticmethod
     def _build_uploaded_documents(uploaded_texts: list[str]) -> list[dict[str, Any]]:
         documents: list[dict[str, Any]] = []
+
         for index, text in enumerate(uploaded_texts, start=1):
             cleaned = re.sub(r"\s+", " ", str(text or "").strip())
+
             if not cleaned:
                 continue
+
             excerpt = cleaned[:1800]
             title = f"Uploaded Document {index}"
+
             documents.append(
+
                 {
                     "doc_id": f"upload-{index}",
                     "title": title,
@@ -2239,6 +4576,8 @@ class ChatService:
                     "publishdate": "",
                     "url": "",
                     "score": 100.0 - index,
+                    "source_kind": "user_upload",
+                    "authority_type": "user_upload",
                 }
             )
         return documents
@@ -2255,20 +4594,23 @@ class ChatService:
     ) -> str:
         citation_block = "\n".join(f"- {item}" for item in citations[:6])
         packet_json = json.dumps(evidence_packet, ensure_ascii=True, indent=2)
+
         return (
             "Answer the user's Indian legal query using only the grounded context below.\n"
-            "Use only the retrieved internal corpus and Indian Kanoon sources that are included in the context.\n"
+            "Use only the grounded sources included in the context, such as the local legal dataset, India Kanoon, and trusted Google authority material.\n"
             "Do not invent facts, legal rules, procedures, deadlines, or authorities.\n"
             "Do not provide direct legal advice or claim to act as a lawyer; give general legal information only.\n"
-            "Use a clear, slightly robotic tone with brief empathy where appropriate.\n"
+            "Use a clear, human, lawyer-like Indian tone. Do not sound robotic or textbook-like.\n"
             "Acknowledge the user's latest message specifically before giving guidance.\n"
             "Do not reuse the same opening, empathy line, or action wording across consecutive replies when the facts have changed.\n"
             "Keep the structure consistent, but make the wording sound natural rather than template-like.\n"
             "If the situation is urgent, use direct time-sensitive wording. For fraud or fast-moving loss, explain that reporting within 24 hours can improve recovery chances when the grounded context supports that urgency.\n"
             "If the context is weak, conflicting, or incomplete, say so explicitly and keep the answer cautious.\n"
-            "Always mention the sources you relied on in a dedicated Sources section.\n"
+            "Never dump raw or noisy text. Remove AIR, SCC, PDF fragments, debug text, and broken snippets from the answer.\n"
+            "Always mention the source you relied on in a clean Source line.\n"
             "If uploaded user documents are present, explicitly use their facts and mention them in the final answer.\n"
-            "Prefer this answer shape where relevant: Summary, Legal position, Practical next steps, Sources, Disclaimer.\n"
+            "For law or provision queries, prefer this answer shape in the answer text: 1. What it is, 2. Meaning, 3. Key points / elements, 4. Punishment, 5. Practical use, 6. Source.\n"
+            "For scenario queries, give practical steps, relevant sections if grounded, where to complain, documents to keep, and source.\n"
             "Use the evidence packet to understand source sufficiency, jurisdiction notes, recency notes, disclaimer mode, and urgency.\n"
             "If the evidence packet says the sources are partial or dated, say that clearly in the answer.\n"
             "Return strict JSON with keys: answer, follow_up_question, likely_forum, caution, documents_to_keep.\n\n"
@@ -2283,44 +4625,60 @@ class ChatService:
     @staticmethod
     def _conversation_for_llm(previous_messages: list[dict[str, Any]]) -> list[dict[str, str]]:
         conversation: list[dict[str, str]] = []
+
         for item in previous_messages[-6:]:
             role = str(item.get("role") or "")
             content = str(item.get("content") or "").strip()
+
             if role not in {"user", "assistant"} or not content:
                 continue
             conversation.append({"role": role, "content": content})
+
         return conversation
 
     def _build_grounded_context(self, documents: list[dict[str, Any]]) -> str:
         blocks: list[str] = []
+
         for index, doc in enumerate(documents, start=1):
             source_kind = str(doc.get("source_kind") or ("internal" if str(doc.get("docsource") or "").startswith("internal:") else "indiankanoon"))
+
             lines = [
                 f"Document {index}",
                 f"Title: {doc.get('title') or 'Untitled'}",
                 f"Authority: {doc.get('docsource') or 'Indian Kanoon'}",
                 f"Source kind: {source_kind}",
             ]
+
             if doc.get("authority_type"):
                 lines.append(f"Authority type: {doc.get('authority_type')}")
+
             if doc.get("jurisdiction"):
                 lines.append(f"Jurisdiction: {doc.get('jurisdiction')}")
+
             if doc.get("recency_bucket"):
                 lines.append(f"Recency bucket: {doc.get('recency_bucket')}")
+
             if doc.get("publishdate"):
                 lines.append(f"Date: {doc.get('publishdate')}")
+
             if doc.get("headline"):
                 lines.append(f"Search snippet: {self._clean_search_snippet(str(doc.get('headline') or ''))}")
+
             if doc.get("fragment_headline"):
                 lines.append(f"Relevant fragment: {self._clean_search_snippet(str(doc.get('fragment_headline') or ''))}")
+
             excerpt = str(doc.get("doc_excerpt") or doc.get("fragment_excerpt") or "").strip()
+
             if excerpt:
                 lines.append(f"Excerpt: {self._clean_search_snippet(excerpt)}")
             citations = doc.get("citations") or []
+
             if citations:
                 lines.append("Citations: " + ", ".join(str(item) for item in citations[:3]))
+
             if doc.get("url"):
                 lines.append(f"URL: {doc.get('url')}")
+
             blocks.append("\n".join(lines))
         return "\n\n".join(blocks)
 
@@ -2331,35 +4689,61 @@ class ChatService:
         query: str,
         answer_mode: str,
     ) -> list[dict[str, Any]]:
+
         if not documents:
             return []
+
         filtered = [doc for doc in documents if self._document_is_usable(doc)]
         if not filtered:
             return []
+
         internal_docs = [doc for doc in filtered if str(doc.get("source_kind") or "").strip().lower() == "internal"]
         live_docs = [doc for doc in filtered if str(doc.get("source_kind") or "").strip().lower() != "internal"]
+        curated_google_docs = [
+            doc
+
+            for doc in live_docs
+            if str(doc.get("source_kind") or "").strip().lower() == "google_custom_search"
+            and str(doc.get("authority_type") or "").strip().lower() in {"government_portal", "regulator", "court_portal"}
+        ]
 
         def _dedupe_and_limit(docs: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
             selected: list[dict[str, Any]] = []
             seen_sources: set[str] = set()
+
             for doc in docs:
                 source = f"{str(doc.get('source_kind') or '').strip().lower()}:{str(doc.get('docsource') or '').strip().lower()}:{str(doc.get('title') or '').strip().lower()}"
+
                 if source in seen_sources:
                     continue
+
                 seen_sources.add(source)
                 selected.append(doc)
+
                 if len(selected) >= limit:
                     break
             return selected
+
+        if curated_google_docs and self._query_prefers_curated_google_primary_authority(
+            query=query,
+            answer_mode=answer_mode,
+        ):
+            ranked_google = sorted(curated_google_docs, key=lambda item: float(item.get("score") or 0.0), reverse=True)
+            selected_google = _dedupe_and_limit(ranked_google, 2)
+
+            if selected_google:
+                return selected_google[:2]
 
         ranked_internal = sorted(internal_docs, key=lambda item: float(item.get("score") or 0.0), reverse=True)
         ranked_live = sorted(live_docs, key=lambda item: float(item.get("score") or 0.0), reverse=True)
 
         if answer_mode == "statute_first" and ranked_live and any(
             str(doc.get("docsource") or "").strip().lower() == "laws"
+
             and self._looks_like_exact_authority_match_for_response(query=query, document=doc)
             for doc in ranked_live
         ):
+
             selected_live = _dedupe_and_limit(ranked_live, 2)
             return selected_live[:4]
 
@@ -2371,6 +4755,43 @@ class ChatService:
             return selected[:4]
 
         return _dedupe_and_limit(filtered, 4)
+
+    @staticmethod
+    def _query_prefers_curated_google_primary_authority(*, query: str, answer_mode: str) -> bool:
+        normalized = query.lower()
+        case_law_markers = {
+            "judgment",
+            "judgement",
+            "case law",
+            "precedent",
+            "citation",
+            "ratio",
+            "ruling",
+            "supreme court",
+            "high court",
+            "latest judgment",
+            "latest case law",
+            "interpretation",
+            "legal position",
+        }
+        if any(re.search(rf"\b{re.escape(marker)}\b", normalized) for marker in case_law_markers):
+            return False
+        if bool(re.search(r"\barticle\s+\d+[a-z]?\b", normalized)):
+            return True
+        if answer_mode in {"statute_first", "case_first", "grounded"} and bool(
+            re.search(r"\bsection\s+\d+[a-z]?\b", normalized)
+        ):
+            return True
+        return any(
+            marker in normalized
+            for marker in {
+                "constitution",
+                "fundamental rights",
+                "fundamental duties",
+                "directive principles",
+                "dpsp",
+            }
+        )
 
     def _document_is_usable(self, doc: dict[str, Any]) -> bool:
         raw_text = " ".join(
@@ -2480,7 +4901,23 @@ class ChatService:
         domain: str,
         documents: list[dict[str, Any]],
         citations: list[str],
+        response_mode: str = "research",
     ) -> dict[str, Any]:
+        if str(response_mode).strip().lower() == "authority":
+            return self._build_grounded_authority_payload(
+                query=query,
+                documents=documents,
+                citations=citations,
+            ) or {
+                "answer": "",
+                "follow_up_question": None,
+                "likely_forum": None,
+                "caution": None,
+                "documents_to_keep": [],
+                "source": "deterministic_grounded_authority",
+                "authority_match_level": "none",
+                "llm_failed": False,
+            }
         if self._is_statute_query(query):
             primary_statute = self._select_primary_statute_document(query=query, documents=documents)
         else:
@@ -2499,7 +4936,47 @@ class ChatService:
             "likely_forum": likely_forum,
             "caution": self._grounded_caution(domain),
             "documents_to_keep": self._grounded_documents_to_keep(domain),
+            "source": "deterministic_grounded_fallback",
+            "llm_failed": False,
         }
+
+    @staticmethod
+    def _is_deterministic_grounded_payload(payload: dict[str, Any]) -> bool:
+        return str(payload.get("source") or "").strip().lower() in {
+            "deterministic_grounded_fallback",
+            "deterministic_grounded_authority",
+        }
+
+    def _has_trusted_curated_google_authority_context(
+        self,
+        *,
+        documents: list[dict[str, Any]],
+        query: str,
+        answer_mode: str,
+    ) -> bool:
+        if not self._query_prefers_curated_google_primary_authority(query=query, answer_mode=answer_mode):
+            return False
+        authoritative_docs = [
+            doc
+            for doc in documents
+            if str(doc.get("source_kind") or "").strip().lower() == "google_custom_search"
+            and (
+                str(doc.get("authority_type") or "").strip().lower() in {"government_portal", "regulator", "court_portal"}
+                or bool(doc.get("trusted_domain_match"))
+                or str(doc.get("source_domain") or "").strip().lower().endswith(("gov.in", "nic.in"))
+                or "indiacode.nic.in" in str(doc.get("docsource") or "").strip().lower()
+            )
+        ]
+        if not authoritative_docs:
+            return False
+        return any(
+            self._curated_google_authority_variant_document_relevant(
+                authority_query=query,
+                document=doc,
+            )
+            or self._looks_like_relaxed_authority_match_for_response(query=query, document=doc)
+            for doc in authoritative_docs
+        ) or bool(authoritative_docs)
 
     def _normalize_llm_payload(
         self,
@@ -2509,13 +4986,23 @@ class ChatService:
         domain: str,
         documents: list[dict[str, Any]],
         citations: list[str],
+        response_mode: str = "research",
     ) -> dict[str, Any]:
+        if str(response_mode).strip().lower() == "authority":
+            return self._build_structured_grounded_payload(
+                query=query,
+                domain=domain,
+                documents=documents,
+                citations=citations,
+                response_mode=response_mode,
+            )
         if not isinstance(payload, dict):
             return self._build_structured_grounded_payload(
                 query=query,
                 domain=domain,
                 documents=documents,
                 citations=citations,
+                response_mode=response_mode,
             )
 
         answer = str(payload.get("answer") or "").strip()
@@ -2525,6 +5012,7 @@ class ChatService:
                 domain=domain,
                 documents=documents,
                 citations=citations,
+                response_mode=response_mode,
             )
 
         normalized = dict(payload)
@@ -2545,7 +5033,7 @@ class ChatService:
         primary_statute: dict[str, Any] | None = None,
     ) -> str:
         if not documents:
-            return "No relevant legal data found on India Kanoon"
+            return "No relevant legal authority material was retrieved for this query."
         if primary_statute is not None:
             return self._grounded_statute_answer(
                 query=query,
@@ -2568,34 +5056,41 @@ class ChatService:
             or top.get("headline")
             or ""
         ).strip()
-        legal_position = self._clean_search_snippet(legal_excerpt) if legal_excerpt else "The retrieved Indian Kanoon materials indicate the closest grounded legal position available for this query."
+        legal_position = self._clean_search_snippet(legal_excerpt) if legal_excerpt else "The retrieved authority materials indicate the closest grounded legal position available for this query."
 
         next_steps = self._grounded_next_steps(query=query, domain=domain, documents=documents)
-        sources_line = "; ".join(citations[:3]) if citations else "Indian Kanoon retrieved authorities."
+        sources_line = "; ".join(citations[:3]) if citations else "Retrieved authority materials."
         return self._format_final_answer(
             summary=summary,
             legal_position=legal_position,
             practical_next_steps=next_steps,
             sources=sources_line,
-            disclaimer="This is general legal information based on retrieved Indian Kanoon material, not a substitute for professional legal advice.",
+            disclaimer="This is general legal information based on retrieved authority material, not a substitute for professional legal advice.",
         )
 
     def _select_primary_statute_document(self, *, query: str, documents: list[dict[str, Any]]) -> dict[str, Any] | None:
+        best_match = self._select_best_authority_document_match(query=query, documents=documents)
+        if best_match is not None:
+            return best_match["document"]
         if not documents:
             return None
         ranked = sorted(documents, key=lambda item: float(item.get("score") or 0.0), reverse=True)
-        exact_law_matches = [
-            doc
-            for doc in ranked
-            if str(doc.get("docsource") or "").strip().lower() == "laws"
-            and self._looks_like_exact_authority_match_for_response(query=query, document=doc)
-        ]
-        if exact_law_matches:
-            return exact_law_matches[0]
-        law_matches = [doc for doc in ranked if str(doc.get("docsource") or "").strip().lower() == "laws"]
-        if law_matches:
-            return law_matches[0]
-        return None
+        return ranked[0]
+
+    @staticmethod
+    def _is_deterministic_authority_source(doc: dict[str, Any]) -> bool:
+        source = str(doc.get("docsource") or "").strip().lower()
+        source_kind = str(doc.get("source_kind") or "").strip().lower()
+        authority_type = str(doc.get("authority_type") or "").strip().lower()
+        if source in {"laws", "constitution"}:
+            return True
+        if source_kind == "local_legal_dataset":
+            return True
+        if source_kind == "google_custom_search" and authority_type in {"government_portal", "regulator", "court_portal"}:
+            return True
+        if source.startswith("google:") and any(domain in source for domain in {"indiacode.nic.in", "gov.in", "nic.in"}):
+            return True
+        return False
 
     def _grounded_statute_answer(
         self,
@@ -2742,11 +5237,68 @@ class ChatService:
                 fallback_filtered.append(doc)
         return fallback_filtered
 
+    @staticmethod
+    def _authority_statute_aliases() -> list[tuple[tuple[str, ...], str]]:
+        return [
+            (("bns", "bharatiya nyaya sanhita"), "bharatiya nyaya sanhita"),
+            (("bnss", "bharatiya nagarik suraksha sanhita"), "bharatiya nagarik suraksha sanhita"),
+            (("ipc", "indian penal code"), "indian penal code"),
+            (("crpc", "code of criminal procedure"), "code of criminal procedure"),
+            (("cpc", "code of civil procedure"), "code of civil procedure"),
+            (("ni act", "negotiable instruments act"), "negotiable instruments act"),
+        ]
+
+    @staticmethod
+    def _document_authority_text(doc: dict[str, Any]) -> str:
+        return " ".join(
+            [
+                str(doc.get("title") or ""),
+                str(doc.get("headline") or ""),
+                str(doc.get("fragment_title") or ""),
+                str(doc.get("fragment_headline") or ""),
+                str(doc.get("fragment_excerpt") or ""),
+                str(doc.get("doc_excerpt") or ""),
+                str(doc.get("citations") or ""),
+            ]
+        ).lower()
+
+    def _document_supports_requested_authority(self, *, doc: dict[str, Any], query: str) -> bool:
+        query_lower = query.lower()
+        text = self._document_authority_text(doc)
+        if not text.strip():
+            return False
+        reference = self._parse_authority_reference(query_lower)
+        kind = str(reference["kind"])
+        identifier = str(reference["identifier"] or "").lower()
+        statute_aliases = tuple(str(alias).lower() for alias in reference["statute_aliases"])
+        if kind == "article" and identifier:
+            if re.search(rf"\b(?:without|not|no)\b[^.:\n]{{0,40}}\barticle\s+{re.escape(identifier)}\b", text):
+                return False
+            article_present = f"article {identifier}" in text or (
+                "constitution" in text and re.search(rf"\b{re.escape(identifier)}\b", text) is not None
+            )
+            if not article_present:
+                return False
+            if statute_aliases:
+                return any(alias in text for alias in statute_aliases)
+            return True
+        if kind not in {"section", "rule"} or not identifier:
+            return False
+        if re.search(rf"\b(?:without|not|no)\b[^.:\n]{{0,40}}\b{kind}\s+{re.escape(identifier)}\b", text):
+            return False
+        label_present = f"{kind} {identifier}" in text or re.search(rf"\b{re.escape(identifier)}\b", text) is not None
+        if not label_present:
+            return False
+        if statute_aliases:
+            return any(alias in text for alias in statute_aliases)
+        return f"{kind} {identifier}" in text
+
     def _document_matches_query_strategy(self, *, doc: dict[str, Any], query: str, answer_mode: str) -> bool:
         query_lower = query.lower()
         title = str(doc.get("title") or "").lower()
         source = str(doc.get("docsource") or "").strip().lower()
         source_kind = str(doc.get("source_kind") or "").strip().lower()
+        authority_type = str(doc.get("authority_type") or "").strip().lower()
         document_kind = str(doc.get("document_kind") or "").strip().lower()
         text = " ".join(
             [
@@ -2763,10 +5315,48 @@ class ChatService:
         meaningful_query_tokens = self._meaningful_query_tokens(query_lower)
         meaningful_text_tokens = self._meaningful_query_tokens(text)
         meaningful_overlap = len(meaningful_query_tokens & meaningful_text_tokens)
+        article_match = re.search(r"\barticle\s+([0-9]+[a-z]?)\b", query_lower)
+        section_match = re.search(r"\bsection\s+([0-9]+[a-z]?)\b", query_lower)
+        rule_match = re.search(r"\brule\s+([0-9]+[a-z]?)\b", query_lower)
+        authoritative_curated_google = (
+            source_kind == "google_custom_search"
+            and authority_type in {"government_portal", "regulator", "court_portal"}
+        )
+        trusted_google_fallback = (
+            source_kind == "google_custom_search"
+            and str(doc.get("retrieval_source") or "").strip().lower() == "google"
+            and str(doc.get("retrieval_confidence_level") or "").strip().lower() in {"medium", "strong"}
+            and (
+                authoritative_curated_google
+                or bool(doc.get("trusted_domain_match"))
+                or str(doc.get("source_domain") or "").strip().lower().endswith(("gov.in", "nic.in"))
+                or "indiacode.nic.in" in source
+            )
+        )
+        if trusted_google_fallback:
+            return True
+        if self._document_supports_requested_authority(doc=doc, query=query_lower):
+            return True
+        if authoritative_curated_google:
+            if article_match and f"article {article_match.group(1)}" in text:
+                return True
+            if section_match and f"section {section_match.group(1)}" in text and meaningful_overlap >= 1:
+                return True
+            if rule_match and f"rule {rule_match.group(1)}" in text and meaningful_overlap >= 1:
+                return True
+            if self._query_prefers_curated_google_primary_authority(query=query, answer_mode=answer_mode):
+                constitutional_markers = {
+                    "constitution",
+                    "fundamental rights",
+                    "fundamental duties",
+                    "directive principles",
+                    "dpsp",
+                }
+                if meaningful_overlap >= 1 or any(marker in text for marker in constitutional_markers):
+                    return True
 
         if source_kind == "internal":
             if answer_mode == "statute_first":
-                section_match = re.search(r"\bsection\s+([0-9]+[a-z]?)\b", query_lower)
                 if document_kind in {"statute", "rule"}:
                     if section_match:
                         return f"section {section_match.group(1)}" in text or "article" in text or meaningful_overlap >= 1
@@ -2787,7 +5377,6 @@ class ChatService:
             return meaningful_overlap >= 2
 
         if answer_mode == "statute_first":
-            section_match = re.search(r"\bsection\s+([0-9]+[a-z]?)\b", query_lower)
             negated_section = False
             if section_match:
                 negation_pattern = rf"\b(?:no|without|not)\s+section\s+{re.escape(section_match.group(1))}\b"
@@ -2818,6 +5407,7 @@ class ChatService:
         return overlap >= 2 or source in {"laws", "supremecourt", "consumer"}
 
     def _document_is_safe_authority_fallback(self, *, doc: dict[str, Any], query: str, answer_mode: str) -> bool:
+        
         if answer_mode != "statute_first":
             return False
         source = str(doc.get("docsource") or "").strip().lower()
@@ -2843,6 +5433,8 @@ class ChatService:
             negation_pattern = rf"\b(?:no|without|not)\s+section\s+{re.escape(section_match.group(1))}\b"
             if re.search(negation_pattern, text):
                 return False
+        if self._document_supports_requested_authority(doc=doc, query=query):
+            return True
         if source_kind == "internal":
             kind = str(doc.get("document_kind") or "").strip().lower()
             section_match = re.search(r"\bsection\s+([0-9]+[a-z]?)\b", query.lower())
@@ -2881,10 +5473,14 @@ class ChatService:
         top = documents[0]
         score = float(top.get("score") or 0.0)
         source = str(top.get("docsource") or "").strip().lower()
+        source_kind = str(top.get("source_kind") or "").strip().lower()
+        authority_type = str(top.get("authority_type") or "").strip().lower()
         normalized_query = query.lower()
         confidence = 0.35
         if answer_mode == "statute_first" and source == "laws":
             confidence += 0.35
+        elif source_kind == "google_custom_search" and authority_type in {"government_portal", "regulator", "court_portal"}:
+            confidence += 0.3
         elif answer_mode == "case_first" and source != "laws":
             confidence += 0.25
         else:
@@ -2895,6 +5491,12 @@ class ChatService:
             confidence += 0.15
         elif score >= 18:
             confidence += 0.08
+        upstream_confidence = top.get("retrieval_confidence")
+        if upstream_confidence is not None:
+            try:
+                confidence = max(confidence, float(upstream_confidence))
+            except (TypeError, ValueError):
+                pass
         return min(confidence, 0.95)
 
     @staticmethod
@@ -2992,7 +5594,19 @@ class ChatService:
         answer_mode = str(strategy.get("answer_mode") or "").strip().lower()
         payload = raw_json or {}
         source = str(payload.get("source") or "").strip().lower()
-        if source in {"authority_fast_path", "constitutional_explainer", "constitutional_mixed_direct", "direct_answer_clarification", "safe_fallback"}:
+        if source in {
+            "authority_fast_path",
+            "authority_mixed_direct",
+            "constitutional_explainer",
+            "constitutional_mixed_direct",
+            "curated_google_authority_lookup",
+            "curated_google_authority_clarification",
+            "deterministic_grounded_authority",
+            "general_legal_explainer",
+            "direct_answer_clarification",
+            "local_legal_dataset",
+            "safe_fallback",
+        }:
             return False
         if answer_mode in {"statute_first", "case_first"}:
             return True
@@ -3070,7 +5684,18 @@ class ChatService:
             normalized = line.strip()
             if not normalized:
                 continue
-            if normalized.startswith(("Legal Position:", "Practical Next Steps:", "Summary:")):
+            if normalized.startswith(
+                (
+                    "Legal Position:",
+                    "Practical Next Steps:",
+                    "Summary:",
+                    "1. What it is:",
+                    "2. Meaning:",
+                    "3. Key points / elements:",
+                    "4. Punishment:",
+                    "5. Practical use:",
+                )
+            ):
                 if self._line_has_unsupported_reference(normalized, allowed_text=allowed_text):
                     continue
             cleaned_lines.append(normalized)
@@ -3090,24 +5715,35 @@ class ChatService:
     @staticmethod
     def _ensure_disclaimer_present(answer: str) -> str:
         cleaned = answer.strip()
-        disclaimer = "Disclaimer: This is general legal information, not a substitute for professional legal advice."
-        if re.search(r"^Disclaimer:.*$", cleaned, flags=re.IGNORECASE | re.MULTILINE):
-            return cleaned
+        disclaimer = "Note: This is general legal information, not a substitute for professional legal advice."
+        if re.search(r"^(?:Disclaimer|Note):.*$", cleaned, flags=re.IGNORECASE | re.MULTILINE):
+            return re.sub(r"^Disclaimer:", "Note:", cleaned, flags=re.IGNORECASE | re.MULTILINE)
         if not cleaned:
             return disclaimer
         return f"{cleaned}\n{disclaimer}"
 
     def _apply_disclaimer_mode(self, *, answer: str, mode: str) -> str:
         cleaned = self._ensure_disclaimer_present(answer)
-        replacement = f"Disclaimer: {self._disclaimer_text(mode)}"
-        if re.search(r"^Disclaimer:.*$", cleaned, flags=re.IGNORECASE | re.MULTILINE):
-            return re.sub(r"^Disclaimer:.*$", replacement, cleaned, flags=re.IGNORECASE | re.MULTILINE)
+        replacement = f"Note: {self._disclaimer_text(mode)}"
+        if re.search(r"^(?:Disclaimer|Note):.*$", cleaned, flags=re.IGNORECASE | re.MULTILINE):
+            return re.sub(r"^(?:Disclaimer|Note):.*$", replacement, cleaned, flags=re.IGNORECASE | re.MULTILINE)
         return f"{cleaned}\n{replacement}"
 
     @staticmethod
     def _output_requires_safe_fallback(answer: str) -> bool:
-        required_sections = ["Summary:", "Legal Position:", "Practical Next Steps:", "Sources:", "Disclaimer:"]
-        return not all(section in answer for section in required_sections)
+        has_source = bool(re.search(r"^(?:6\.\s*)?Source:\s*", answer, flags=re.IGNORECASE | re.MULTILINE))
+        has_note = bool(re.search(r"^(?:Disclaimer|Note):\s*", answer, flags=re.IGNORECASE | re.MULTILINE))
+        has_new_shape = all(
+            re.search(pattern, answer, flags=re.IGNORECASE | re.MULTILINE)
+            for pattern in [
+                r"^1\.\s*What it is:\s*",
+                r"^2\.\s*Meaning:\s*",
+                r"^4\.\s*Punishment:\s*",
+                r"^5\.\s*Practical use:\s*",
+            ]
+        )
+        has_old_shape = all(section in answer for section in ["Summary:", "Legal Position:", "Practical Next Steps:", "Sources:"])
+        return not (has_source and has_note and (has_new_shape or has_old_shape))
 
     def _strip_unsupported_criminal_references(
         self,
@@ -3268,14 +5904,34 @@ class ChatService:
     def _looks_like_exact_authority_match_for_response(self, *, query: str, document: dict[str, Any]) -> bool:
         title = str(document.get("title") or "")
         normalized_title = title.lower()
+        normalized_query = str(query or "").lower()
+        article_match = re.search(r"\barticle\s+([0-9]+[a-z]?)\b", query, re.IGNORECASE)
+        if article_match and f"article {article_match.group(1).lower()}" in normalized_title:
+            return True
         section_match = re.search(r"\bsection\s+([0-9]+[a-z]?)\b", query, re.IGNORECASE)
         if section_match and f"section {section_match.group(1)}" in normalized_title:
+            if "bnss" in normalized_query and "bharatiya nagarik suraksha sanhita" not in normalized_title:
+                return False
+            if "bns" in normalized_query and "bharatiya nyaya sanhita" not in normalized_title:
+                return False
             return True
         if "ipc" in query and "indian penal code" in normalized_title:
             return True
         if "ni act" in query and "negotiable instruments act" in normalized_title:
             return True
         if "constitution" in query and "constitution" in normalized_title:
+            return True
+        if (
+            ("bns" in normalized_query or "bharatiya nyaya sanhita" in normalized_query)
+            and "bharatiya nyaya sanhita" in normalized_title
+            and section_match is None
+        ):
+            return True
+        if (
+            ("bnss" in normalized_query or "bharatiya nagarik suraksha sanhita" in normalized_query)
+            and "bharatiya nagarik suraksha sanhita" in normalized_title
+            and section_match is None
+        ):
             return True
         return False
 
@@ -3293,6 +5949,8 @@ class ChatService:
         sections = {
             "Summary": "",
             "Legal Position": "",
+            "Key Points": "",
+            "Punishment": "",
             "Practical Next Steps": "",
             "Sources": "",
             "Disclaimer": "",
@@ -3300,28 +5958,37 @@ class ChatService:
         current: str | None = None
         alias_map = {
             "summary": "Summary",
+            "what it is": "Summary",
             "legal position": "Legal Position",
             "legal position ": "Legal Position",
             "legal_position": "Legal Position",
             "legal": "Legal Position",
+            "meaning": "Legal Position",
+            "key points / elements": "Key Points",
+            "key points": "Key Points",
+            "elements": "Key Points",
+            "punishment": "Punishment",
             "practical next steps": "Practical Next Steps",
             "practical next step": "Practical Next Steps",
             "next steps": "Practical Next Steps",
             "practical": "Practical Next Steps",
+            "practical use": "Practical Next Steps",
             "sources": "Sources",
             "source": "Sources",
             "disclaimer": "Disclaimer",
+            "note": "Disclaimer",
         }
 
         for raw_line in cleaned.splitlines():
             line = raw_line.strip()
             if not line:
                 continue
+            line_for_match = re.sub(r"^\d+\.\s*", "", line).strip()
             matched = False
             for alias, canonical in alias_map.items():
                 prefix = f"{alias}:"
-                if line.lower().startswith(prefix):
-                    value = line[len(prefix):].strip()
+                if line_for_match.lower().startswith(prefix):
+                    value = line_for_match[len(prefix):].strip()
                     if value:
                         sections[canonical] = self._merge_section_value(sections[canonical], value)
                     current = canonical
@@ -3330,24 +5997,29 @@ class ChatService:
             if matched:
                 continue
             if current:
-                sections[current] = self._merge_section_value(sections[current], line)
+                if current == "Key Points":
+                    sections[current] = f"{sections[current]}\n{line}".strip() if sections[current] else line
+                else:
+                    sections[current] = self._merge_section_value(sections[current], line)
 
         if not sections["Summary"]:
-            sections["Summary"] = self._first_meaningful_sentence(cleaned) or "Relevant Indian Kanoon material was retrieved for this query."
+            sections["Summary"] = self._first_meaningful_sentence(cleaned) or "I was able to retrieve relevant legal material for your question."
         if not sections["Legal Position"]:
             sections["Legal Position"] = sections["Summary"]
         if not sections["Practical Next Steps"]:
-            sections["Practical Next Steps"] = "Review the strongest cited authority and match it against your facts before taking further legal action."
+            sections["Practical Next Steps"] = "Review the strongest cited authority and then match it carefully against your facts before taking the next legal step."
         if citations:
             sections["Sources"] = "; ".join(citations[:3])
         elif not sections["Sources"]:
             sections["Sources"] = "Indian Kanoon retrieved authorities."
         if not sections["Disclaimer"]:
-            sections["Disclaimer"] = "This is general legal information, not a substitute for professional legal advice."
+            sections["Disclaimer"] = self._default_brief_disclaimer()
 
         return self._format_final_answer(
             summary=sections["Summary"],
             legal_position=sections["Legal Position"],
+            key_points=sections["Key Points"],
+            punishment=sections["Punishment"],
             practical_next_steps=sections["Practical Next Steps"],
             sources=sections["Sources"],
             disclaimer=sections["Disclaimer"],
@@ -3358,49 +6030,62 @@ class ChatService:
         *,
         summary: str,
         legal_position: str,
+        key_points: str | list[str] | None = None,
+        punishment: str | None = None,
         practical_next_steps: str,
         sources: str,
         disclaimer: str,
     ) -> str:
-        cleaned_summary = self._sanitize_section_value(summary, fallback="Relevant Indian Kanoon material was retrieved for this query.")
+        cleaned_summary = self._sanitize_section_value(summary, fallback="I was able to retrieve relevant legal material for your question.")
         cleaned_legal_position = self._sanitize_section_value(
             legal_position,
-            fallback="The retrieved authorities provide the closest grounded legal position available for this query.",
+            fallback="The retrieved authorities provide the closest grounded legal position available on the material currently in hand.",
         )
         cleaned_steps = self._sanitize_section_value(
             practical_next_steps,
-            fallback="Review the strongest cited authority and match it against your facts before taking further legal action.",
+            fallback="Review the strongest cited authority and then match it carefully against your facts before taking the next legal step.",
         )
         cleaned_disclaimer = self._sanitize_section_value(
             disclaimer,
-            fallback="This is general legal information, not a substitute for professional legal advice.",
+            fallback=self._default_brief_disclaimer(),
         )
-        lines = [
-            f"Summary: {cleaned_summary}",
-            f"Legal Position: {cleaned_legal_position}",
-            f"Practical Next Steps: {cleaned_steps}",
-            f"Sources: {self._sanitize_sources(sources)}",
-            f"Disclaimer: {cleaned_disclaimer}",
-        ]
-        return "\n".join(lines)
+        derived_key_points = key_points if key_points else self._derive_key_points(cleaned_summary, cleaned_legal_position)
+        derived_punishment = punishment or self._derive_punishment_text(cleaned_summary, cleaned_legal_position)
+        return self._format_numbered_legal_answer(
+            what_it_is=cleaned_summary,
+            meaning=cleaned_legal_position,
+            key_points=derived_key_points,
+            punishment=derived_punishment,
+            practical_use=cleaned_steps,
+            source=sources,
+            disclaimer=cleaned_disclaimer,
+        )
 
-    def _sanitize_sources(self, text: str) -> str:
-        cleaned = self._sanitize_section_value(text)
-        parts = [part.strip(" ;,") for part in re.split(r"[;\n]+", cleaned) if part.strip(" ;,")]
+    @staticmethod
+    def _default_brief_disclaimer() -> str:
+        return "This is general legal information, not a substitute for advice on your specific facts."
+
+    @staticmethod
+    def _sanitize_sources(text: str) -> str:
+        cleaned = ChatService._sanitize_section_value(text)
+        raw_parts = [part.strip(" ;,") for part in re.split(r"[;\n]+", cleaned) if part.strip(" ;,")]
+        parts = [ChatService._clean_visible_authority_source(part) for part in raw_parts]
         deduped: list[str] = []
         for part in parts:
             if part not in deduped:
                 deduped.append(part)
         return "; ".join(deduped[:3]) if deduped else "Indian Kanoon retrieved authorities."
 
-    def _sanitize_section_value(self, text: str, fallback: str = "Not available from the retrieved material.") -> str:
-        cleaned = self._sanitize_text_block(text)
+    @staticmethod
+    def _sanitize_section_value(text: str, fallback: str = "Not available from the retrieved material.") -> str:
+        cleaned = ChatService._sanitize_text_block(text)
         cleaned = re.sub(r"\b(Document \d+|Search snippet|Relevant fragment|Excerpt|Title|Authority|Date|URL|Citations)\s*:\s*", "", cleaned, flags=re.IGNORECASE)
-        cleaned = re.sub(r"\b(errmsg|error|debug|traceback|stack trace|request_id)\b\s*:?\s*[^.;]*", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\b(errmsg|error|debug|traceback|stack trace|request_id|permission_denied|insufficient_quota|provider)\b\s*:?\s*[^.;]*", "", cleaned, flags=re.IGNORECASE)
         cleaned = re.sub(r"\s+", " ", cleaned).strip(" ;,-")
         return cleaned or fallback
 
-    def _sanitize_text_block(self, text: str) -> str:
+    @staticmethod
+    def _sanitize_text_block(text: str) -> str:
         cleaned = str(text or "").replace("\r\n", "\n").replace("\r", "\n")
         cleaned = re.sub(r"<[^>]+>", " ", cleaned)
         cleaned = re.sub(r"`{3,}.*?`{3,}", " ", cleaned, flags=re.DOTALL)
@@ -3525,24 +6210,39 @@ class ChatService:
         message: str,
         domain: str,
         conversation_state: ConversationState,
+        uploaded_texts: list[str] | None = None,
     ) -> dict[str, str | bool]:
         normalized = re.sub(r"\s+", " ", message.strip()).lower()
+        flow = self._classify_query_flow(
+            message=message,
+            domain=domain,
+            conversation_state=conversation_state,
+            uploaded_texts=uploaded_texts or [],
+        )
         routing = self._classify_routing_precedence(normalized, domain=domain)
-        if self._is_statute_query(normalized) and not routing["prefer_playbook"]:
+        flow_type = str(flow["flow_type"])
+        if flow_type == "provision_lookup":
             answer_mode = "statute_first"
             intent = "authority_lookup"
-        elif self._looks_like_grounded_authority_query(normalized):
+        elif flow_type == "general_legal_research" and self._looks_like_grounded_authority_query(normalized):
             answer_mode = "case_first"
             intent = "authority_lookup"
+        elif flow_type == "general_legal_research":
+            answer_mode = "grounded_general"
+            intent = "authority_lookup"
+        elif flow_type == "uploaded_document_query":
+            answer_mode = "grounded_general"
+            intent = "uploaded_document_analysis"
         elif conversation_state.active_intent == "indiankanoon_rag":
             answer_mode = "grounded_general"
             intent = "authority_lookup"
-        elif routing["prefer_playbook"]:
+        elif flow_type == "scenario_practical_legal_issue" or routing["prefer_playbook"]:
             answer_mode = "fact_guidance"
             intent = "practical_guidance"
         else:
             answer_mode = "grounded_general"
             intent = "authority_lookup"
+        response_mode = self._response_mode_for_flow(flow_type)
 
         allow_criminal_sections = (
             self._user_requested_sections(normalized)
@@ -3559,6 +6259,8 @@ class ChatService:
             "answer_mode": answer_mode,
             "allow_criminal_sections": allow_criminal_sections,
             "domain": domain,
+            "flow_type": flow_type,
+            "response_mode": response_mode,
         }
 
     def _build_query_profile(
@@ -3568,28 +6270,34 @@ class ChatService:
         domain: str,
         conversation_state: ConversationState,
         strategy: dict[str, str | bool],
+        uploaded_texts: list[str] | None = None,
     ) -> dict[str, Any]:
         normalized = re.sub(r"\s+", " ", message.strip()).lower()
         issue_type = conversation_state.issue_type or self._detect_issue_type(normalized, domain)
         routing = self._classify_routing_precedence(normalized, domain=domain)
+        flow = self._classify_query_flow(
+            message=message,
+            domain=domain,
+            conversation_state=conversation_state,
+            uploaded_texts=uploaded_texts or [],
+        )
+        flow_type = str(flow["flow_type"])
         has_authority_signal = routing["has_authority_signal"]
         has_practical_signal = routing["prefer_playbook"] or issue_type != "general"
-        if has_authority_signal and has_practical_signal:
-            query_type = "mixed"
-        elif self._is_statute_query(normalized):
-            query_type = "statute_lookup"
-        elif self._looks_like_grounded_authority_query(normalized):
-            query_type = "case_law"
-        elif domain == "document_review" or issue_type == "documents":
+        if flow_type == "scenario_practical_legal_issue":
+            query_type = "incident" if issue_type != "general" else "procedure"
+        elif flow_type == "uploaded_document_query":
             query_type = "document_review"
-        elif has_practical_signal and issue_type != "general":
-            query_type = "incident"
-        elif has_practical_signal:
-            query_type = "procedure"
+        elif flow_type == "provision_lookup":
+            query_type = "statute_lookup"
+        elif flow_type == "general_legal_research" and self._looks_like_grounded_authority_query(normalized):
+            query_type = "case_law"
+        elif has_authority_signal and has_practical_signal:
+            query_type = "mixed"
         else:
             query_type = "grounded_general"
 
-        if routing["prefer_playbook"]:
+        if flow_type == "scenario_practical_legal_issue" or routing["prefer_playbook"]:
             route_target = "playbook"
         else:
             route_target = "grounded"
@@ -3630,6 +6338,8 @@ class ChatService:
                 route_confidence = "high" if route_assist["confidence"] >= 0.75 else "medium"
         return {
             "query_type": query_type,
+            "flow_type": flow_type,
+            "response_mode": self._response_mode_for_flow(flow_type),
             "route_target": route_target,
             "urgency": urgency,
             "official_source_needed": official_source_needed,
@@ -3639,6 +6349,69 @@ class ChatService:
             "answer_mode": strategy.get("answer_mode"),
             "route_assist": route_assist,
         }
+
+    def _classify_query_flow(
+        self,
+        *,
+        message: str,
+        domain: str,
+        conversation_state: ConversationState,
+        uploaded_texts: list[str],
+    ) -> dict[str, str | bool]:
+        normalized = re.sub(r"\s+", " ", str(message or "").strip().lower())
+        issue_type = conversation_state.issue_type or self._detect_issue_type(normalized, domain)
+        has_uploaded_context = bool(uploaded_texts or conversation_state.uploaded_document_summaries)
+        routing = self._classify_routing_precedence(normalized, domain=domain)
+        if has_uploaded_context and self._is_uploaded_document_query(
+            normalized=normalized,
+            conversation_state=conversation_state,
+            domain=domain,
+        ):
+            return {"flow_type": "uploaded_document_query", "has_uploaded_context": True}
+        if self._is_provision_lookup_query(normalized):
+            return {"flow_type": "provision_lookup", "has_uploaded_context": has_uploaded_context}
+        if routing["prefer_grounded_authority"]:
+            return {"flow_type": "general_legal_research", "has_uploaded_context": has_uploaded_context}
+        if routing["prefer_playbook"] or issue_type != "general":
+            return {"flow_type": "scenario_practical_legal_issue", "has_uploaded_context": has_uploaded_context}
+        return {"flow_type": "general_legal_research", "has_uploaded_context": has_uploaded_context}
+
+    def _is_uploaded_document_query(
+        self,
+        *,
+        normalized: str,
+        conversation_state: ConversationState,
+        domain: str,
+    ) -> bool:
+        if not normalized:
+            return False
+        if domain == "document_review" or conversation_state.legal_domain == "document_review":
+            return True
+        uploaded_markers = {
+            "uploaded",
+            "upload",
+            "file",
+            "document",
+            "agreement",
+            "notice",
+            "clause",
+            "draft",
+            "pdf",
+            "attached",
+        }
+        return any(marker in normalized for marker in uploaded_markers)
+
+    def _is_provision_lookup_query(self, normalized: str) -> bool:
+        if not normalized:
+            return False
+        if self.legal_dataset.parse_query(normalized) is not None:
+            return True
+        if self._is_statute_query(normalized):
+            return True
+        return bool(
+            re.search(r"\b(article|section|rule)\s+[0-9]+[a-z]?\b", normalized)
+            or re.search(r"\b(constitution|ipc|bns|bnss|crpc|cpc|ni act)\b", normalized)
+        )
 
     def _local_route_assist(self, normalized_message: str) -> dict[str, Any]:
         labels = {
@@ -3801,7 +6574,7 @@ class ChatService:
         authority_types = {str(doc.get("authority_type") or "").lower() for doc in documents}
         jurisdictions = {str(doc.get("jurisdiction") or "").strip() for doc in documents if str(doc.get("jurisdiction") or "").strip()}
         recency_buckets = {str(doc.get("recency_bucket") or "").lower() for doc in documents}
-        if {"statute", "case_law"} & authority_types:
+        if {"statute", "case_law", "government_portal", "regulator", "court_portal"} & authority_types:
             score += 0.08
             reasons.append("authoritative_source_present")
         if state and any(state.lower() in item.lower() for item in jurisdictions):
@@ -3827,6 +6600,16 @@ class ChatService:
             label = "partial"
         else:
             label = "weak"
+        retrieval_levels = {
+            str(doc.get("retrieval_confidence_level") or "").strip().lower()
+            for doc in documents[:3]
+        }
+        if label == "weak" and "medium" in retrieval_levels:
+            label = "partial"
+            reasons.append("medium_confidence_source_accepted")
+        if label != "strong" and "strong" in retrieval_levels:
+            label = "strong"
+            reasons.append("strong_confidence_source_accepted")
         return {
             "label": label,
             "score": round(max(min(score, 0.99), 0.0), 3),
@@ -3921,8 +6704,12 @@ class ChatService:
         if not normalized:
             return None
 
+        alias_key = ChatService._resolve_direct_constitutional_authority_alias(normalized)
+        if alias_key:
+            return alias_key
+
         article_match = re.fullmatch(
-            r"(?:(?:what is|explain|meaning of|tell me about)\s+)?(?:article|art)\s+(14|19|21|22|32|226)(?:\s+(?:of|under)\s+the\s+constitution)?(?:\s+of\s+india|\s+constitution)?(?:\s+(?:in\s+short|briefly|step\s+by\s+step|step-by-step|in\s+points|point\s+wise|pointwise|as\s+points|bullet\s+points))?",
+            r"(?:(?:what is|explain|meaning of|tell me about)\s+)?(?:article|art)\s+(14|19|21|22|32|226|300a)(?:\s+(?:of|under)\s+the\s+constitution)?(?:\s+of\s+india|\s+constitution)?(?:\s+(?:in\s+short|briefly|step\s+by\s+step|step-by-step|in\s+points|point\s+wise|pointwise|as\s+points|bullet\s+points))?",
             normalized,
         )
         if article_match:
@@ -3933,10 +6720,17 @@ class ChatService:
             normalized,
         )
         if not section_match:
-            return None
-
-        section_value = section_match.group(1)
-        statute = section_match.group(2)
+            reverse_section_match = re.fullmatch(
+                r"(?:(?:what is|explain|meaning of|tell me about)\s+)?(?:ipc|indian penal code)\s+(138|406|420|498a)(?:\s+(?:in\s+short|briefly|step\s+by\s+step|step-by-step|in\s+points|point\s+wise|pointwise|as\s+points|bullet\s+points))?",
+                normalized,
+            )
+            if not reverse_section_match:
+                return None
+            section_value = reverse_section_match.group(1)
+            statute = "ipc"
+        else:
+            section_value = section_match.group(1)
+            statute = section_match.group(2)
         if section_value == "138" and statute in {"ni act", "negotiable instruments act"}:
             return "ni_act_section_138"
         if statute in {"ipc", "indian penal code"}:
@@ -3946,6 +6740,34 @@ class ChatService:
                 return "ipc_section_406"
             if section_value == "498a":
                 return "ipc_section_498a"
+        return None
+
+    @staticmethod
+    def _resolve_direct_constitutional_authority_alias(message: str) -> str | None:
+        normalized = re.sub(r"[^a-z0-9 ]+", " ", str(message or "").lower())
+        normalized = re.sub(r"\s+", " ", normalized).strip()
+        if not normalized:
+            return None
+        if any(
+            phrase in normalized
+            for phrase in {
+                "constitutional remedies",
+                "constitution remedies",
+                "constitutional remedy",
+                "constitution remedy",
+                "right to constitutional remedies",
+                "right to constitution remedies",
+                "article for constitutional remedies",
+                "article for constitution remedies",
+                "article gives constitutional remedies",
+                "article gives constitution remedies",
+                "which article gives constitutional remedies",
+                "which article gives constitution remedies",
+                "which article is constitutional remedies",
+                "which article is constitution remedies",
+            }
+        ):
+            return "constitution_article_32"
         return None
 
     @staticmethod
@@ -3960,6 +6782,52 @@ class ChatService:
             return "directive_principles"
         if any(phrase in normalized for phrase in {"fundamental rights", "basic rights in constitution", "rights under constitution"}):
             return "fundamental_rights"
+        return None
+
+    @staticmethod
+    def _general_legal_explainer_key(message: str) -> str | None:
+        normalized = re.sub(r"[^a-z0-9 ]+", " ", str(message or "").lower())
+        normalized = re.sub(r"\s+", " ", normalized).strip()
+        if not normalized:
+            return None
+        explainer_phrases = {
+            "arbitration": {
+                "what is arbitration",
+                "what arbitration is",
+                "explain arbitration",
+                "meaning of arbitration",
+                "define arbitration",
+                "arbitration meaning",
+            },
+            "fir": {
+                "what is fir",
+                "what is an fir",
+                "explain fir",
+                "fir meaning",
+                "define fir",
+            },
+            "bail": {
+                "what is bail",
+                "explain bail",
+                "bail meaning",
+                "define bail",
+            },
+            "anticipatory_bail": {
+                "what is anticipatory bail",
+                "explain anticipatory bail",
+                "anticipatory bail meaning",
+                "define anticipatory bail",
+            },
+            "legal_notice": {
+                "what is legal notice",
+                "explain legal notice",
+                "legal notice meaning",
+                "define legal notice",
+            },
+        }
+        for key, phrases in explainer_phrases.items():
+            if any(phrase in normalized for phrase in phrases):
+                return key
         return None
 
     @staticmethod
@@ -3987,8 +6855,7 @@ class ChatService:
 
         components: list[dict[str, str]] = []
         seen: set[tuple[str, str]] = set()
-        for article_number in re.findall(r"\b(?:article|art)\s+(14|19|21|22|32|226)\b", lowered):
-            key = f"constitution_article_{article_number}"
+        for key in ChatService._extract_grouped_authority_keys(lowered):
             marker = ("authority", key)
             if marker not in seen:
                 seen.add(marker)
@@ -4005,6 +6872,56 @@ class ChatService:
                     seen.add(marker)
                     components.append({"kind": "explainer", "key": explainer_key})
         return components if len(components) >= 2 else []
+
+    @staticmethod
+    def _extract_grouped_authority_keys(message: str) -> list[str]:
+        normalized = re.sub(r"\s+", " ", str(message or "").strip().lower())
+        if not normalized:
+            return []
+
+        keys: list[str] = []
+        seen: set[str] = set()
+
+        def add_key(key: str) -> None:
+            if key and key not in seen and key in FAST_AUTHORITY_LOOKUPS:
+                seen.add(key)
+                keys.append(key)
+
+        article_numbers: list[str] = []
+
+        def add_article_number(value: str) -> None:
+            if value not in article_numbers:
+                article_numbers.append(value)
+
+        for article_number in re.findall(r"\b(?:article|art)\s+([0-9]+[a-z]?)\b", normalized):
+            add_article_number(article_number)
+        grouped_article_pattern = re.compile(
+            r"\b(?:article|art)\s+([0-9]+[a-z]?(?:(?:\s*(?:,|and)\s*|\s+)[0-9]+[a-z]?)+)(?:\s+(?:of|under)\s+the\s+constitution)?(?:\s+of\s+india|\s+constitution)?\b"
+        )
+        for match in grouped_article_pattern.finditer(normalized):
+            for article_number in re.findall(r"[0-9]+[a-z]?", match.group(1)):
+                add_article_number(article_number)
+        for article_number in article_numbers:
+            add_key(f"constitution_article_{article_number}")
+
+        section_matches = re.finditer(
+            r"\bsection(?:s)?\s+([0-9]+[a-z]?(?:(?:\s*(?:,|and)\s*|\s+)[0-9]+[a-z]?)*)(?:\s+(?:of|under)\s+the)?\s+(ni act|negotiable instruments act|ipc|indian penal code)\b",
+            normalized,
+        )
+        for match in section_matches:
+            statute = match.group(2)
+            for section_value in re.findall(r"[0-9]+[a-z]?", match.group(1)):
+                if section_value == "138" and statute in {"ni act", "negotiable instruments act"}:
+                    add_key("ni_act_section_138")
+                elif statute in {"ipc", "indian penal code"}:
+                    if section_value == "420":
+                        add_key("ipc_section_420")
+                    elif section_value == "406":
+                        add_key("ipc_section_406")
+                    elif section_value == "498a":
+                        add_key("ipc_section_498a")
+
+        return keys
 
     def _run_semantic_support_check(
         self,
@@ -4957,34 +7874,34 @@ class ChatService:
         if issue_type == "food_safety":
             if category == "evidence":
                 return (
-                    f"{prefix}: keep the packet, batch details, invoice, and photographs together in one preserved record."
+                    f"{prefix}: keep the packet, batch number, expiry date, invoice, photos or video, and any illness record together in one preserved file."
                 )
             if category == "progress":
                 if self._fact_indicates_completed_action(collected_facts.get("seller_contact"), {"complained", "seller", "brand", "platform", "emailed", "written complaint"}):
                     return (
-                        f"{prefix}: keep the seller-side complaint trail with the packet and defect record ready for escalation."
+                        f"{prefix}: keep the seller-side complaint trail ready, then escalate through the FSSAI Food Safety Connect channel or the National Consumer Helpline if there is no proper refund, replacement, or response."
                     )
                 return (
-                    f"{prefix}: put the seller or brand complaint in writing and keep the reply trail with the packet record."
+                    f"{prefix}: send a written complaint to the seller or brand asking for refund or replacement, then keep the ticket number for FSSAI or Consumer Helpline escalation."
                 )
             return (
-                f"{prefix}: do not throw away the packet or product. Keep the invoice, batch details, and clear photographs, and send a written complaint to the seller or brand."
+                f"{prefix}: do not throw away the packet or product. Preserve the invoice, batch details, and photos, complain in writing to the seller or brand, and be ready to escalate on FSSAI Food Safety Connect or the National Consumer Helpline."
             )
         if issue_type == "consumer":
             if category == "evidence":
                 return (
-                    f"{prefix}: keep the invoice, payment proof, and defect or service record together in one file."
+                    f"{prefix}: keep the invoice, payment proof, warranty or listing page, defect photos, chats, and complaint numbers together in one file."
                 )
             if category == "progress":
                 if self._fact_indicates_completed_action(collected_facts.get("complaint_status"), {"complaint", "emailed", "written", "ticket", "support"}):
                     return (
-                        f"{prefix}: tighten the complaint record and state the exact refund, replacement, repair, or compensation you want."
+                        f"{prefix}: tighten the complaint record and state the exact refund, replacement, repair, compensation, and timeline you want before escalation."
                     )
                 return (
-                    f"{prefix}: put the complaint in writing to the seller or service provider and preserve the reply trail."
+                    f"{prefix}: put the complaint in writing to the seller or service provider, ask for refund, replacement, repair, or compensation, and preserve the reply trail."
                 )
             return (
-                f"{prefix}: keep the invoice, payment proof, and defect or service record together, put the complaint in writing to the seller or service provider, and preserve the emails, screenshots, and complaint numbers."
+                f"{prefix}: keep the invoice, payment proof, and defect record together, complain in writing to the seller or platform, and escalate through the National Consumer Helpline if they do not resolve it."
             )
         if issue_type == "fir_refusal":
             if category == "actor":
@@ -5219,18 +8136,18 @@ class ChatService:
         if issue_type == "food_safety":
             progress = ""
             if self._fact_indicates_completed_action(facts.get("seller_contact"), {"complained", "written complaint", "seller", "brand", "platform", "emailed"}):
-                progress = " You have already complained to the seller side, so the next step is to preserve the evidence and be ready to escalate if needed."
+                progress = " Since you have already complained to the seller side, move from waiting to escalation: keep the proof ready for FSSAI Food Safety Connect and the National Consumer Helpline."
             return (
-                f"{opening} This kind of matter is easier to prove while the packet, batch details, and photographs are still intact."
+                f"{opening} This becomes much stronger when the packet, batch details, invoice, photos, and complaint numbers are preserved before FSSAI or consumer escalation."
                 + progress,
                 style_key,
             )
         if issue_type == "consumer":
             progress = ""
             if self._fact_indicates_completed_action(facts.get("complaint_status"), {"complaint", "emailed", "written", "ticket", "support"}):
-                progress = " You have already started the complaint record, so the next step is to tighten the proof and state clearly what relief you want."
+                progress = " Since a complaint trail already exists, the next step is to set a deadline and state the exact refund, replacement, repair, or compensation expected."
             return (
-                f"{opening} A clear written complaint usually makes the transaction trail easier to prove."
+                f"{opening} The strongest path is a short written demand backed by proof, followed by National Consumer Helpline or Consumer Commission escalation if the seller does not resolve it."
                 + progress,
                 style_key,
             )
@@ -5361,11 +8278,27 @@ class ChatService:
         warnings: list[str],
         query: str | None,
     ) -> InternalChatResult:
+        normalized_query = re.sub(r"\s+", " ", str(query or "").strip().lower())
+        complete_authority_reference = self._looks_like_complete_authority_reference_prompt(normalized_query)
+        bns_unavailable = self._is_bns_authority_query_with_unavailable_dataset(normalized_query)
         follow_up_question: str | None = None
         likely_forum: str | None = None
         caution: str | None = None
         disclaimer_mode = "medium_risk"
-        if kind == "low_confidence":
+        if bns_unavailable and kind in {"low_confidence", "unsupported_output", "no_relevant_authority", "technical_failure"}:
+            answer = self._complete_authority_no_result_answer(query=query or "")
+            reason_code = "bns_dataset_source_unavailable"
+            disclaimer_mode = "high_risk"
+        elif complete_authority_reference and kind in {"low_confidence", "unsupported_output", "no_relevant_authority"}:
+            answer = self._complete_authority_no_result_answer(query=query or "")
+            reason_code = (
+                "retrieval_low_confidence"
+                if kind == "low_confidence"
+                else ("unsupported_output" if kind == "unsupported_output" else "no_relevant_authority")
+            )
+            caution = None
+            disclaimer_mode = "high_risk" if kind in {"low_confidence", "unsupported_output"} else "medium_risk"
+        elif kind == "low_confidence":
             follow_up_question = self._grounded_clarifying_question(query or "")
             answer = self._human_fallback_clarification_answer(
                 kind=kind,
@@ -5422,6 +8355,29 @@ class ChatService:
         )
 
     @staticmethod
+    def _complete_authority_no_result_answer(*, query: str) -> str:
+        normalized_query = re.sub(r"\s+", " ", str(query or "").strip())
+        reference = normalized_query or "that legal reference"
+        lowered = reference.lower()
+        if " bns" in f" {lowered}" or "bharatiya nyaya sanhita" in lowered:
+            return (
+                f"BNS dataset/source unavailable for {reference} right now.\n"
+                "I could not confirm it from the local BNS dataset, India Kanoon, or the available external authority sources."
+            )
+        return (
+            f"I could not find a reliable official result for {reference} from the currently available sources.\n"
+            "If you want, I can next try the exact statutory text, a broader official-source lookup, or the practical meaning of that provision."
+        )
+
+    def _is_bns_authority_query_with_unavailable_dataset(self, normalized_query: str) -> bool:
+        compact = re.sub(r"\s+", " ", str(normalized_query or "").strip().lower())
+        if not compact:
+            return False
+        if not (" bns" in f" {compact}" or "bharatiya nyaya sanhita" in compact):
+            return False
+        return not self.legal_dataset.has_dataset_file("bns")
+
+    @staticmethod
     def _human_fallback_clarification_answer(*, kind: str, question: str) -> str:
         normalized_kind = str(kind or "").strip().lower()
         normalized_question = str(question or "").strip()
@@ -5440,7 +8396,11 @@ class ChatService:
     @staticmethod
     def _grounded_clarifying_question(query: str) -> str:
         normalized = query.lower()
-        if any(token in normalized for token in {"section ", "article ", "rule "}):
+        if ChatService._looks_like_complete_authority_reference_prompt(normalized):
+            return ""
+        if "article " in normalized and not re.search(r"\barticle\s+\d+[a-z]?\b", normalized):
+            return "Which Constitution article do you want checked?"
+        if "section " in normalized or "rule " in normalized:
             return "Which exact statute or Act is this section or rule from?"
         if any(token in normalized for token in {"judgment", "judgement", "case law", "citation", "precedent"}):
             return "Can you share the exact case name, court, citation, or year you want checked?"
@@ -5504,12 +8464,18 @@ class ChatService:
             "help me file",
         }
         narrative_markers = {
+            "scam",
+            "scammed",
             "money got debited",
+            "debited",
             "money deducted",
             "fake link",
+            "payment link",
             "upi fraud",
             "cyber fraud",
             "bank fraud",
+            "olx",
+            "cheated",
             "unauthorized debit",
             "police refused",
             "refused to file fir",
@@ -5603,8 +8569,7 @@ class ChatService:
             )
         if issue_type == "food_safety":
             return (
-                "A contamination or unsafe-food complaint becomes stronger when the packet details, invoice, defect photographs,"
-                " and any illness records are preserved before the seller or authority is approached."
+                "Unsafe or contaminated food can be taken through both the food-safety route and the consumer route. FSSAI/Food Safety Connect is useful for safety action, while the National Consumer Helpline or Consumer Commission is useful for refund, replacement, compensation, and costs."
             )
         if issue_type == "snatching_theft":
             location_text = f" in {location}" if location else ""
@@ -5624,8 +8589,7 @@ class ChatService:
             )
         if issue_type == "consumer":
             return (
-                "Consumer matters usually turn on a clear written complaint, proof of payment, product or service records,"
-                " and a precise statement of the refund, replacement, repair, or compensation being sought."
+                "Consumer matters usually turn on proof of purchase, proof of defect or service deficiency, a written demand, and a clear relief request such as refund, replacement, repair, compensation, or complaint costs."
             )
         if issue_type == "notice":
             return (
@@ -5694,7 +8658,7 @@ class ChatService:
                 product = "the chocolate packet"
             return (
                 f"This looks like a contamination or unsafe-food complaint concerning {product},"
-                " so the immediate focus is evidence preservation and seller or authority escalation."
+                " so the answer should focus on preserving evidence, asking for refund or replacement, and escalating to FSSAI/Food Safety Connect or the National Consumer Helpline if needed."
             )
         if issue_type == "snatching_theft":
             item = "the stolen item"
@@ -5716,8 +8680,7 @@ class ChatService:
             )
         if issue_type == "consumer":
             return (
-                "This appears to be a consumer dispute, so the practical path is a written seller or service complaint"
-                " backed by payment and defect records."
+                "This appears to be a consumer dispute, so the useful path is a written seller or platform demand, proof-backed escalation, and a clear request for refund, replacement, repair, compensation, or costs."
             )
         if issue_type == "notice":
             return (
@@ -6265,17 +9228,21 @@ class ChatService:
         if issue_type == "food_safety":
             steps = ["Preserve the packet, batch details, invoice, and defect photographs."]
             if not self._fact_indicates_completed_action(facts.get("seller_contact"), {"complained", "seller", "brand", "platform", "emailed", "written complaint"}):
-                steps.append("Send a written complaint to the seller, brand, or platform and keep the reply trail.")
-            steps.append("If the product caused illness or appears unsafe, prepare the record for food-safety or consumer escalation.")
+                steps.append("Send a written complaint to the seller, brand, or platform asking for refund or replacement, and keep the email, ticket number, or chat acknowledgement.")
+            steps.append("If it appears unsafe or caused illness, file on FSSAI Food Safety Connect at https://foscos.fssai.gov.in/consumergrievance/ and keep the grievance number.")
+            steps.append("For refund, replacement, compensation, or complaint costs, raise the matter on the National Consumer Helpline at https://consumerhelpline.gov.in/ or call 1915.")
+            steps.append("If the seller still does not resolve it, use the same record for a Consumer Commission complaint through https://edaakhil.nic.in/.")
             return steps
         if issue_type == "consumer":
             steps = []
             if not self._fact_indicates_completed_action(facts.get("complaint_status"), {"complaint", "emailed", "written", "ticket", "support"}):
-                steps.append("Put the complaint in writing to the seller, platform, or service provider.")
+                steps.append("Put the complaint in writing to the seller, platform, or service provider and ask clearly for refund, replacement, repair, compensation, or costs.")
             steps.extend(
                 [
-                    "Collect the invoice, payment proof, chats, warranty terms, and defect or service evidence.",
-                    "State the exact relief you want before escalating further.",
+                    "Collect the invoice, payment proof, listing or warranty terms, chats, emails, defect photos, and complaint numbers.",
+                    "If there is no timely response, escalate through the National Consumer Helpline at https://consumerhelpline.gov.in/ or call 1915.",
+                    "If the issue remains unresolved, prepare an e-Daakhil Consumer Commission filing at https://edaakhil.nic.in/ with the chronology, proof, and relief amount.",
+                    "If you want, I can help draft the seller complaint, Consumer Helpline text, or Consumer Commission complaint summary.",
                 ]
             )
             return steps
@@ -6339,8 +9306,8 @@ class ChatService:
             "cyber_fraud": "Bank / Cyber Crime Portal / Cyber Cell",
             "snatching_theft": "Police Station",
             "landlord_harassment": "Police / Civil or Rent Dispute Forum",
-            "food_safety": "Seller / Food Safety Authority / Consumer Forum",
-            "consumer": "Seller / Consumer Forum",
+            "food_safety": "Seller or Brand / FSSAI Food Safety Connect / National Consumer Helpline / Consumer Commission",
+            "consumer": "Seller or Platform / National Consumer Helpline / Consumer Commission",
             "fir_refusal": "Senior Police Officer",
             "notice": "Advocate Notice / Pre-litigation",
             "police_complaint": "Police Station",
@@ -6354,8 +9321,8 @@ class ChatService:
             "cyber_fraud": ["transaction ID", "screenshots", "bank statement", "complaint acknowledgement"],
             "snatching_theft": ["complaint copy", "IMEI or item details", "invoice", "ID proof"],
             "landlord_harassment": ["rent agreement", "rent proof", "messages", "notice copy"],
-            "food_safety": ["packet", "invoice", "photos", "medical record if any"],
-            "consumer": ["invoice", "payment proof", "complaint copy", "photos or chats"],
+            "food_safety": ["packet", "batch number", "expiry date", "invoice", "photos or video", "medical record if any", "seller/FSSAI complaint number"],
+            "consumer": ["invoice", "payment proof", "listing or warranty terms", "complaint copy", "photos or chats", "ticket numbers"],
             "fir_refusal": ["written complaint", "proof of refusal", "supporting evidence"],
             "notice": ["notice copy", "agreement", "payment records", "communications"],
             "police_complaint": ["written complaint", "ID proof", "supporting evidence"],
@@ -6473,7 +9440,7 @@ class ChatService:
         if issue_type == "documents":
             guidance = self._documents_guidance(conversation_state)
             return {**guidance, **playbook}
-        if any(token in normalized for token in {"cyber fraud", "upi", "wallet", "bank fraud", "phishing", "fake link", "otp", "debit"}):
+        if any(token in normalized for token in {"cyber fraud", "upi", "wallet", "bank fraud", "phishing", "fake link", "payment link", "otp", "debit", "debited", "scam", "scammed", "olx", "cheated"}):
             return {
                 "lines": [
                     "Immediate steps: block the payment channel, call the bank or wallet helpline, and secure the account credentials.",
@@ -6644,7 +9611,7 @@ class ChatService:
         )
 
     def _detect_issue_type(self, normalized: str, domain: str) -> str:
-        if any(token in normalized for token in {"cyber fraud", "upi", "wallet", "bank fraud", "phishing", "fake link", "otp", "debit"}):
+        if any(token in normalized for token in {"cyber fraud", "upi", "wallet", "bank fraud", "phishing", "fake link", "payment link", "otp", "debit", "debited", "scam", "scammed", "olx", "cheated"}):
             return "cyber_fraud"
         if any(
             token in normalized
@@ -6773,22 +9740,23 @@ class ChatService:
 
     def _consumer_guidance(self, state: ConversationState) -> dict[str, str | list[str] | None]:
         return {
-            "summary": "This appears to be a consumer dispute, so the first useful move is a written complaint backed by payment proof and clear defect or deficiency evidence.",
-            "legal_position": "Consumer matters are easier to pursue when the product or service issue, the money paid, and the exact relief claimed are all stated clearly in writing before escalation.",
+            "summary": "This appears to be a consumer dispute, so move in writing: demand a clear remedy from the seller or platform, then escalate with the same proof if they do not resolve it.",
+            "legal_position": "Consumer matters are easier to pursue when the defect or service deficiency, purchase proof, complaint trail, and requested relief are specific. The relief can include refund, replacement, repair, compensation for loss or inconvenience, and complaint costs.",
             "practical_next_steps": [
-                "Send a written complaint to the seller, brand, or service provider and keep delivery proof, ticket number, email trail, or chat acknowledgment.",
-                "Collect the invoice, payment proof, warranty terms, chats, and photographs or recordings that show the defect, delay, or deficiency in service.",
-                "If the problem is not resolved, prepare a concise consumer complaint file stating the chronology, the loss suffered, and the exact refund, replacement, repair, or compensation requested.",
+                "Send a written complaint to the seller, platform, brand, or service provider asking for the exact remedy you want: refund, replacement, repair, compensation, or costs. Give a short deadline and keep the ticket number or email trail.",
+                "Organise the invoice, payment proof, product listing or warranty terms, chats, emails, photos or video of the defect, delivery details, and every complaint reference number.",
+                "If there is no proper response, escalate on the National Consumer Helpline at https://consumerhelpline.gov.in/ or call 1915, then use the same record for e-Daakhil at https://edaakhil.nic.in/ if a Consumer Commission complaint is needed.",
+                "If you want, I can draft a short seller complaint, Consumer Helpline complaint text, or Consumer Commission summary from your facts.",
             ],
             "lines": [
-                "Start by sending a written complaint to the seller or service provider and keep proof of delivery.",
-                "Collect the invoice, payment proof, chats or emails, warranty terms, and photographs of the defect or deficiency.",
-                "If the issue is not resolved, prepare a consumer complaint that clearly states the defect or service deficiency, the loss suffered, and the refund, replacement, repair, or compensation you are seeking.",
+                "Start with a written demand to the seller, platform, brand, or service provider and ask clearly for refund, replacement, repair, compensation, or costs.",
+                "Keep the invoice, payment proof, warranty or listing page, chats, emails, photos or video, and ticket numbers together.",
+                "If they do not resolve it, use the National Consumer Helpline at https://consumerhelpline.gov.in/ or 1915; for a formal Consumer Commission filing, prepare the same record for https://edaakhil.nic.in/.",
             ],
-            "likely_forum": "Consumer Commission",
-            "authorities": ["seller", "consumer commission"],
-            "documents_to_keep": ["invoice", "payment proof", "complaint copy", "photos"],
-            "caution": "Make sure the chronology and the exact refund or compensation amount are clearly documented.",
+            "likely_forum": "Seller or Platform / National Consumer Helpline / Consumer Commission",
+            "authorities": ["National Consumer Helpline", "Consumer Commission", "e-Daakhil", "seller or platform"],
+            "documents_to_keep": ["invoice", "payment proof", "listing or warranty terms", "complaint copy", "photos or video", "ticket numbers"],
+            "caution": "Make the relief specific; a complaint that only says the product was bad is weaker than one that asks for refund, replacement, repair, compensation, or costs with proof.",
             "follow_up_question": "Was any written complaint already sent to the seller or service provider?",
         }
 
@@ -6841,22 +9809,24 @@ class ChatService:
         if "chocolate" in query.lower():
             product_hint = "the chocolate packet"
         return {
-            "summary": f"This appears to be a contamination or unsafe-food complaint involving {product_hint}, so the immediate priority is to preserve the packet and defect evidence before the matter becomes harder to prove.",
-            "legal_position": "Food contamination complaints are much stronger when the packet, batch details, expiry, invoice, defect photographs, and any illness records are preserved before the seller or authority is approached.",
+            "summary": f"This appears to be a defective or unsafe-food complaint involving {product_hint}. Treat it as both an evidence issue and a consumer-relief issue: preserve the product, demand refund or replacement, and escalate if needed.",
+            "legal_position": "For unsafe or contaminated food, FSSAI/Food Safety Connect is the practical safety-regulator route, while the National Consumer Helpline or Consumer Commission route helps with refund, replacement, compensation, and complaint costs.",
             "practical_next_steps": [
-                f"Do not discard {product_hint}; keep the packet, batch number, expiry date, and clear photographs or video of the defect in the same condition as far as possible.",
-                "Send a written complaint to the seller, brand, or platform asking for refund or replacement and keep the reply, complaint number, and invoice or payment proof.",
-                "If the product appears unsafe or someone fell ill, prepare the packet details, invoice, photos, and any medical papers for escalation to the food safety authority or consumer forum.",
+                f"Do not discard {product_hint}. Keep the sealed packet or remaining product, batch number, expiry date, invoice, photos or video, and any medical record if someone felt unwell.",
+                "Send a written complaint to the seller, brand, or platform asking for refund or replacement and a written acknowledgement. Keep the ticket number, email, chat, or call record.",
+                "For food-safety action, file on FSSAI Food Safety Connect at https://foscos.fssai.gov.in/consumergrievance/ with packet photos, batch details, invoice, and illness details if any.",
+                "For refund, replacement, compensation, or costs, raise the matter on the National Consumer Helpline at https://consumerhelpline.gov.in/ or call 1915; if unresolved, prepare an e-Daakhil filing at https://edaakhil.nic.in/.",
+                "If you want, I can draft the seller complaint or the FSSAI/Consumer Helpline complaint text from your product details.",
             ],
             "lines": [
-                f"Because the issue appears to be contamination or an unsafe defect in {product_hint}, preserve the packet, batch details, expiry date, purchase bill, and clear photos or video of the defect before consuming or discarding it.",
-                "Start with a written complaint to the seller or brand and ask for a refund, replacement, and written acknowledgment, then keep all chats, emails, and complaint reference numbers.",
-                "If the product appears unsafe or harmful, escalate the matter to the food safety authority or consumer forum with the packet details, invoice, photos, and any medical records if illness occurred.",
+                f"Preserve {product_hint}, the batch number, expiry date, invoice, and clear photos or video before consuming or throwing anything away.",
+                "Ask the seller, brand, or platform in writing for refund or replacement and keep the acknowledgement or ticket number.",
+                "Escalate safety concerns through FSSAI Food Safety Connect at https://foscos.fssai.gov.in/consumergrievance/; use https://consumerhelpline.gov.in/ or 1915 for consumer relief such as refund, replacement, or compensation.",
             ],
-            "likely_forum": "Seller / Brand / Food Safety Authority / Consumer Commission",
-            "authorities": ["seller", "food safety authority", "consumer commission"],
-            "documents_to_keep": ["product packet", "invoice", "photos or video", "written complaint", "medical records if any"],
-            "caution": "Do not rely only on a verbal complaint because contamination or unsafe-food claims are stronger when the packet details and defect evidence are preserved.",
+            "likely_forum": "Seller or Brand / FSSAI Food Safety Connect / National Consumer Helpline / Consumer Commission",
+            "authorities": ["FSSAI", "Food Safety Connect", "National Consumer Helpline", "Consumer Commission", "e-Daakhil"],
+            "documents_to_keep": ["product packet", "batch number", "expiry date", "invoice", "photos or video", "written complaint", "medical records if any", "complaint numbers"],
+            "caution": "Do not rely only on a verbal complaint or throw away the packet; the batch details and defect evidence are what make refund, replacement, compensation, and safety escalation practical.",
             "follow_up_question": "Do you still have the packet, invoice, and photographs of the defect?",
         }
 
@@ -7158,20 +10128,23 @@ class ChatService:
         lowered = cleaned.lower()
         variants = [cleaned]
 
-        replacements = {
-            " ipc": " Indian Penal Code",
-            " crpc": " Code of Criminal Procedure",
-            " cpc": " Code of Civil Procedure",
-            " bns": " Bharatiya Nyaya Sanhita",
-            " bnss": " Bharatiya Nagarik Suraksha Sanhita",
-            " ni act": " Negotiable Instruments Act",
+        statute_expansions = {
+            "ipc": "Indian Penal Code",
+            "crpc": "Code of Criminal Procedure",
+            "cpc": "Code of Civil Procedure",
+            "bns": "Bharatiya Nyaya Sanhita",
+            "bnss": "Bharatiya Nagarik Suraksha Sanhita",
+            "ni act": "Negotiable Instruments Act",
         }
-        expanded = lowered
-        for needle, replacement in replacements.items():
-            expanded = re.sub(rf"\b{re.escape(needle.strip())}\b", replacement, expanded, flags=re.IGNORECASE)
+        expanded = cleaned
+        matched_statutes: list[tuple[str, str]] = []
+        for alias, full_name in statute_expansions.items():
+            if re.search(rf"\b{re.escape(alias)}\b", lowered, flags=re.IGNORECASE):
+                matched_statutes.append((alias, full_name))
+                expanded = re.sub(rf"\b{re.escape(alias)}\b", full_name, expanded, flags=re.IGNORECASE)
         expanded = re.sub(r"\s+", " ", expanded).strip()
-        if expanded and expanded != lowered:
-            variants.append(expanded.title())
+        if expanded and expanded.lower() != lowered:
+            variants.append(expanded)
 
         if any(token in lowered for token in {"upi", "fake link", "phishing", "otp", "debit", "cyber fraud", "bank fraud"}):
             variants.extend(
@@ -7186,10 +10159,28 @@ class ChatService:
 
         section_match = re.search(r"\bsection\s+([0-9]+[a-z]?)\b", lowered, re.IGNORECASE)
         article_match = re.search(r"\barticle\s+([0-9]+[a-z]?)\b", lowered, re.IGNORECASE)
-        if section_match and "ipc" in lowered:
-            variants.append(f"Indian Penal Code section {section_match.group(1).upper()}")
-        if article_match and "constitution" in lowered:
-            variants.append(f"Constitution of India article {article_match.group(1).upper()}")
+        if section_match:
+            section_value = section_match.group(1).upper()
+            for alias, full_name in matched_statutes:
+                variants.extend(
+                    [
+                        f"Section {section_value} {full_name}",
+                        f"{full_name} Section {section_value}",
+                        f"Section {section_value} {full_name} explanation",
+                        f"{full_name} Section {section_value} official text",
+                        f"{alias.upper()} Section {section_value}",
+                    ]
+                )
+        if article_match:
+            article_value = article_match.group(1).upper()
+            variants.extend(
+                [
+                    f"Article {article_value} Constitution of India",
+                    f"Constitution of India Article {article_value}",
+                    f"Article {article_value} explanation",
+                    f"Article {article_value} official text",
+                ]
+            )
 
         return self._dedupe_values(variants)
 

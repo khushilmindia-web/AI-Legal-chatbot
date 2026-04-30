@@ -1,8 +1,8 @@
-const apiBase = window.APP_CONFIG?.apiBaseUrl ?? "";
 const frontendBase = window.APP_CONFIG?.frontendBaseUrl || "/frontend";
 const USER_KEY = 'legalAuthUser';
-const ME_URL = `${apiBase}/auth/me`;
-const LOGOUT_URL = `${apiBase}/auth/logout`;
+const TOKEN_KEY = 'legalAuthToken';
+const ME_URL = "/auth/me";
+const LOGOUT_URL = "/auth/logout";
 const DEFAULT_REQUEST_TIMEOUT_MS = 30000;
 
 const state = {
@@ -154,30 +154,52 @@ function clearError() {
 }
 
 function setStoredUser(user) {
-  sessionStorage.setItem(USER_KEY, JSON.stringify(user));
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+
+function getStoredUser() {
+  const raw = localStorage.getItem(USER_KEY);
+  if (!raw) {
+    return null;
+  }
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    localStorage.removeItem(USER_KEY);
+    return null;
+  }
+}
+
+function getStoredToken() {
+  return localStorage.getItem(TOKEN_KEY) || "";
 }
 
 function clearSession() {
-  sessionStorage.removeItem(USER_KEY);
+  localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(TOKEN_KEY);
   state.currentUser = null;
 }
 
 function redirectToAuth() {
-  window.location.href = `${frontendBase}/auth.html`;
+  window.location.replace(`${frontendBase}/auth.html`);
 }
 
 async function requestJson(path, options = {}) {
   const headers = {
     ...(options.headers || {}),
   };
+  const token = getStoredToken();
   const controller = new AbortController();
   const timeoutMs = options.timeoutMs || DEFAULT_REQUEST_TIMEOUT_MS;
   const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
   if (!(options.body instanceof FormData) && !headers["Content-Type"]) {
     headers["Content-Type"] = "application/json";
   }
+  if (token && !headers.Authorization) {
+    headers.Authorization = `Bearer ${token}`;
+  }
   try {
-    const response = await fetch(`${apiBase}${path}`, {
+    const response = await fetch(path, {
       ...options,
       credentials: options.credentials || "include",
       headers,
@@ -221,6 +243,19 @@ function renderUserCard(user) {
 }
 
 async function ensureAuthenticated() {
+  const token = getStoredToken();
+  if (!token) {
+    clearSession();
+    redirectToAuth();
+    throw new Error("Authentication required");
+  }
+
+  const storedUser = getStoredUser();
+  if (storedUser) {
+    state.currentUser = storedUser;
+    renderUserCard(storedUser);
+  }
+
   try {
     const user = await fetchCurrentUser();
     state.currentUser = user;
@@ -228,8 +263,10 @@ async function ensureAuthenticated() {
     renderUserCard(user);
     return user;
   } catch (error) {
-    clearSession();
-    redirectToAuth();
+    if (!storedUser) {
+      clearSession();
+      redirectToAuth();
+    }
     throw error;
   }
 }
