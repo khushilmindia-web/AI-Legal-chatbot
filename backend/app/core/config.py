@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     retrieval_mode: str = Field(default="local_context", alias="RETRIEVAL_MODE")
     openai_timeout_seconds: float = Field(default=45.0, alias="OPENAI_TIMEOUT_SECONDS")
     openai_max_retries: int = Field(default=2, alias="OPENAI_MAX_RETRIES")
-    database_backend: str = Field(default="sqlite", alias="DATABASE_BACKEND")
+    database_backend: str = Field(default="mongodb", alias="DATABASE_BACKEND")
     mongodb_uri: str = Field(default="mongodb://127.0.0.1:27017", alias="MONGODB_URI")
     mongodb_database: str = Field(default="lawyer_ai", alias="MONGODB_DATABASE")
     cors_origins_raw: str = Field(
@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     google_client_id: str = Field(default="", alias="GOOGLE_CLIENT_ID")
     google_client_secret: str = Field(default="", alias="GOOGLE_CLIENT_SECRET")
     google_redirect_uri: str = Field(default="", alias="GOOGLE_REDIRECT_URI")
-    auth_cookie_name: str = Field(default="legal_auth_token", alias="AUTH_COOKIE_NAME")
+    auth_cookie_name: str = Field(default="session_token", alias="AUTH_COOKIE_NAME")
     auth_session_duration_days: int = Field(default=14, alias="AUTH_SESSION_DURATION_DAYS")
     frontend_auth_path: str = Field(default="/frontend/auth.html", alias="FRONTEND_AUTH_PATH")
     frontend_app_path: str = Field(default="/frontend/index.html", alias="FRONTEND_APP_PATH")
@@ -139,7 +139,18 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins(self) -> list[str]:
-        return [item.strip() for item in self.cors_origins_raw.split(",") if item.strip()]
+        origins = [item.strip().rstrip("/") for item in self.cors_origins_raw.split(",") if item.strip()]
+        app_base_url = self.app_base_url.strip().rstrip("/")
+        if app_base_url and app_base_url not in origins:
+            origins.append(app_base_url)
+        return origins
+
+    @property
+    def google_oauth_redirect_uri(self) -> str:
+        app_base_url = self.app_base_url.strip().rstrip("/")
+        if app_base_url:
+            return f"{app_base_url}/auth/google/callback"
+        return self.google_redirect_uri.strip()
 
     @property
     def google_search_trusted_domains(self) -> list[str]:
@@ -147,6 +158,8 @@ class Settings(BaseSettings):
 
     @property
     def database_url(self) -> str:
+        # SQLite temporarily disabled during MongoDB migration.
+        # Kept only so backup/migration tooling can still locate data/lawyer_ai.db.
         DATA_DIR.mkdir(parents=True, exist_ok=True)
         return str(DB_PATH)
 

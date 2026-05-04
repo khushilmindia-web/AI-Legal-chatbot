@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
+import logging
 
 from backend.app.api.auth_utils import get_optional_current_user
 from backend.app.api.routes.auth import router as auth_router
@@ -11,17 +12,30 @@ from backend.app.api.routes.health import router as health_router
 from backend.app.core.config import get_settings
 from backend.app.core.logging import configure_logging
 from backend.app.services.chat_service import ChatService
-from backend.app.services.session_store import SessionStore
+from backend.app.services.storage import create_session_store
 from backend.app.utils.request_context import RequestContextMiddleware
+
+
+logger = logging.getLogger(__name__)
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging(settings.debug)
+    logger.info(
+        "startup APP_BASE_URL=%s GOOGLE_REDIRECT_URI=%s effective_google_redirect_uri=%s CORS_ALLOW_ORIGINS=%s",
+        settings.app_base_url,
+        settings.google_redirect_uri,
+        settings.google_oauth_redirect_uri,
+        settings.cors_origins,
+    )
 
     app = FastAPI(title="Lawyer AI", version="0.1.0")
     app.state.settings = settings
-    app.state.session_store = SessionStore(settings.database_url)
+    # SQLite temporarily disabled during MongoDB migration.
+    # The old SQLite SessionStore code remains in backend/app/services/session_store.py
+    # as a backup, but runtime storage is intentionally created through MongoDB only.
+    app.state.session_store = create_session_store(settings)
     app.state.chat_service = ChatService(settings=settings, store=app.state.session_store)
 
     app.add_middleware(RequestContextMiddleware)
@@ -44,18 +58,51 @@ def create_app() -> FastAPI:
         lower_path = path.lower()
 
         if path == "/":
-            destination = settings.frontend_app_path if get_optional_current_user(request) else settings.frontend_auth_path
+            user = get_optional_current_user(request)
+            destination = settings.frontend_app_path if user else settings.frontend_auth_path
+            logger.info(
+                "frontend_auth_guard redirect path=%s destination=%s reason=%s cookies=%s",
+                path,
+                destination,
+                "authenticated_root" if user else "unauthenticated_root",
+                sorted(request.cookies.keys()),
+            )
             return RedirectResponse(url=destination)
 
         if lower_path in {"/frontend", "/frontend/"}:
-            destination = settings.frontend_app_path if get_optional_current_user(request) else settings.frontend_auth_path
+            user = get_optional_current_user(request)
+            destination = settings.frontend_app_path if user else settings.frontend_auth_path
+            logger.info(
+                "frontend_auth_guard redirect path=%s destination=%s reason=%s cookies=%s",
+                path,
+                destination,
+                "authenticated_frontend_root" if user else "unauthenticated_frontend_root",
+                sorted(request.cookies.keys()),
+            )
             return RedirectResponse(url=destination)
 
         if path == "/frontend/Index.html":
+            logger.info("frontend_auth_guard redirect path=%s destination=%s reason=legacy_index_case", path, settings.frontend_app_path)
             return RedirectResponse(url=settings.frontend_app_path)
 
-        if lower_path in protected_paths and not get_optional_current_user(request):
-            return RedirectResponse(url=settings.frontend_auth_path)
+        if lower_path in protected_paths:
+            user = get_optional_current_user(request)
+            if not user:
+                logger.warning(
+                    "frontend_auth_guard redirect path=%s destination=%s reason=protected_path_no_session cookie_name=%s cookies=%s",
+                    path,
+                    settings.frontend_auth_path,
+                    settings.auth_cookie_name,
+                    sorted(request.cookies.keys()),
+                )
+                return RedirectResponse(url=settings.frontend_auth_path)
+            logger.info(
+                "frontend_auth_guard allow path=%s reason=protected_path_session user_id=%s cookie_name=%s cookies=%s",
+                path,
+                user.get("id"),
+                settings.auth_cookie_name,
+                sorted(request.cookies.keys()),
+            )
 
         return await call_next(request)
 

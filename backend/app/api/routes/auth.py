@@ -73,10 +73,18 @@ def frontend_app_url(request: Request) -> str:
 
 
 def google_redirect_uri(request: Request) -> str:
-    configured = request.app.state.settings.google_redirect_uri.strip()
-    if configured:
-        return configured
-    return build_frontend_url(request, "/auth/google/callback")
+    settings = request.app.state.settings
+    redirect_uri = settings.google_oauth_redirect_uri.strip()
+    configured = settings.google_redirect_uri.strip()
+    if configured and configured.rstrip("/") != redirect_uri.rstrip("/"):
+        logger.warning(
+            "GOOGLE_REDIRECT_URI ignored because APP_BASE_URL is authoritative configured=%s effective=%s",
+            configured,
+            redirect_uri,
+        )
+    if redirect_uri.startswith("http://") and "localhost" not in redirect_uri and "127.0.0.1" not in redirect_uri:
+        logger.warning("Google OAuth redirect_uri is not HTTPS; ngrok Google OAuth requires exact HTTPS URL redirect_uri=%s", redirect_uri)
+    return redirect_uri or build_frontend_url(request, "/auth/google/callback")
 
 
 def google_auth_configured(request: Request) -> bool:
@@ -93,6 +101,8 @@ def cleanup_google_states() -> None:
 
 def exchange_google_code_for_tokens(request: Request, code: str) -> dict:
     settings = request.app.state.settings
+    redirect_uri = google_redirect_uri(request)
+    logger.info("Google OAuth token exchange redirect_uri=%s", redirect_uri)
     response = google_oauth_http_request(
         "POST",
         GOOGLE_TOKEN_URL,
@@ -100,7 +110,7 @@ def exchange_google_code_for_tokens(request: Request, code: str) -> dict:
             "code": code,
             "client_id": settings.google_client_id,
             "client_secret": settings.google_client_secret,
-            "redirect_uri": google_redirect_uri(request),
+            "redirect_uri": redirect_uri,
             "grant_type": "authorization_code",
         },
         timeout=20,
@@ -109,7 +119,7 @@ def exchange_google_code_for_tokens(request: Request, code: str) -> dict:
         logger.warning(
             "Google token exchange failed status=%s redirect_uri=%s body=%s",
             response.status_code,
-            google_redirect_uri(request),
+            redirect_uri,
             response.text[:500],
         )
     response.raise_for_status()
@@ -146,16 +156,32 @@ def get_or_create_google_auth_user(request: Request, profile: dict):
 
     existing_google_user = store.get_user_by_google_sub(google_sub)
     if existing_google_user:
+        logger.info(
+            "Google OAuth Mongo user lookup result=existing_google user_id=%s email=%s",
+            existing_google_user.get("id"),
+            existing_google_user.get("email"),
+        )
         return existing_google_user
 
     existing_email_user = store.get_user_by_email(email)
     if existing_email_user:
         linked_user = store.link_google_account(existing_email_user["id"], google_sub)
         if linked_user:
+            logger.info(
+                "Google OAuth Mongo user lookup result=linked_existing_email user_id=%s email=%s",
+                linked_user.get("id"),
+                linked_user.get("email"),
+            )
             return linked_user
         raise ValueError("Failed to link Google account")
 
-    return store.create_google_user(full_name=full_name, email=email, google_sub=google_sub, state=None)
+    user = store.create_google_user(full_name=full_name, email=email, google_sub=google_sub, state=None)
+    logger.info(
+        "Google OAuth Mongo user lookup result=created_google user_id=%s email=%s",
+        user.get("id"),
+        user.get("email"),
+    )
+    return user
 
 
 @router.post("/auth/signup", response_model=AuthResponse)
@@ -195,6 +221,7 @@ def login(payload: AuthLoginRequest, request: Request, response: Response) -> Au
 @router.get("/auth/me", response_model=AuthUser)
 def me(request: Request) -> AuthUser:
     user = require_current_user(request)
+    logger.info("/auth/me authenticated user_id=%s email=%s", user.get("id"), user.get("email"))
     return AuthUser(**user)
 
 
@@ -261,9 +288,15 @@ def google_login(request: Request):
     cleanup_google_states()
     state = secrets.token_urlsafe(24)
     GOOGLE_OAUTH_STATE_CACHE[state] = time.time()
+    redirect_uri = google_redirect_uri(request)
+    logger.info(
+        "Google OAuth login APP_BASE_URL=%s redirect_uri=%s",
+        request.app.state.settings.app_base_url,
+        redirect_uri,
+    )
     params = {
         "client_id": request.app.state.settings.google_client_id,
-        "redirect_uri": google_redirect_uri(request),
+        "redirect_uri": redirect_uri,
         "response_type": "code",
         "scope": GOOGLE_SCOPES,
         "state": state,
@@ -275,13 +308,23 @@ def google_login(request: Request):
 
 @router.get("/auth/google/callback")
 def google_callback(request: Request, code: str | None = None, state: str | None = None, error: str | None = None):
+    logger.info(
+        "Google OAuth callback reached has_code=%s has_state=%s error=%s cookies=%s",
+        bool(code),
+        bool(state),
+        error or "",
+        sorted(request.cookies.keys()),
+    )
     if error:
+        logger.warning("Google OAuth callback received provider error=%s", error)
         return RedirectResponse(url=frontend_auth_url(request, error="google_auth_failed"))
     if not code or not state:
+        logger.warning("Google OAuth callback incomplete has_code=%s has_state=%s", bool(code), bool(state))
         return RedirectResponse(url=frontend_auth_url(request, error="google_auth_incomplete"))
 
     cleanup_google_states()
     if state not in GOOGLE_OAUTH_STATE_CACHE:
+        logger.warning("Google OAuth callback invalid_state state_prefix=%s", state[:8] if state else "")
         return RedirectResponse(url=frontend_auth_url(request, error="google_auth_state_invalid"))
     GOOGLE_OAUTH_STATE_CACHE.pop(state, None)
 
@@ -296,8 +339,16 @@ def google_callback(request: Request, code: str | None = None, state: str | None
             user["id"],
             request.app.state.settings.auth_session_duration_days,
         )
-        redirect = RedirectResponse(url=frontend_app_url(request))
-        set_auth_cookie(redirect, request, app_token)
+        redirect_target = frontend_app_url(request)
+        redirect = RedirectResponse(url=redirect_target)
+        set_auth_cookie(redirect, request, app_token, secure=True, samesite="none")
+        logger.info(
+            "Google OAuth callback auth_session created user_id=%s token_prefix=%s redirect=%s cookie_name=%s",
+            user["id"],
+            app_token[:8],
+            redirect_target,
+            request.app.state.settings.auth_cookie_name,
+        )
         return redirect
     except requests.Timeout:
         logger.warning("Google OAuth callback timed out redirect_uri=%s", google_redirect_uri(request))

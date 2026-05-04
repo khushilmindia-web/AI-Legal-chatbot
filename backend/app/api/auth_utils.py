@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import HTTPException, Request, Response
+
+
+logger = logging.getLogger(__name__)
 
 
 def get_bearer_token(authorization: str | None) -> str | None:
@@ -12,19 +17,44 @@ def get_bearer_token(authorization: str | None) -> str | None:
 
 
 def get_request_token(request: Request) -> str | None:
-    authorization = request.headers.get("Authorization")
-    token = get_bearer_token(authorization)
-    if token:
-        return token
     cookie_name = request.app.state.settings.auth_cookie_name
-    return request.cookies.get(cookie_name)
+    cookie_token = request.cookies.get(cookie_name)
+    if cookie_token:
+        logger.debug(
+            "auth token source=cookie cookie_name=%s token_prefix=%s",
+            cookie_name,
+            cookie_token[:8],
+        )
+        return cookie_token
+
+    authorization = request.headers.get("Authorization")
+    bearer_token = get_bearer_token(authorization)
+    if bearer_token:
+        logger.debug("auth token source=authorization token_prefix=%s", bearer_token[:8])
+        return bearer_token
+
+    logger.debug(
+        "auth token missing cookie_name=%s available_cookies=%s has_authorization=%s",
+        cookie_name,
+        sorted(request.cookies.keys()),
+        bool(authorization),
+    )
+    return None
 
 
 def get_optional_current_user(request: Request):
     token = get_request_token(request)
     if not token:
+        logger.debug("auth/me session lookup no token cookie_name=%s", request.app.state.settings.auth_cookie_name)
         return None
-    return request.app.state.session_store.get_user_by_token(token)
+    user = request.app.state.session_store.get_user_by_token(token)
+    logger.debug(
+        "auth/me session lookup result=%s cookie_name=%s token_prefix=%s",
+        "hit" if user else "miss",
+        request.app.state.settings.auth_cookie_name,
+        token[:8],
+    )
+    return user
 
 
 def require_current_user(request: Request):
@@ -34,17 +64,31 @@ def require_current_user(request: Request):
     return user
 
 
-def set_auth_cookie(response: Response, request: Request, token: str) -> None:
+def set_auth_cookie(
+    response: Response,
+    request: Request,
+    token: str,
+    *,
+    secure: bool | None = None,
+    samesite: str = "lax",
+) -> None:
     settings = request.app.state.settings
-    secure_cookie = _should_use_secure_cookie(request)
+    secure_cookie = _should_use_secure_cookie(request) if secure is None else secure
     response.set_cookie(
         key=settings.auth_cookie_name,
         value=token,
         httponly=True,
         secure=secure_cookie,
-        samesite="lax",
+        samesite=samesite,
         max_age=settings.auth_session_duration_days * 24 * 60 * 60,
         path="/",
+    )
+    logger.debug(
+        "auth cookie set cookie_name=%s secure=%s samesite=%s token_prefix=%s",
+        settings.auth_cookie_name,
+        secure_cookie,
+        samesite,
+        token[:8],
     )
 
 

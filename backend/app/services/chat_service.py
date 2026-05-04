@@ -25,7 +25,7 @@ from backend.app.services.legal_domain_classifier import LegalDomainClassifier
 from backend.app.services.local_ml import LocalSemanticSupportChecker, LocalTextSimilarityService
 from backend.app.services.openai_service import OpenAIResponsesService
 
-from backend.app.services.session_store import SessionStore
+from backend.app.services.storage import SessionStoreProtocol
 from backend.app.utils.request_context import get_logger
 
 logger = get_logger("lawyer_ai.chat_service")
@@ -327,7 +327,7 @@ GENERAL_LEGAL_EXPLAINER_LOOKUPS: dict[str, dict[str, Any]] = {
 }
 
 class ChatService:
-    def __init__(self, settings: Settings, store: SessionStore) -> None:
+    def __init__(self, settings: Settings, store: SessionStoreProtocol) -> None:
         self.settings = settings
         self.store = store
         self.extractor = FileExtractionService(settings)
@@ -966,12 +966,14 @@ class ChatService:
                 domain=domain,
                 warnings=warnings,
                 query=user_message,
-            ), ConversationState(
-                conversation_started=True,
-                active_intent="indiankanoon_rag",
-                legal_domain=domain,
-                last_user_issue=user_message,
-                last_grounded_query=message,
+            ), conversation_state.model_copy(
+                update={
+                    "conversation_started": True,
+                    "active_intent": "indiankanoon_rag",
+                    "legal_domain": domain,
+                    "last_user_issue": user_message,
+                    "last_grounded_query": message,
+                }
             )
 
         if documents and source_sufficiency["label"] == "weak" and not trusted_curated_google_authority_context:
@@ -4159,10 +4161,13 @@ class ChatService:
         ]
 
         for candidate in candidates:
-            cleaned = self._clean_search_snippet(candidate)
+            cleaned = self._sanitize_text_block(candidate)
+            cleaned = re.sub(r"\{[^{}]*\"errmsg\"[^{}]*\}", " ", cleaned, flags=re.IGNORECASE)
+            cleaned = re.sub(r"\b(errmsg|debug|traceback|stack trace)\b\s*:?\s*[^.;]*", " ", cleaned, flags=re.IGNORECASE)
+            cleaned = re.sub(r"\s+", " ", cleaned).strip(" ;,-")
 
             if cleaned:
-                return cleaned
+                return cleaned[:1800]
 
         return "No grounded statutory text excerpt was available in the retrieved authority material."
 
@@ -4861,7 +4866,15 @@ class ChatService:
         pattern = re.compile(r"(Practical Next Steps:\s*)(.*?)(\nSources:)", flags=re.IGNORECASE | re.DOTALL)
         match = pattern.search(answer)
         if not match:
-            return answer
+            if upload_note.lower() in answer.lower():
+                return answer
+            numbered_source = re.search(r"(\n\s*6\.\s*Source:)", answer, flags=re.IGNORECASE)
+            if numbered_source:
+                return f"{answer[:numbered_source.start()]} {upload_note}{answer[numbered_source.start():]}"
+            source_line = re.search(r"(\n\s*Source:)", answer, flags=re.IGNORECASE)
+            if source_line:
+                return f"{answer[:source_line.start()]} {upload_note}{answer[source_line.start():]}"
+            return f"{answer.rstrip()}\n\n{upload_note}"
         practical_steps = match.group(2).strip()
         practical_lower = practical_steps.lower()
         if "uploaded document" in practical_lower or "uploaded file" in practical_lower or "user upload" in practical_lower:
@@ -7966,25 +7979,27 @@ class ChatService:
         latest_message: str,
     ) -> str:
         prefix = self._urgency_prefix_for_turn(issue_type=issue_type, latest_message=latest_message, state=state)
+        saved_context = self._case_context_sentence(state)
+        saved_context_suffix = f" {saved_context}" if saved_context else ""
         if issue_type == "cyber_fraud":
-            return f"{prefix}: the first 24 hours usually matter most because tracing and recovery chances are often better while the transaction trail is still fresh and consistent."
+            return f"{prefix}: the first 24 hours usually matter most because tracing and recovery chances are often better while the transaction trail is still fresh and consistent.{saved_context_suffix}"
         if issue_type == "snatching_theft":
-            return f"{prefix}: misuse risk usually rises quickly after snatching or theft, and early account protection plus a clear complaint record often make follow-up easier."
+            return f"{prefix}: misuse risk usually rises quickly after snatching or theft, and early account protection plus a clear complaint record often make follow-up easier.{saved_context_suffix}"
         if issue_type == "landlord_harassment":
-            return f"{prefix}: early written proof usually matters more if the pressure escalates into threats, lockout, or a formal dispute."
+            return f"{prefix}: early written proof usually matters more if the pressure escalates into threats, lockout, or a formal dispute.{saved_context_suffix}"
         if issue_type == "food_safety":
-            return f"{prefix}: this kind of matter is easier to prove while the packet condition and defect images still reflect the original problem."
+            return f"{prefix}: this kind of matter is easier to prove while the packet condition and defect images still reflect the original problem.{saved_context_suffix}"
         if issue_type == "consumer":
-            return f"{prefix}: a specific written record usually makes the defect, timeline, and relief claimed much easier to prove later."
+            return f"{prefix}: a specific written record usually makes the defect, timeline, and relief claimed much easier to prove later.{saved_context_suffix}"
         if issue_type == "fir_refusal":
-            return f"{prefix}: the refusal trail becomes harder to establish if the complaint history changes or stretches out."
+            return f"{prefix}: the refusal trail becomes harder to establish if the complaint history changes or stretches out.{saved_context_suffix}"
         if issue_type == "notice":
-            return f"{prefix}: the reply window matters because a late or rushed response can weaken your position."
+            return f"{prefix}: the reply window matters because a late or rushed response can weaken your position.{saved_context_suffix}"
         if issue_type == "police_complaint":
-            return f"{prefix}: a clear chronology usually makes the station-side process smoother from the beginning."
+            return f"{prefix}: a clear chronology usually makes the station-side process smoother from the beginning.{saved_context_suffix}"
         if issue_type == "documents":
-            return f"{prefix}: format mismatch often causes avoidable rejection or delay in filing processes."
-        return f"{prefix}: the next step usually works better when the facts, documents, and urgency are already clear."
+            return f"{prefix}: format mismatch often causes avoidable rejection or delay in filing processes.{saved_context_suffix}"
+        return f"{prefix}: the next step usually works better when the facts, documents, and urgency are already clear.{saved_context_suffix}"
 
     def _contextualize_follow_up_question(
         self,
@@ -8050,6 +8065,9 @@ class ChatService:
         paragraph = self._compose_virtual_advocate_paragraph(query=query, state=state, facts=collected_facts)
         steps = self._compose_virtual_advocate_steps(state=state, facts=collected_facts)
         intro, style_key = self._completed_guidance_intro(state=state, facts=collected_facts, latest_message=latest_message)
+        saved_context = self._case_context_sentence(state)
+        if saved_context:
+            intro = f"{intro} {saved_context}".strip()
         action_block, context_block = self._split_completed_guidance_blocks(paragraph)
         answer = "\n\n".join(part for part in [intro, action_block, context_block] if part).strip()
         if steps:
@@ -8362,11 +8380,18 @@ class ChatService:
         if " bns" in f" {lowered}" or "bharatiya nyaya sanhita" in lowered:
             return (
                 f"BNS dataset/source unavailable for {reference} right now.\n"
-                "I could not confirm it from the local BNS dataset, India Kanoon, or the available external authority sources."
+                "I could not confirm it from the local BNS dataset, India Kanoon, or the available external authority sources.\n"
+                f"Note: {ChatService._default_brief_disclaimer()}"
             )
+        if re.search(r"\bsection\s+\d+[a-z]?\b", lowered) and (
+            " ipc" in f" {lowered}" or "indian penal code" in lowered
+        ):
+            reference = "the requested IPC provision"
         return (
             f"I could not find a reliable official result for {reference} from the currently available sources.\n"
-            "If you want, I can next try the exact statutory text, a broader official-source lookup, or the practical meaning of that provision."
+            "I cannot verify that legal reference or treat it as law without a reliable source. "
+            "If you want, I can next try the exact statutory text, a broader official-source lookup, or the practical meaning of that provision.\n"
+            f"Note: {ChatService._default_brief_disclaimer()}"
         )
 
     def _is_bns_authority_query_with_unavailable_dataset(self, normalized_query: str) -> bool:
@@ -8540,13 +8565,47 @@ class ChatService:
         intro_text: str,
     ) -> str:
         guidance_summary = str(guidance.get("summary") or "").strip()
+        context_sentence = self._case_context_sentence(state)
         if guidance_summary:
+            if context_sentence:
+                return f"{guidance_summary} {context_sentence}".strip()
             return guidance_summary
 
         issue_sentence = self._issue_summary_sentence(query=query, state=state)
         if intro_text:
-            return f"{intro_text} {issue_sentence}".strip()
-        return issue_sentence
+            summary = f"{intro_text} {issue_sentence}".strip()
+        else:
+            summary = issue_sentence
+        if context_sentence:
+            return f"{summary} {context_sentence}".strip()
+        return summary
+
+    @staticmethod
+    def _case_context_sentence(state: ConversationState) -> str:
+        parts: list[str] = []
+        location_parts = [str(item).strip() for item in [state.district, state.case_state] if str(item or "").strip()]
+        if location_parts:
+            parts.append(", ".join(location_parts))
+        if state.case_stage:
+            parts.append(f"{state.case_stage} stage")
+        if state.is_own_matter is True:
+            parts.append("your own matter")
+        elif state.is_own_matter is False:
+            parts.append("a matter you are helping with")
+
+        uploaded_summary = ""
+        if state.uploaded_document_summaries:
+            uploaded_summary = str(state.uploaded_document_summaries[0] or "").strip()
+            uploaded_summary = re.sub(r"\s+", " ", uploaded_summary)[:140].strip()
+
+        context_bits: list[str] = []
+        if parts:
+            context_bits.append("; ".join(parts))
+        if uploaded_summary:
+            context_bits.append(f"uploaded document: {uploaded_summary}")
+        if not context_bits:
+            return ""
+        return f"I am using the saved chat context ({'; '.join(context_bits)}) so you do not need to repeat it."
 
     def _compose_legal_help_position(
         self,

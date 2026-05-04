@@ -52,9 +52,10 @@ def tmp_path() -> Path:
 
 
 @pytest.fixture()
-def anonymous_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
+def anonymous_client(monkeypatch: pytest.MonkeyPatch):
     tmp_path = PYTEST_TEMP_ROOT / f"chat-tests-{uuid4().hex[:8]}"
     tmp_path.mkdir(parents=True, exist_ok=True)
+    mongo_database = f"lawyer_ai_test_{uuid4().hex[:12]}"
     knowledge_dir = tmp_path / "knowledge"
     knowledge_dir.mkdir(parents=True, exist_ok=True)
     (knowledge_dir / "cyber_fraud_basics.txt").write_text(
@@ -70,6 +71,8 @@ def anonymous_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setenv("OPENAI_MODEL", "gpt-4.1-mini")
     monkeypatch.setenv("INDIANKANOON_API_TOKEN", "test-indiankanoon-token")
     monkeypatch.setenv("DEBUG", "true")
+    monkeypatch.setenv("DATABASE_BACKEND", "mongodb")
+    monkeypatch.setenv("MONGODB_DATABASE", mongo_database)
     get_settings.cache_clear()
 
     def fake_retrieve_grounded_documents(self, query_variants, doctypes_options, max_results=4):
@@ -170,7 +173,16 @@ def anonymous_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", fake_retrieve_grounded_documents)
     monkeypatch.setattr(OpenAIResponsesService, "generate_json", fake_generate_json)
     app = create_app()
-    return TestClient(app)
+    try:
+        with TestClient(app) as client:
+            yield client
+    finally:
+        store = getattr(app.state, "session_store", None)
+        client_obj = getattr(store, "client", None)
+        if client_obj is not None and mongo_database.startswith("lawyer_ai_test_"):
+            client_obj.drop_database(mongo_database)
+            client_obj.close()
+        get_settings.cache_clear()
 
 
 @pytest.fixture()

@@ -4683,6 +4683,116 @@ def test_chat_persists_case_details_in_conversation_state_metadata(client, monke
     assert "Legal notice demanding payment" in conversation_state["uploaded_document_summaries"][0]
 
 
+def test_case_details_are_reused_within_chat_and_isolated_for_new_chat(client, monkeypatch):
+    def no_external_docs(self, query_variants, doctypes_options, max_results=4):
+        return []
+
+    def no_google_docs(self, **kwargs):
+        return GoogleSearchResult(documents=[], from_cache=False, trusted_result_count=0)
+
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", no_external_docs)
+    monkeypatch.setattr(GoogleCustomSearchService, "search", no_google_docs)
+
+    details = client.post(
+        "/chat",
+        json={
+            "message": "These are my case details for this chat.",
+            "state": "Gujarat",
+            "district": "Ahmedabad",
+            "case_stage": "Pre-complaint",
+            "is_own_matter": True,
+        },
+    )
+    assert details.status_code == 200
+    chat_id = details.json()["chat_id"]
+
+    question = client.post(
+        "/chat",
+        json={
+            "chat_id": chat_id,
+            "message": "A seller took payment for a phone and is not delivering or refunding.",
+        },
+    )
+    assert question.status_code == 200
+
+    follow_up = client.post(
+        "/chat",
+        json={"chat_id": chat_id, "message": "What should I do next?"},
+    )
+    assert follow_up.status_code == 200
+    follow_payload = follow_up.json()
+    follow_answer = follow_payload["answer"].lower()
+    assert "gujarat" in follow_answer
+    assert "ahmedabad" in follow_answer
+    assert "pre-complaint" in follow_answer
+    assert "saved chat context" in follow_answer
+
+    messages = client.get(f"/chat/{chat_id}/messages").json()["items"]
+    latest_state = [item for item in messages if item["role"] == "assistant"][-1]["metadata"]["conversation_state"]
+    assert latest_state["case_state"] == "Gujarat"
+    assert latest_state["district"] == "Ahmedabad"
+    assert latest_state["case_stage"] == "Pre-complaint"
+    assert latest_state["is_own_matter"] is True
+
+    new_chat = client.post("/chat", json={"message": "What should I do next?"})
+    assert new_chat.status_code == 200
+    assert new_chat.json()["chat_id"] != chat_id
+    new_messages = client.get(f"/chat/{new_chat.json()['chat_id']}/messages").json()["items"]
+    new_state = [item for item in new_messages if item["role"] == "assistant"][-1]["metadata"]["conversation_state"]
+    assert new_state["district"] is None
+    assert new_state["case_stage"] is None
+    assert new_state["is_own_matter"] is None
+    assert "ahmedabad" not in new_chat.json()["answer"].lower()
+    assert "pre-complaint" not in new_chat.json()["answer"].lower()
+
+
+def test_uploaded_context_is_reused_on_follow_up_in_same_chat(client, monkeypatch):
+    def no_external_docs(self, query_variants, doctypes_options, max_results=4):
+        return []
+
+    def no_google_docs(self, **kwargs):
+        return GoogleSearchResult(documents=[], from_cache=False, trusted_result_count=0)
+
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", no_external_docs)
+    monkeypatch.setattr(GoogleCustomSearchService, "search", no_google_docs)
+
+    upload = client.post(
+        "/chat/upload",
+        data={
+            "message": "Please review this notice.",
+            "state": "Gujarat",
+            "district": "Ahmedabad",
+            "case_stage": "Pre-complaint",
+            "is_own_matter": "true",
+        },
+        files={
+            "files": (
+                "notice.txt",
+                io.BytesIO(b"Legal notice demanding payment within 7 days for invoice INV-42."),
+                "text/plain",
+            ),
+        },
+    )
+    assert upload.status_code == 200
+    chat_id = upload.json()["chat_id"]
+
+    follow_up = client.post(
+        "/chat",
+        json={"chat_id": chat_id, "message": "What should I do next based on it?"},
+    )
+    assert follow_up.status_code == 200
+    answer = follow_up.json()["answer"].lower()
+    assert "uploaded document" in answer or "uploaded file" in answer or "inv-42" in answer or "notice" in answer
+    assert "ahmedabad" in answer
+    assert "saved chat context" in answer
+
+    messages = client.get(f"/chat/{chat_id}/messages").json()["items"]
+    latest_state = [item for item in messages if item["role"] == "assistant"][-1]["metadata"]["conversation_state"]
+    assert latest_state["uploaded_document_summaries"]
+    assert "Legal notice demanding payment" in latest_state["uploaded_document_summaries"][0]
+    assert latest_state["district"] == "Ahmedabad"
+
+
 def test_follow_up_decision_normalizer_stays_issue_sensitive():
     service = ChatService.__new__(ChatService)
 

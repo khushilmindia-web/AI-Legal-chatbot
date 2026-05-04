@@ -209,7 +209,7 @@ def hash_text(text: str) -> str:
 GOOGLE_OAUTH_STATE_CACHE = TTLCache(maxsize=128, ttl=600)
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "").strip()
-GOOGLE_REDIRECT_URI = os.environ.get("GOOGLE_REDIRECT_URI", "http://127.0.0.1:5000/auth/google/callback").strip()
+GOOGLE_REDIRECT_URI = os.environ.get("GOOGLE_REDIRECT_URI", "https://cheating-uncover-resubmit.ngrok-free.dev").strip()
 FRONTEND_AUTH_URL = os.environ.get("FRONTEND_AUTH_URL", "http://127.0.0.1:5000/frontend/auth.html").strip()
 FRONTEND_APP_URL = os.environ.get("FRONTEND_APP_URL", "http://127.0.0.1:5000/frontend/index.html").strip()
 EXPOSE_RESET_TOKEN_IN_RESPONSE = os.environ.get("EXPOSE_RESET_TOKEN_IN_RESPONSE", "true").strip().lower() == "true"

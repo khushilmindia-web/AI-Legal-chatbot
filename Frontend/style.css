@@ -277,6 +277,8 @@ body.sidebar-closed .sidebar {
 }
 
 .status-text {
+    width: fit-content;
+    margin: 0 28px 8px;
     padding: 10px 14px;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.84);
@@ -371,6 +373,7 @@ body.sidebar-closed .sidebar {
 .message-content {
     line-height: 1.65;
     font-size: 18px;
+    overflow-wrap: anywhere;
 }
 
 .message-footer {
@@ -831,6 +834,7 @@ textarea {
     place-items: center;
     padding: 24px;
     background: rgba(29, 26, 22, 0.34);
+    z-index: 50;
 }
 
 .modal-content {
@@ -924,6 +928,7 @@ textarea {
     .chat-thread,
     .composer,
     .error-banner,
+    .status-text,
     .typing-indicator {
         margin-left: 0;
         margin-right: 0;
@@ -947,7 +952,11 @@ textarea {
     .details-panel {
         grid-template-columns: 1fr;
         flex-direction: column;
-        align-items: flex-start;
+        align-items: stretch;
+    }
+
+    .send-button {
+        width: 100%;
     }
 
     .header-actions,

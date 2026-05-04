@@ -102,6 +102,7 @@ function setBusy(isBusy) {
   state.isBusy = isBusy;
   if (elements.sendButton) {
     elements.sendButton.disabled = isBusy;
+    elements.sendButton.textContent = isBusy ? "Sending..." : "Send";
   }
   if (elements.messageInput) {
     elements.messageInput.disabled = isBusy;
@@ -243,13 +244,6 @@ function renderUserCard(user) {
 }
 
 async function ensureAuthenticated() {
-  const token = getStoredToken();
-  if (!token) {
-    clearSession();
-    redirectToAuth();
-    throw new Error("Authentication required");
-  }
-
   const storedUser = getStoredUser();
   if (storedUser) {
     state.currentUser = storedUser;
@@ -283,6 +277,21 @@ function buildMatterDetails() {
   };
 }
 
+function clearCaseDetails() {
+  if (elements.stateInput) {
+    elements.stateInput.value = "";
+  }
+  if (elements.districtInput) {
+    elements.districtInput.value = "";
+  }
+  if (elements.caseStageInput) {
+    elements.caseStageInput.value = "";
+  }
+  if (elements.ownMatterInput) {
+    elements.ownMatterInput.value = "";
+  }
+}
+
 function setBlankDraft() {
   state.activeChatId = null;
   state.draftMessages = [];
@@ -296,6 +305,7 @@ function setBlankDraft() {
   if (elements.imageUrlsInput) {
     elements.imageUrlsInput.value = "";
   }
+  clearCaseDetails();
   renderHistory();
   renderMessages();
 }
@@ -477,6 +487,9 @@ function appendFailureMessage(errorMessage) {
 
 async function submitMessage(event) {
   event.preventDefault();
+  if (state.isBusy) {
+    return;
+  }
   clearError();
 
   const message = elements.messageInput.value.trim();
@@ -491,7 +504,8 @@ async function submitMessage(event) {
     elements.messageInput.value = "";
   }
   setBusy(true);
-  const fallbackAnswer = "No relevant legal data found on India Kanoon";
+  const fallbackAnswer = "I could not complete that request. Please try again in a moment.";
+  const timeoutAnswer = "The request took too long. Please try again with a shorter message or fewer uploads.";
 
   try {
     const details = buildMatterDetails();
@@ -517,7 +531,7 @@ async function submitMessage(event) {
         body: formData,
         credentials: "include",
         timeoutMs: DEFAULT_REQUEST_TIMEOUT_MS,
-        timeoutMessage: fallbackAnswer,
+        timeoutMessage: timeoutAnswer,
       });
     } else {
       payload = await requestJson("/chat", {
@@ -529,7 +543,7 @@ async function submitMessage(event) {
         }),
         credentials: "include",
         timeoutMs: DEFAULT_REQUEST_TIMEOUT_MS,
-        timeoutMessage: fallbackAnswer,
+        timeoutMessage: timeoutAnswer,
       });
     }
 
@@ -568,7 +582,7 @@ async function submitMessage(event) {
   } catch (error) {
     const messageText = error instanceof Error ? error.message : fallbackAnswer;
     showError(messageText);
-    appendFailureMessage(fallbackAnswer);
+    appendFailureMessage(messageText);
   } finally {
     setBusy(false);
   }

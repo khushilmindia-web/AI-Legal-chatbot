@@ -1,3 +1,4 @@
+# Stabilization pass 2026-05-02: dependency pins reviewed; no new packages required.
 absl-py==2.4.0
 accelerate==1.13.0
 aiohappyeyeballs==2.6.1

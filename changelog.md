@@ -2,9 +2,132 @@
 
 Historical note: entries before `2026-04-15` were previously maintained as date-grouped sections; starting with the `2026-04-15` section below, individual change bullets also carry explicit IST timestamps.
 
+## 2026-05-04
+
+### Final Manual UI Review
+- `2026-05-04 17:00 IST` Reviewed final launch-critical UI/response flows covering optional case-detail entry, same-chat follow-up context, new-chat isolation, uploaded-document follow-ups, forgot-password UI/email behavior, chat delete/clear history, long/vague legal questions, unsupported non-legal prompts, loading/error behavior, mobile layout risk, sidebar/history behavior, and disclaimer coverage.
+- `2026-05-04 17:00 IST` Fixed the smallest UI isolation issue found in [`Frontend/app.js`](d:/AI-Chatbot/Frontend/app.js): New Chat, active-chat deletion, and Clear History now clear optional case-detail fields so stale state/district/stage/ownership values are not accidentally sent into a new chat.
+- `2026-05-04 17:00 IST` Added [`tests/test_frontend_ui_static.py`](d:/AI-Chatbot/tests/test_frontend_ui_static.py) to guard the optional case-detail reset behavior without introducing a frontend test framework.
+- `2026-05-04 17:20 IST` Completed final manual UI response review task `183` in [`tasks.md`](d:/AI-Chatbot/tasks.md), verifying New Chat, active-chat deletion, and Clear History clear optional case-detail inputs while same-chat case details persist and new-chat isolation still works. Verified with `tests/test_frontend_ui_static.py` (`1 passed`, `1 warning`), focused chat/session regressions (`7 passed`, `1 warning`), backend `py_compile`, and `git diff --check`.
+
+### Case-detail Memory Verification
+- `2026-05-04 16:30 IST` Added focused endpoint regressions in [`tests/test_chat.py`](d:/AI-Chatbot/tests/test_chat.py) proving case details are stored and reused within a single chat, new chats do not inherit the old district/stage/ownership context, and uploaded-document summaries remain available on later follow-ups in the same chat.
+- `2026-05-04 16:30 IST` Updated [`backend/app/services/chat_service.py`](d:/AI-Chatbot/backend/app/services/chat_service.py) so no-document fallback turns preserve the existing per-chat conversation state instead of replacing it, and practical guidance responses surface saved chat context such as district, state, stage, own-matter status, and uploaded-document summary.
+- `2026-05-04 16:30 IST` Created and completed case-detail memory verification task `182` in [`tasks.md`](d:/AI-Chatbot/tasks.md).
+
+### Edge-case & Adversarial Response Testing
+- `2026-05-04 15:06 IST` Extended [`tests/test_response_quality_audit.py`](d:/AI-Chatbot/tests/test_response_quality_audit.py) with final live-release edge-case coverage for vague queries, incomplete questions, typo-heavy inputs, repeated follow-ups, contradictory facts, very long messy inputs, unsupported non-legal prompts, urgent unsafe scenarios, and attempts to force incorrect legal advice.
+- `2026-05-04 15:06 IST` Hardened [`backend/app/services/chat_service.py`](d:/AI-Chatbot/backend/app/services/chat_service.py) so unsupported IPC provision fallbacks no longer echo unverified section numbers from adversarial prompts and now include the standard legal-information disclaimer.
+- `2026-05-04 15:06 IST` Created and completed edge-case/adversarial response testing task `181` in [`tasks.md`](d:/AI-Chatbot/tasks.md).
+
+### Response-Quality Audit
+- `2026-05-04 14:39 IST` Added [`tests/test_response_quality_audit.py`](d:/AI-Chatbot/tests/test_response_quality_audit.py), a focused response audit set covering greetings, legal concepts, Article/Section lookups, cyber fraud, theft/snatching, consumer complaints, food safety issues, notice/reply situations, uploaded-document questions, follow-up behavior, and unclear unsupported queries.
+- `2026-05-04 14:39 IST` Fixed a grounded authority excerpt issue in [`backend/app/services/chat_service.py`](d:/AI-Chatbot/backend/app/services/chat_service.py) where long local provision text could be truncated before the punishment sentence, causing `Section 420 IPC` answers to omit the seven-year-and-fine punishment detail.
+- `2026-05-04 14:39 IST` Created and completed response-quality audit task `180` in [`tasks.md`](d:/AI-Chatbot/tasks.md).
+
+### Demo and Portfolio Readiness
+- `2026-05-04 14:24 IST` Polished [`README.md`](d:/AI-Chatbot/README.md) for GitHub, resume, and video demo presentation with a recruiter-friendly opening, feature highlights, tech stack, architecture overview, legal AI flow explanation, demo queries, screenshot/demo placeholders, and limitations/disclaimer while preserving existing setup and deployment accuracy.
+- `2026-05-04 14:24 IST` Created and completed demo/portfolio readiness task `179` in [`tasks.md`](d:/AI-Chatbot/tasks.md).
+
+### Deployment Readiness
+- `2026-05-04 14:17 IST` Confirmed the production FastAPI entrypoint is `backend.main:app` and documented the deployment startup command `python -m uvicorn backend.main:app --host 0.0.0.0 --port $PORT` without local-development `--reload`.
+- `2026-05-04 14:17 IST` Updated [`.env.example`](d:/AI-Chatbot/.env.example) for safer production defaults and complete deployment configuration, including `DEBUG=false`, frontend paths, auth session/cookie values, CORS/app origin, SMTP, India Kanoon, OpenAI, Google OAuth, and Google Custom Search settings.
+- `2026-05-04 14:17 IST` Added deployment notes to [`README.md`](d:/AI-Chatbot/README.md) for Render, Railway, and VPS, plus production environment checklist and `/health` verification commands for startup and frontend path handling.
+- `2026-05-04 14:17 IST` Created and completed deployment-readiness task `178` in [`tasks.md`](d:/AI-Chatbot/tasks.md).
+
+### Verified
+- `2026-05-04 17:00 IST` Confirmed the local backend remained reachable at `/health` while preparing the browser review (`{"status":"ok"}`).
+- `2026-05-04 17:00 IST` Attempted the required browser review with Selenium and direct headless Edge against `http://127.0.0.1:5000/frontend/...`; Edge crashed in this Windows sandbox before page interaction due access-denied browser runtime errors, so the final flow review was completed through focused endpoint regressions, frontend DOM/static checks, and code inspection instead of a successful live browser session.
+- `2026-05-04 17:00 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_frontend_ui_static.py tests\test_chat.py::test_case_details_are_reused_within_chat_and_isolated_for_new_chat tests\test_chat.py::test_uploaded_context_is_reused_on_follow_up_in_same_chat tests\test_auth_flow.py::test_password_reset_email_has_html_template_and_plain_text_fallback tests\test_auth_flow.py::test_password_reset_request_and_confirm_flow tests\test_chat.py::test_clear_history_removes_all_chats tests\test_chat.py::test_delete_single_chat_removes_only_selected_session tests\test_response_quality_audit.py -q` (`13 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-04 16:30 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_chat.py::test_merge_case_details_into_state_preserves_prior_values_and_adds_upload_summaries tests\test_chat.py::test_chat_persists_case_details_in_conversation_state_metadata tests\test_chat.py::test_case_details_are_reused_within_chat_and_isolated_for_new_chat tests\test_chat.py::test_uploaded_context_is_reused_on_follow_up_in_same_chat tests\test_upload.py -q` (`7 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-04 16:30 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\services\chat_service.py tests\test_chat.py`.
+- `2026-05-04 16:30 IST` Ran `git diff --check -- backend\app\services\chat_service.py tests\test_chat.py changelog.md tasks.md`.
+- `2026-05-04 15:06 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_response_quality_audit.py -q` (`6 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-04 15:06 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\services\chat_service.py tests\test_response_quality_audit.py`.
+- `2026-05-04 15:06 IST` Ran `git diff --check -- backend\app\services\chat_service.py tests\test_response_quality_audit.py changelog.md tasks.md`.
+- `2026-05-04 14:39 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_response_quality_audit.py tests\test_upload.py tests\test_chat.py::test_local_legal_dataset_supports_reverse_ipc_reference_without_external_lookup tests\test_chat.py::test_local_legal_dataset_normalizes_420_ipc_sectin_without_external_lookup tests\test_chat.py::test_authority_structured_answer_uses_six_part_lawyer_format tests\test_chat.py::test_follow_up_police_vs_bank_question_gets_direct_answer_in_fraud_flow -q` (`11 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-04 14:39 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\services\chat_service.py tests\test_response_quality_audit.py`.
+- `2026-05-04 14:24 IST` Ran `git diff --check -- README.md changelog.md tasks.md`.
+- `2026-05-04 14:17 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_config.py tests\test_health.py tests\test_auth_flow.py::test_signup_me_logout_and_protected_redirects tests\test_auth_flow.py::test_signup_cookie_secure_for_https_forwarded_requests -q` (`9 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-04 14:17 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\main.py backend\app\main.py backend\app\core\config.py backend\app\api\auth_utils.py backend\app\api\routes\health.py`.
+- `2026-05-04 14:17 IST` Ran `git diff --check -- .env.example README.md changelog.md tasks.md`.
+
+## 2026-05-02
+
+### Stabilization & Polish
+- `2026-05-02 17:57 IST` Stabilized the existing production flows without adding features: verified signup/login, password reset, chat follow-ups, upload-grounded answers, and chat history/delete flows; restored chat loading/status indicators; improved timeout/API failure messaging; fixed upload-document acknowledgement when model output omits it; polished auth/chat UI alignment and mobile behavior; sanitized [`.env.example`](d:/AI-Chatbot/.env.example); reviewed [`requirements.txt`](d:/AI-Chatbot/requirements.txt); expanded [`README.md`](d:/AI-Chatbot/README.md) with setup, features, testing, and screenshot placeholders; cleaned generated `manual_pytest_tmp` artifacts; and marked stabilization task `177` complete in [`tasks.md`](d:/AI-Chatbot/tasks.md).
+
+### Changed
+- `2026-05-02 14:59 IST` Improved the password reset email UI in [`backend/app/services/mailer.py`](d:/AI-Chatbot/backend/app/services/mailer.py) with a clean HTML template, reset button, fallback link, expiry message, and disclaimer while preserving the plain-text fallback and existing multipart HTML delivery.
+- `2026-05-02 14:59 IST` Marked task `91` complete in [`tasks.md`](d:/AI-Chatbot/tasks.md).
+
+### Verified
+- `2026-05-02 17:57 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_auth_flow.py tests\test_upload.py tests\test_chat.py::test_clear_history_removes_all_chats tests\test_chat.py::test_delete_single_chat_removes_only_selected_session tests\test_chat.py::test_cyber_fraud_follow_up_acknowledges_latest_progress_and_varies_opening -q` (`15 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-02 17:57 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\services\chat_service.py`.
+- `2026-05-02 14:59 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_auth_flow.py::test_password_reset_email_has_html_template_and_plain_text_fallback tests\test_auth_flow.py::test_password_reset_request_and_confirm_flow -q` (`2 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-02 14:59 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\services\mailer.py tests\test_auth_flow.py`.
+
+## 2026-05-01
+
+### Added
+- `2026-05-01 11:22 IST` Added [`scripts/build_bns_dataset.py`](d:/AI-Chatbot/scripts/build_bns_dataset.py), a one-time polite Devgan.in BNS scraper with request timeout, per-section delay, failure logging, resume-friendly incremental writes, `--dry-run` for the first three sections, and optional batch/resume flags.
+- `2026-05-01 11:22 IST` Generated [`data/legal_datasets/bns.json`](d:/AI-Chatbot/data/legal_datasets/bns.json) from Devgan.in with 358 BNS section records containing `section`, `title`, `text`, `source_url`, and `source_name`.
+- `2026-05-01 11:22 IST` Added [`tests/test_legal_dataset_service.py`](d:/AI-Chatbot/tests/test_legal_dataset_service.py) covering local BNS lookup variants including `bns 34`, `section 34 bns`, and `bns section 318`.
+
+### Changed
+- `2026-05-01 13:00 IST` Fixed the exact Google OAuth loop failure in [`backend/app/api/auth_utils.py`](d:/AI-Chatbot/backend/app/api/auth_utils.py): `/auth/me` now prefers the configured session cookie over an `Authorization` bearer token, so a stale frontend `localStorage` token can no longer override a valid HttpOnly Google OAuth cookie and force a redirect back to `/frontend/auth.html`.
+- `2026-05-01 13:00 IST` Added targeted OAuth diagnostics in [`backend/app/api/routes/auth.py`](d:/AI-Chatbot/backend/app/api/routes/auth.py) for callback reachability, missing/invalid state, provider errors, Google-user create/link/lookup outcome, auth-session token prefix, cookie name, and callback redirect target.
+- `2026-05-01 13:00 IST` Added Mongo session diagnostics in [`backend/app/services/mongo_session_store.py`](d:/AI-Chatbot/backend/app/services/mongo_session_store.py) for Google user lookup/create/link, auth session create, token lookup hit/miss/expiry, and logout deletion.
+- `2026-05-01 13:00 IST` Added `frontend_auth_guard` diagnostics in [`backend/app/main.py`](d:/AI-Chatbot/backend/app/main.py) so redirects from `/frontend/index.html` to `/frontend/auth.html` now log the exact reason, configured cookie name, and received cookie names.
+- `2026-05-01 13:00 IST` Aligned the active `.env` ngrok values so `CORS_ALLOW_ORIGINS`, `GOOGLE_REDIRECT_URI`, and `APP_BASE_URL` use the same `https://cheating-uncover-resubmit.ngrok-free.dev` origin, and set `AUTH_COOKIE_NAME=session_token`.
+- `2026-05-01 13:00 IST` Updated [`tests/test_auth_flow.py`](d:/AI-Chatbot/tests/test_auth_flow.py) so the Google callback regression now proves `/auth/me` succeeds when a valid OAuth cookie is present even if the request also carries a stale bearer token.
+- `2026-05-01 13:00 IST` Marked task `176` complete in [`tasks.md`](d:/AI-Chatbot/tasks.md) with the identified failing step and scoped fix.
+- `2026-05-01 12:47 IST` Updated [`backend/app/core/config.py`](d:/AI-Chatbot/backend/app/core/config.py) so the effective Google OAuth redirect URI is derived from `APP_BASE_URL` as `{APP_BASE_URL}/auth/google/callback`, `APP_BASE_URL` is included in CORS origins, and the default auth cookie name is `session_token`.
+- `2026-05-01 12:47 IST` Updated [`backend/app/api/routes/auth.py`](d:/AI-Chatbot/backend/app/api/routes/auth.py) so Google login and callback token exchange use the same redirect URI, successful callbacks always redirect to `/frontend/index.html`, OAuth failures redirect to `/frontend/auth.html?error=...`, and debug logs show `APP_BASE_URL`, redirect URI, callback session creation, and cookie name.
+- `2026-05-01 12:47 IST` Updated [`backend/app/api/auth_utils.py`](d:/AI-Chatbot/backend/app/api/auth_utils.py) to log cookie-backed session lookup results, log auth cookie creation, and allow the Google callback to set `HttpOnly`, `Secure`, `SameSite=None` cookies for HTTPS ngrok OAuth.
+- `2026-05-01 12:47 IST` Updated [`backend/app/main.py`](d:/AI-Chatbot/backend/app/main.py) to log startup OAuth/CORS configuration including `APP_BASE_URL`, configured `GOOGLE_REDIRECT_URI`, effective redirect URI, and allowed origins.
+- `2026-05-01 12:47 IST` Updated [`Frontend/app.js`](d:/AI-Chatbot/Frontend/app.js) and [`Frontend/auth.js`](d:/AI-Chatbot/Frontend/auth.js) so Google OAuth sessions stored only in the HttpOnly cookie are validated through `/auth/me` with `credentials: "include"` before redirecting, preventing the post-login loop back to `/frontend/auth.html`.
+- `2026-05-01 12:47 IST` Updated [`.env.example`](d:/AI-Chatbot/.env.example) with ngrok-specific Google OAuth guidance and `AUTH_COOKIE_NAME=session_token`.
+- `2026-05-01 12:47 IST` Updated [`tests/test_auth_flow.py`](d:/AI-Chatbot/tests/test_auth_flow.py) to verify the HTTPS redirect URI used in Google login and token exchange, callback redirect to `/frontend/index.html`, secure `session_token` cookie attributes, `/auth/me` session retrieval from the cookie, and failure fallback to the auth page with an error.
+- `2026-05-01 12:47 IST` Marked task `175` complete in [`tasks.md`](d:/AI-Chatbot/tasks.md).
+- `2026-05-01 11:22 IST` Updated [`backend/app/services/legal_dataset_service.py`](d:/AI-Chatbot/backend/app/services/legal_dataset_service.py) so local dataset matches cite item-level source metadata when present, allowing BNS lookups to show Devgan.in URLs while preserving existing dataset fallback labels.
+- `2026-05-01 11:22 IST` Marked task `174` complete in [`tasks.md`](d:/AI-Chatbot/tasks.md).
+
+### Verified
+- `2026-05-01 13:00 IST` Re-ran `.\venv\Scripts\python.exe -m pytest tests\test_auth_flow.py -q` (`8 passed`, `1 warning` for `PyPDF2` deprecation), including the stale-bearer plus valid-cookie OAuth regression.
+- `2026-05-01 13:00 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\api\routes\auth.py backend\app\api\auth_utils.py backend\app\main.py backend\app\services\mongo_session_store.py`.
+- `2026-05-01 12:47 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_auth_flow.py -q` (`8 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-01 12:47 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_config.py -q` (`5 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-01 11:22 IST` Verified the builder dry-run fetched sections 1-3 without writing output, then built the full 358-section BNS JSON in bounded batches.
+- `2026-05-01 11:22 IST` Verified [`data/legal_datasets/bns.json`](d:/AI-Chatbot/data/legal_datasets/bns.json) parses as valid JSON and spot-checked sections 34 and 318.
+- `2026-05-01 11:22 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_legal_dataset_service.py -q` (`1 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-01 11:22 IST` Confirmed a direct real-dataset lookup reports 358 BNS entries and resolves `bns 34`, `section 34 bns`, and `bns section 318` locally.
+
 ## 2026-04-30
 
 ### Changed
+- `2026-04-30 16:38 IST` Updated [`tests/conftest.py`](d:/AI-Chatbot/tests/conftest.py) so FastAPI `TestClient` fixtures use generated MongoDB databases named `lawyer_ai_test_<id>` instead of the migrated `lawyer_ai` database, then drop only those generated test databases during teardown.
+- `2026-04-30 16:38 IST` Marked post-cutover test isolation task `173` complete in [`tasks.md`](d:/AI-Chatbot/tasks.md).
+- `2026-04-30 15:49 IST` Updated [`README.md`](d:/AI-Chatbot/README.md) so MongoDB is documented as the active runtime database, `DATABASE_BACKEND=mongodb` / `MONGODB_URI` / `MONGODB_DATABASE` are included in setup and environment guidance, and clear history is described as deleting MongoDB sessions/messages instead of SQLite data.
+- `2026-04-30 15:49 IST` Added database migration and backup guidance to [`README.md`](d:/AI-Chatbot/README.md), including dry-run and real migration commands plus a rollback note that keeps [`data/lawyer_ai.db`](d:/AI-Chatbot/data/lawyer_ai.db) as the SQLite backup source.
+- `2026-04-30 15:49 IST` Updated [`docs/IMPLEMENTATION_SUMMARY.md`](d:/AI-Chatbot/docs/IMPLEMENTATION_SUMMARY.md) to list `mongo_session_store.py` and `storage.py` as the active persistence path, with `session_store.py` retained as inactive SQLite backup code.
+- `2026-04-30 15:49 IST` Updated [`docs/LEGACY_NOTES.md`](d:/AI-Chatbot/docs/LEGACY_NOTES.md) with explicit MongoDB persistence guidance, SQLite backup-file retention, and intentional rollback requirements.
+- `2026-04-30 15:49 IST` Marked Step 6 complete in [`tasks.md`](d:/AI-Chatbot/tasks.md), closing the guided SQLite-to-MongoDB cutover sequence while keeping SQLite code and `data/lawyer_ai.db` intact.
+- `2026-04-30 15:33 IST` Ran the real SQLite-to-MongoDB migration with `.\venv\Scripts\python.exe scripts\migrate_sqlite_to_mongo.py`, copying active data from [`data/lawyer_ai.db`](d:/AI-Chatbot/data/lawyer_ai.db) into MongoDB database `lawyer_ai` without deleting or modifying the SQLite backup file.
+- `2026-04-30 15:33 IST` Updated [`tasks.md`](d:/AI-Chatbot/tasks.md) to mark Step 5 complete after migrated MongoDB runtime checks passed against the populated `lawyer_ai` database.
+- `2026-04-30 13:04 IST` Added [`scripts/migrate_sqlite_to_mongo.py`](d:/AI-Chatbot/scripts/migrate_sqlite_to_mongo.py), a one-time SQLite-to-MongoDB migration utility for `users`, `auth_sessions`, `password_reset_tokens`, `chat_sessions`, and `chat_messages`.
+- `2026-04-30 13:04 IST` The migration script preserves integer `id` values, `user_id` and `chat_id` relationships, timestamps, auth/session tokens, password-reset token hashes, and converts SQLite JSON columns into Mongo-native fields: `chat_sessions.state_json` becomes `state`, and `chat_messages.metadata_json` becomes `metadata`.
+- `2026-04-30 13:04 IST` Added dry-run support via `python scripts/migrate_sqlite_to_mongo.py --dry-run`, which reads SQLite counts and Mongo target counts without inserting or updating any MongoDB documents.
+- `2026-04-30 13:04 IST` Added idempotent Mongo writes using id-based `replace_one(..., upsert=True)`, collection indexes, and counter synchronization so rerunning the script does not duplicate migrated documents and future Mongo inserts continue after the highest migrated IDs.
+- `2026-04-30 13:04 IST` Omitted null `google_sub` values during migration and from new local Mongo users in [`backend/app/services/mongo_session_store.py`](d:/AI-Chatbot/backend/app/services/mongo_session_store.py), preventing duplicate-null conflicts with the sparse unique Google account index.
+- `2026-04-30 12:49 IST` Added [`backend/app/services/mongo_session_store.py`](d:/AI-Chatbot/backend/app/services/mongo_session_store.py), a MongoDB-backed runtime store for auth users, auth sessions, password reset tokens, chat sessions, chat messages, conversation state, history listing, clearing, and deletion while preserving the existing integer-ID API contract used by the frontend and route schemas.
+- `2026-04-30 12:49 IST` Added [`backend/app/services/storage.py`](d:/AI-Chatbot/backend/app/services/storage.py) as the active storage dependency-injection boundary. It now creates `MongoSessionStore` only and raises `SQLite temporarily disabled during MongoDB migration` if `DATABASE_BACKEND=sqlite` is requested.
+- `2026-04-30 12:49 IST` Switched [`backend/app/main.py`](d:/AI-Chatbot/backend/app/main.py) from direct SQLite `SessionStore(settings.database_url)` construction to `create_session_store(settings)`, with comments documenting that SQLite is temporarily disabled during the MongoDB migration and preserved only as backup code.
+- `2026-04-30 12:49 IST` Preserved [`backend/app/services/session_store.py`](d:/AI-Chatbot/backend/app/services/session_store.py) without deleting SQLite logic, but marked the class as backup/fallback only with `SQLite temporarily disabled during MongoDB migration` comments so the active runtime no longer instantiates it.
+- `2026-04-30 12:49 IST` Updated [`backend/app/core/config.py`](d:/AI-Chatbot/backend/app/core/config.py) so `DATABASE_BACKEND` now defaults to `mongodb`; the SQLite `database_url` property remains only to locate `data/lawyer_ai.db` for backup or migration tooling and is no longer used by app startup.
+- `2026-04-30 12:49 IST` Updated [`backend/app/services/chat_service.py`](d:/AI-Chatbot/backend/app/services/chat_service.py) to type against the new storage protocol instead of importing the SQLite store, keeping chat behavior unchanged while removing SQLite from the active import path.
+- `2026-04-30 12:49 IST` Updated [`.env.example`](d:/AI-Chatbot/.env.example) to make `DATABASE_BACKEND=mongodb` the documented default and retain the MongoDB connection settings.
+- `2026-04-30 12:49 IST` Updated [`tests/test_config.py`](d:/AI-Chatbot/tests/test_config.py) for the MongoDB cutover, including checks that MongoDB is the default backend, the storage factory creates the Mongo store, and SQLite runtime selection is rejected during migration.
 - `2026-04-30 12:34 IST` Added MongoDB migration configuration in [`backend/app/core/config.py`](d:/AI-Chatbot/backend/app/core/config.py): `DATABASE_BACKEND`, `MONGODB_URI`, and `MONGODB_DATABASE`. The backend selector defaults to `sqlite`, accepts `mongodb`, and rejects unknown values so the runtime remains on SQLite until the migration is explicitly cut over.
 - `2026-04-30 12:34 IST` Documented the new MongoDB environment values in [`.env.example`](d:/AI-Chatbot/.env.example) with a note to keep SQLite until migration verification is complete.
 - `2026-04-30 12:34 IST` Confirmed `pymongo==4.16.0` is already present in both [`requirements.txt`](d:/AI-Chatbot/requirements.txt) and [`config/requirements.txt`](d:/AI-Chatbot/config/requirements.txt), so no dependency install or lockfile change was needed for Step 2.
@@ -15,10 +138,27 @@ Historical note: entries before `2026-04-15` were previously maintained as date-
 - `2026-04-30 12:28 IST` Updated [`tasks.md`](d:/AI-Chatbot/tasks.md) with MongoDB migration tasks `167` through `172`, marking Step 1 analysis complete and leaving the next implementation step pending so the migration can proceed one confirmed step at a time.
 
 ### Verified
+- `2026-04-30 16:38 IST` Verified MongoDB-isolated test fixtures with `.\venv\Scripts\python.exe -m pytest tests/test_config.py tests/test_health.py tests/test_auth_flow.py::test_signup_me_logout_and_protected_redirects tests/test_chat_routing.py tests/test_question_priority.py -q` (`12 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-04-30 16:38 IST` Confirmed no generated `lawyer_ai_test_*` MongoDB databases remained after the focused test run.
+- `2026-04-30 15:49 IST` Re-scanned production-facing docs and active backend wiring for stale SQLite assumptions; remaining SQLite references are intentional backup/rollback notes or the disabled `backend/app/services/session_store.py` implementation.
+- `2026-04-30 15:49 IST` Re-ran `.\venv\Scripts\python.exe -m pytest tests/test_config.py -q` (`5 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-04-30 15:49 IST` Verified `/health` startup with `DATABASE_BACKEND=mongodb` and confirmed the app is using `MongoSessionStore`.
+- `2026-04-30 15:33 IST` Migration validation matched exactly: `users` SQLite=18 -> MongoMigrated=18, `auth_sessions` SQLite=35 -> MongoMigrated=35, `password_reset_tokens` SQLite=5 -> MongoMigrated=5, `chat_sessions` SQLite=39 -> MongoMigrated=39, and `chat_messages` SQLite=108 -> MongoMigrated=108.
+- `2026-04-30 15:33 IST` Confirmed the active app starts with `MongoSessionStore` and the populated MongoDB `lawyer_ai` collections contain the migrated counts: `users=18`, `auth_sessions=35`, `password_reset_tokens=5`, `chat_sessions=39`, and `chat_messages=108`.
+- `2026-04-30 15:33 IST` Confirmed [`data/lawyer_ai.db`](d:/AI-Chatbot/data/lawyer_ai.db) remains present as backup with the same SQLite counts after migration.
+- `2026-04-30 15:33 IST` Verified migrated MongoDB runtime behavior with `/health`, `/auth/signup`, `/auth/me`, `/auth/logout`, and direct Mongo chat session/message create-read-delete checks using a temporary smoke user; the temporary smoke records were removed afterward and final Mongo counts remained at the migrated totals.
+- `2026-04-30 13:04 IST` Verified the migration script dry-run with `.\venv\Scripts\python.exe scripts\migrate_sqlite_to_mongo.py --dry-run`; it reported SQLite counts `users=18`, `auth_sessions=35`, `password_reset_tokens=5`, `chat_sessions=39`, and `chat_messages=108`, Mongo-before counts of `0` for each target collection, and confirmed no MongoDB documents were inserted or updated.
+- `2026-04-30 13:04 IST` Reverified focused config/storage coverage with `.\venv\Scripts\python.exe -m pytest tests/test_config.py -q` (`5 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-04-30 12:49 IST` Verified local MongoDB connectivity with a PyMongo `admin.command("ping")` against `mongodb://127.0.0.1:27017`.
+- `2026-04-30 12:49 IST` Verified app startup dependency injection with `DATABASE_BACKEND=mongodb` and a temporary `MONGODB_DATABASE=lawyer_ai_runtime_smoke`, confirming `app.state.session_store` is `MongoSessionStore`.
+- `2026-04-30 12:49 IST` Verified direct Mongo store behavior against temporary database `lawyer_ai_runtime_smoke_store`: create user, create auth session, resolve user by token, create chat session, add user/assistant messages, update/read conversation state, list history, and delete session.
+- `2026-04-30 12:49 IST` Verified endpoint-level MongoDB auth behavior against temporary database `lawyer_ai_runtime_smoke_api`: `/auth/signup`, `/auth/me`, and `/auth/logout` succeeded while the app was using `MongoSessionStore`.
+- `2026-04-30 12:51 IST` Verified `/health` startup behavior with `DATABASE_BACKEND=mongodb` and temporary database `lawyer_ai_runtime_smoke_health`, confirming the FastAPI app starts through the MongoDB dependency path.
+- `2026-04-30 12:49 IST` Verified the focused config/storage tests with `.\venv\Scripts\python.exe -m pytest tests/test_config.py -q` (`5 passed`, `1 warning` for `PyPDF2` deprecation).
 - `2026-04-30 12:34 IST` Verified Step 2 with `.\venv\Scripts\python.exe -m pytest tests/test_config.py tests/test_health.py -q` (`5 passed`, `1 warning` for `PyPDF2` deprecation).
 
 ### Next
-- `2026-04-30 12:34 IST` Step 3 should introduce a storage boundary/factory so the app can choose SQLite or MongoDB persistence without changing route or chat-service contracts.
+- `2026-04-30 16:38 IST` Future persistence work should focus on production MongoDB operations such as backups, monitoring, credentials, deployment-specific `MONGODB_URI` hardening, and optionally expanding MongoDB-specific integration coverage.
 
 ## 2026-04-29
 

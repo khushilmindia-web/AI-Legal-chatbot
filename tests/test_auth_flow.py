@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from urllib.parse import parse_qs, urlparse
 
+from backend.app.core.config import Settings
 from backend.app.api.routes import auth as auth_routes
 from backend.app.services.mailer import SmtpMailer
 
@@ -59,10 +60,12 @@ def test_signup_me_logout_and_protected_redirects(anonymous_client):
 def test_google_callback_sets_session_cookie(monkeypatch, anonymous_client):
     anonymous_client.app.state.settings.google_client_id = "google-client"
     anonymous_client.app.state.settings.google_client_secret = "google-secret"
-    anonymous_client.app.state.settings.google_redirect_uri = "http://testserver/auth/google/callback"
+    anonymous_client.app.state.settings.app_base_url = "https://testserver"
+    anonymous_client.app.state.settings.google_redirect_uri = "https://testserver/auth/google/callback"
 
     def fake_exchange(request, code):
         assert code == "auth-code"
+        assert auth_routes.google_redirect_uri(request) == "https://testserver/auth/google/callback"
         return {"access_token": "google-access-token"}
 
     def fake_userinfo(access_token):
@@ -81,18 +84,37 @@ def test_google_callback_sets_session_cookie(monkeypatch, anonymous_client):
     assert login_redirect.status_code == 307
 
     redirect_url = login_redirect.headers["location"]
-    state = parse_qs(urlparse(redirect_url).query)["state"][0]
+    redirect_query = parse_qs(urlparse(redirect_url).query)
+    assert redirect_query["redirect_uri"][0] == "https://testserver/auth/google/callback"
+    state = redirect_query["state"][0]
 
     callback_response = anonymous_client.get(
-        f"/auth/google/callback?code=auth-code&state={state}",
+        f"https://testserver/auth/google/callback?code=auth-code&state={state}",
         follow_redirects=False,
     )
     assert callback_response.status_code == 307
-    assert callback_response.headers["location"] == "http://testserver/frontend/index.html"
+    assert callback_response.headers["location"] == "https://testserver/frontend/index.html"
+    set_cookie = callback_response.headers.get("set-cookie", "")
+    assert "session_token=" in set_cookie
+    assert "HttpOnly" in set_cookie
+    assert "Secure" in set_cookie
+    assert "SameSite=none" in set_cookie
 
-    me_response = anonymous_client.get("/auth/me")
+    me_response = anonymous_client.get("https://testserver/auth/me", headers={"Authorization": "Bearer stale-localstorage-token"})
     assert me_response.status_code == 200
     assert me_response.json()["email"] == "google@example.com"
+
+
+def test_google_callback_failure_redirects_to_auth_with_error(anonymous_client):
+    anonymous_client.app.state.settings.app_base_url = "https://testserver"
+
+    response = anonymous_client.get(
+        "https://testserver/auth/google/callback?error=access_denied",
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 307
+    assert response.headers["location"] == "https://testserver/frontend/auth.html?error=google_auth_failed"
 
 
 def test_password_reset_requires_smtp_configuration(anonymous_client):
@@ -105,6 +127,31 @@ def test_password_reset_requires_smtp_configuration(anonymous_client):
 
     assert response.status_code == 503
     assert response.json()["detail"] == "Password reset email is not configured yet."
+
+
+def test_password_reset_email_has_html_template_and_plain_text_fallback():
+    settings = Settings(
+        SMTP_HOST="smtp.example.com",
+        SMTP_USERNAME="sender@example.com",
+        SMTP_PASSWORD="app-password",
+        SMTP_FROM_EMAIL="sender@example.com",
+        PASSWORD_RESET_TOKEN_TTL_MINUTES=45,
+    )
+    mailer = SmtpMailer(settings)
+    reset_url = "https://example.com/frontend/auth.html?reset_token=abc123"
+
+    text_body = mailer._build_password_reset_text(reset_url)
+    html_body = mailer._build_password_reset_html(reset_url)
+
+    assert reset_url in text_body
+    assert "This link expires in 45 minutes." in text_body
+    assert "{{RESET_LINK}}" not in text_body
+    assert "<h1" in html_body
+    assert "Reset password" in html_body
+    assert f'href="{reset_url}"' in html_body
+    assert "If the button does not work" in html_body
+    assert "Your current password will remain unchanged" in html_body
+    assert "{{RESET_LINK}}" not in html_body
 
 
 def test_password_reset_request_and_confirm_flow(monkeypatch, anonymous_client):

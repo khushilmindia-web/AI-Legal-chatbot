@@ -175,27 +175,36 @@ async function submitJson(url, payload) {
 
 async function fetchCurrentUser() {
     const token = getStoredToken();
-    const response = await fetch(ME_URL, {
-        method: 'GET',
-        credentials: 'include',
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-        throw new Error(data.detail || `Request failed with status ${response.status}`);
+    try {
+        const response = await fetch(ME_URL, {
+            method: 'GET',
+            credentials: 'include',
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+            signal: controller.signal
+        });
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(data.detail || `Request failed with status ${response.status}`);
+        }
+        return data;
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            throw new Error('Session check timed out. Please log in again.');
+        }
+        throw error;
+    } finally {
+        clearTimeout(timeoutId);
     }
-    return data;
 }
 
 async function redirectIfAuthenticated() {
     const token = getStoredToken();
-    if (!token) {
-        return;
-    }
-
     const storedUser = getStoredUser();
-    if (storedUser) {
+    if (token && storedUser) {
         redirectToApp();
         return;
     }
@@ -393,6 +402,11 @@ async function handlePasswordReset(event) {
     event.preventDefault();
     event.stopPropagation();
     const email = document.getElementById('resetEmail').value.trim();
+    const resetBtn = document.querySelector('#passwordResetForm .auth-submit');
+    const originalText = resetBtn.textContent;
+    resetBtn.textContent = 'Sending...';
+    resetBtn.disabled = true;
+    showResetMessage('');
 
     try {
         const data = await submitJson(PASSWORD_RESET_URL, { email });
@@ -404,6 +418,9 @@ async function handlePasswordReset(event) {
     
     catch (error) {
         showResetMessage(error.message, true);
+    } finally {
+        resetBtn.textContent = originalText;
+        resetBtn.disabled = false;
     }
 }
 
@@ -430,6 +447,12 @@ async function handlePasswordResetConfirm(event) {
         return;
     }
 
+    const confirmBtn = document.querySelector('#passwordResetConfirmForm .auth-submit');
+    const originalText = confirmBtn.textContent;
+    confirmBtn.textContent = 'Updating...';
+    confirmBtn.disabled = true;
+    showResetMessage('');
+
     try {
         const data = await submitJson(PASSWORD_RESET_CONFIRM_URL, { token, password });
         showResetMessage(data.message || 'Your password has been reset.');
@@ -444,5 +467,8 @@ async function handlePasswordResetConfirm(event) {
     
     catch (error) {
         showResetMessage(error.message, true);
+    } finally {
+        confirmBtn.textContent = originalText;
+        confirmBtn.disabled = false;
     }
 }

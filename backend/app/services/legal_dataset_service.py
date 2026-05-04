@@ -244,7 +244,7 @@ class LocalLegalDatasetService:
                     provision_number=provision_number,
                     title=resolved_title,
                 ),
-                source=f"{spec.source_label} (local dataset: data/legal_datasets/{source_path.name})",
+                source=self._resolve_source_label(spec, item, source_path),
                 domain=spec.domain,
                 docsource=spec.docsource,
                 authority_type=spec.authority_type,
@@ -268,6 +268,18 @@ class LocalLegalDatasetService:
             if payload is not None:
                 return payload, path
         return [], None
+
+    def _resolve_source_label(self, spec: LegalDatasetSpec, item: dict[str, Any], source_path: Path) -> str:
+        source_name = self._clean_text(item.get("source_name"))
+        source_url = self._clean_text(item.get("source_url"))
+        dataset_label = f"local dataset: data/legal_datasets/{source_path.name}"
+        if source_name and source_url:
+            return f"{source_name}: {source_url} ({dataset_label})"
+        if source_name:
+            return f"{source_name} ({dataset_label})"
+        if source_url:
+            return f"{spec.source_label}: {source_url} ({dataset_label})"
+        return f"{spec.source_label} ({dataset_label})"
 
     @staticmethod
     def _read_json_file(path: Path) -> Any | None:

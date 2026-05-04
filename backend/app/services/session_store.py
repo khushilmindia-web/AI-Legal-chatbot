@@ -77,6 +77,9 @@ def serialize_user(row: sqlite3.Row | None) -> dict[str, Any] | None:
 
 
 class SessionStore:
+    # SQLite temporarily disabled during MongoDB migration.
+    # This class is preserved as a backup/fallback implementation only.
+    # Active runtime storage is created through backend.app.services.storage.create_session_store().
     def __init__(self, db_path: str) -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
