@@ -2240,7 +2240,8 @@ class ChatService:
                 trusted_only=True,
             )
         
-        except (requests.RequestException, ValueError):
+        except Exception:
+            logger.exception("curated google direct lookup failed query=%r", query[:160])
             return []
         
         if not LegalHybridRetrievalService._curated_google_documents_strong(result.documents):
@@ -2272,7 +2273,12 @@ class ChatService:
                 trusted_only=True,
             )
         
-        except (requests.RequestException, ValueError):
+        except Exception:
+            logger.exception(
+                "curated google authority lookup failed authority_query=%r google_query=%r",
+                authority_query[:160],
+                query[:160],
+            )
             return []
         
         documents = list(result.documents)
@@ -5381,6 +5387,7 @@ class ChatService:
                 if section_match:
                     return f"section {section_match.group(1)}" in text and meaningful_overlap >= 1
                 return meaningful_overlap >= 2 and any(token in text for token in {"section", "article", "rule"})
+
             if answer_mode == "case_first":
                 if document_kind in {"judgment", "order"}:
                     return meaningful_overlap >= 1 or "judgment" in text or "case" in text or "court" in text
@@ -8310,7 +8317,9 @@ class ChatService:
         elif complete_authority_reference and kind in {"low_confidence", "unsupported_output", "no_relevant_authority"}:
             answer = self._complete_authority_no_result_answer(query=query or "")
             reason_code = (
-                "retrieval_low_confidence"
+                "bns_dataset_source_unavailable"
+                if "BNS dataset/source unavailable" in answer
+                else "retrieval_low_confidence"
                 if kind == "low_confidence"
                 else ("unsupported_output" if kind == "unsupported_output" else "no_relevant_authority")
             )

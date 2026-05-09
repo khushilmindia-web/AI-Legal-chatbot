@@ -3852,7 +3852,7 @@ def test_olx_scam_routes_to_practical_legal_help_playbook(client, monkeypatch):
     assert assistant_message["metadata"]["playbook_id"] == "playbook_cyber_fraud_v1"
 
 
-def test_bns_query_returns_clean_unavailable_answer_when_dataset_and_external_sources_fail(client, monkeypatch):
+def test_bns_query_uses_local_dataset_when_external_sources_fail(client, monkeypatch):
     def fail_indiankanoon(self, query_variants, doctypes_options, max_results=4):
         raise RuntimeError("403 PERMISSION_DENIED from India Kanoon provider")
 
@@ -3873,8 +3873,10 @@ def test_bns_query_returns_clean_unavailable_answer_when_dataset_and_external_so
     assert response.status_code == 200
     payload = response.json()
     answer = payload["answer"].lower()
-    assert "bns dataset/source unavailable" in answer
     assert "section 34 bns" in answer
+    assert "private defence" in answer
+    assert "devgan.in/bns/section/34" in answer
+    assert "bns dataset/source unavailable" not in answer
     assert "permission_denied" not in answer
     assert "provider error" not in answer
     assert "insufficient_quota" not in answer

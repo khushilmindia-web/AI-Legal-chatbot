@@ -1255,7 +1255,6 @@ def google_login():
     }
     return RedirectResponse(url=f"{GOOGLE_AUTH_URL}?{urlencode(params)}")
 
-
 @app.get("/auth/google/status")
 def google_auth_status():
     return {"configured": google_auth_configured()}

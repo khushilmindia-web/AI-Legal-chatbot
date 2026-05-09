@@ -2,6 +2,25 @@
 
 Historical note: entries before `2026-04-15` were previously maintained as date-grouped sections; starting with the `2026-04-15` section below, individual change bullets also carry explicit IST timestamps.
 
+## 2026-05-07
+
+### Pre-Deployment Verification Audit
+- `2026-05-07 16:44 IST` Completed a manual pre-deployment verification audit without adding new features. Reviewed auth and Google OAuth tests/config, chat routing, authority/provision lookups, practical legal-help flows, upload handling, history/delete behavior, mobile responsive CSS, fallback behavior, MongoDB persistence wiring, environment config, and deployment startup/health documentation.
+- `2026-05-07 16:44 IST` Fixed a clear defensive-runtime bug in [`backend/app/services/chat_service.py`](d:/AI-Chatbot/backend/app/services/chat_service.py): curated Google direct/authority lookup failures now log and safely return no curated documents instead of bubbling provider/runtime exceptions into a generic technical fallback before local or grounded authority sources can be used.
+- `2026-05-07 16:44 IST` Aligned BNS complete-authority fallback metadata in [`backend/app/services/chat_service.py`](d:/AI-Chatbot/backend/app/services/chat_service.py) so BNS no-result answers carry `bns_dataset_source_unavailable` when that is the user-facing fallback reason.
+- `2026-05-07 16:44 IST` Updated the BNS external-failure regression in [`tests/test_chat.py`](d:/AI-Chatbot/tests/test_chat.py) to match current local-first behavior: when `data/legal_datasets/bns.json` has the requested section, external Google/India Kanoon failures must not hide the local BNS answer or leak provider errors.
+- `2026-05-07 16:44 IST` Marked pre-deployment audit task `184` complete in [`tasks.md`](d:/AI-Chatbot/tasks.md). Pending feature tasks `68` and `139` were intentionally ignored per the audit instruction.
+
+### Verified
+- `2026-05-07 16:44 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_config.py tests\test_health.py tests\test_auth_flow.py -q` (`16 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-07 16:44 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_frontend_ui_static.py tests\test_upload.py -q` (`4 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-07 16:44 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_legal_dataset_service.py tests\test_hybrid_retrieval.py tests\test_google_custom_search.py -q` (`15 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-07 16:44 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_chat_routing.py tests\test_question_priority.py tests\test_response_quality_audit.py -q` (`10 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-07 16:44 IST` Ran focused history/delete, case-detail, upload-follow-up, legal-help, and authority/provision regressions from [`tests/test_chat.py`](d:/AI-Chatbot/tests/test_chat.py) (`6 passed`, then `6 passed`, each with `1 warning` for `PyPDF2` deprecation).
+- `2026-05-07 16:44 IST` Ran an app startup smoke check with `backend.app.main.app`, confirming active storage is `MongoSessionStore` and `/health` returns `200 {'status': 'ok'}`.
+- `2026-05-07 16:44 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\main.py backend\app\main.py backend\app\core\config.py backend\app\api\auth_utils.py backend\app\api\routes\auth.py backend\app\api\routes\chat.py backend\app\services\chat_service.py backend\app\services\mongo_session_store.py backend\app\services\storage.py tests\test_chat.py`.
+- `2026-05-07 16:44 IST` Ran `git diff --check -- backend\app\services\chat_service.py tests\test_chat.py tasks.md changelog.md README.md .env.example Frontend\app.js Frontend\auth.js Frontend\style.css`.
+
 ## 2026-05-04
 
 ### Final Manual UI Review
