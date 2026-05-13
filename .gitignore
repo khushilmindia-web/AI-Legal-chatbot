@@ -23,3 +23,8 @@ local_server.log
 local_server.err.log
 local_server_8010.log
 local_server_8010.err.log
+Frontend/admin.html
+Frontend/admin.js
+backend/app/api/routes/admin.py
+backend/app/services/admin_health_service.py
+scripts/promote_admin.py

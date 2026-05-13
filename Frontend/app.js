@@ -41,6 +41,7 @@ const elements = {
   fileInput: document.getElementById("fileInput"),
   currentUserName: document.getElementById("currentUserName"),
   currentUserMeta: document.getElementById("currentUserMeta"),
+  adminPanelLink: document.getElementById("adminPanelLink"),
   logoutButton: document.getElementById("logoutButton"),
 };
 
@@ -154,8 +155,26 @@ function clearError() {
   elements.errorBanner.textContent = "";
 }
 
+function safeAuthUser(user) {
+  if (!user || typeof user !== "object") {
+    return null;
+  }
+  return {
+    id: user.id,
+    full_name: user.full_name,
+    email: user.email,
+    role: user.role === "admin" ? "admin" : "user",
+    status: user.status === "blocked" ? "blocked" : "active",
+    state: user.state || null,
+    created_at: user.created_at,
+  };
+}
+
 function setStoredUser(user) {
-  localStorage.setItem(USER_KEY, JSON.stringify(user));
+  const safeUser = safeAuthUser(user);
+  if (safeUser) {
+    localStorage.setItem(USER_KEY, JSON.stringify(safeUser));
+  }
 }
 
 function getStoredUser() {
@@ -164,7 +183,7 @@ function getStoredUser() {
     return null;
   }
   try {
-    return JSON.parse(raw);
+    return safeAuthUser(JSON.parse(raw));
   } catch (error) {
     localStorage.removeItem(USER_KEY);
     return null;
@@ -243,18 +262,27 @@ function renderUserCard(user) {
   elements.currentUserMeta.textContent = meta;
 }
 
+function renderAdminNavigation(user) {
+  if (!elements.adminPanelLink) {
+    return;
+  }
+  elements.adminPanelLink.hidden = user?.role !== "admin";
+}
+
 async function ensureAuthenticated() {
   const storedUser = getStoredUser();
   if (storedUser) {
     state.currentUser = storedUser;
     renderUserCard(storedUser);
+    renderAdminNavigation(storedUser);
   }
 
   try {
-    const user = await fetchCurrentUser();
+    const user = safeAuthUser(await fetchCurrentUser());
     state.currentUser = user;
     setStoredUser(user);
     renderUserCard(user);
+    renderAdminNavigation(user);
     return user;
   } catch (error) {
     if (!storedUser) {
@@ -422,15 +450,59 @@ function renderMessages() {
   messages.forEach((message) => {
     const article = document.createElement("article");
     article.className = `message-bubble ${message.role === "user" ? "user" : "assistant"}`;
+    const feedbackControls = message.role === "assistant" && message.id
+      ? `<div class="message-feedback" data-message-id="${message.id}">
+          <button type="button" class="feedback-button" data-rating="up">Thumbs up</button>
+          <button type="button" class="feedback-button" data-rating="down">Thumbs down</button>
+        </div>`
+      : "";
     article.innerHTML = `
       <div class="message-content">${nlToBr(message.content)}</div>
       ${message.role === "assistant" ? buildAssistantMeta(message.metadata || {}) : ""}
+      ${feedbackControls}
       <div class="message-footer">${formatTime(message.created_at)}</div>
     `;
     elements.chatThread.appendChild(article);
   });
 
+  elements.chatThread.querySelectorAll(".feedback-button").forEach((button) => {
+    button.addEventListener("click", submitMessageFeedback);
+  });
+
   elements.chatThread.scrollTop = elements.chatThread.scrollHeight;
+}
+
+async function submitMessageFeedback(event) {
+  const button = event.currentTarget;
+  const container = button.closest(".message-feedback");
+  const messageId = container?.dataset.messageId;
+  const rating = button.dataset.rating;
+  if (!messageId || !rating) {
+    return;
+  }
+  let comment = "";
+  if (rating === "down") {
+    comment = window.prompt("Optional: what felt unhelpful?", "") || "";
+  }
+  container.querySelectorAll(".feedback-button").forEach((item) => {
+    item.disabled = true;
+  });
+  try {
+    await requestJson(`/chat/messages/${encodeURIComponent(messageId)}/feedback`, {
+      method: "POST",
+      body: JSON.stringify({ rating, comment: comment.trim() || null }),
+      credentials: "include",
+    });
+    const status = document.createElement("span");
+    status.className = "feedback-status";
+    status.textContent = "Feedback saved";
+    container.appendChild(status);
+  } catch (error) {
+    container.querySelectorAll(".feedback-button").forEach((item) => {
+      item.disabled = false;
+    });
+    showError(error instanceof Error ? error.message : "Could not save feedback.");
+  }
 }
 
 async function loadHistory() {
@@ -444,6 +516,7 @@ async function openChat(chatId) {
   const payload = await requestJson(`/chat/${chatId}/messages`, { method: "GET", credentials: "include" });
   state.activeChatId = chatId;
   state.liveMessages = (payload.items || []).map((item) => ({
+    id: item.id,
     role: item.role,
     content: item.content,
     created_at: item.created_at,
@@ -548,6 +621,7 @@ async function submitMessage(event) {
     }
 
     const assistantMessage = {
+      id: payload.assistant_message_id,
       role: "assistant",
       content: payload.answer,
       created_at: payload.created_at,

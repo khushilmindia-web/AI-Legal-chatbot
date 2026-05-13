@@ -64,6 +64,13 @@ def require_current_user(request: Request):
     return user
 
 
+def require_admin_user(request: Request):
+    user = require_current_user(request)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+
 def set_auth_cookie(
     response: Response,
     request: Request,

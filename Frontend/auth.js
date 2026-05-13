@@ -65,12 +65,28 @@ function clearSession() {
     localStorage.removeItem(TOKEN_KEY);
 }
 
+function safeAuthUser(user) {
+    if (!user || typeof user !== 'object') {
+        return null;
+    }
+    return {
+        id: user.id,
+        full_name: user.full_name,
+        email: user.email,
+        role: user.role === 'admin' ? 'admin' : 'user',
+        status: user.status === 'blocked' ? 'blocked' : 'active',
+        state: user.state || null,
+        created_at: user.created_at
+    };
+}
+
 function saveSession(data) {
     if (data.token) {
         localStorage.setItem(TOKEN_KEY, data.token);
     }
-    if (data.user) {
-        localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+    const user = safeAuthUser(data.user);
+    if (user) {
+        localStorage.setItem(USER_KEY, JSON.stringify(user));
     }
 }
 

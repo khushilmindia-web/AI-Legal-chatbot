@@ -6,6 +6,8 @@ import io
 from backend.app.services.chat_service import ChatService
 from backend.app.services.file_extractor import FileExtractionService
 from backend.app.services.indiankanoon_service import IndianKanoonService
+from backend.app.services.legal_document_analysis import LegalDocumentAnalysisService
+from backend.app.services.legal_entity_extraction import LegalEntityExtractionService
 from backend.app.services.openai_service import OpenAIResponsesService
 
 
@@ -113,3 +115,80 @@ def test_file_extractor_reads_text_file(tmp_path):
     result = asyncio.run(extractor.extract_uploads([DummyUpload()]))
     assert result.texts
     assert "Consumer complaint" in result.texts[0]
+
+
+def test_legal_document_analysis_extracts_notice_structure():
+    service = LegalDocumentAnalysisService()
+
+    analysis = service.analyze_text(
+        "LEGAL NOTICE from Alpha Traders to Beta Stores. "
+        "You are called upon to pay Rs. 1,25,000 within 15 days. "
+        "The notice refers to Section 138 of the Negotiable Instruments Act and cheque dishonour dated 12/04/2026.",
+        document_index=1,
+    )
+
+    assert analysis["document_type"] == "legal_notice"
+    assert analysis["procedural_stage"] == "notice stage"
+    assert any("within 15 days" in item.lower() for item in analysis["deadlines"])
+    assert any("section 138" in item.lower() for item in analysis["authorities"])
+    assert any("Alpha Traders" in item for item in analysis["parties"])
+    assert any("cheque dishonour" in item.lower() for item in analysis["risk_indicators"])
+    assert analysis["entities"]["sections"][0]["section"] == "138"
+    assert "Negotiable Instruments Act, 1881" in analysis["entities"]["statutes"]
+    assert analysis["actionable_next_steps"]
+
+
+def test_legal_entity_extraction_normalizes_chat_and_document_facts():
+    service = LegalEntityExtractionService()
+
+    entities = service.extract(
+        "FIR No. 45/2026 was registered at Navrangpura Police Station under Section 420 IPC. "
+        "The complaint mentions Rs. 50,000, Case No. CC/17/2026, and hearing on 14 May 2026."
+    )
+
+    assert "FIR 45/2026" in entities["fir_numbers"]
+    assert "Navrangpura Police Station" in entities["police_stations"]
+    assert entities["sections"][0]["section"] == "420"
+    assert entities["sections"][0]["statute"] == "Indian Penal Code, 1860"
+    assert "Indian Penal Code, 1860" in entities["statutes"]
+    assert entities["money_amounts"][0]["normalized"] == "INR 50000"
+    assert any("CC/17/2026" in item for item in entities["case_numbers"])
+    assert any("14 May 2026" in item for item in entities["dates"])
+
+
+def test_chat_upload_persists_structured_document_analysis(client, monkeypatch):
+    def no_live_docs(self, query_variants, doctypes_options, max_results=4):
+        return []
+
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", no_live_docs)
+
+    response = client.post(
+        "/chat/upload",
+        data={"message": "Please review this uploaded legal notice"},
+        files={
+            "files": (
+                "notice.txt",
+                io.BytesIO(
+                    b"LEGAL NOTICE from Alpha Traders to Beta Stores. You are called upon to pay Rs. 125000 within 15 days under Section 138 NI Act."
+                ),
+                "text/plain",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    chat_id = response.json()["chat_id"]
+    messages = client.get(f"/chat/{chat_id}/messages").json()["items"]
+    latest_assistant = [item for item in messages if item["role"] == "assistant"][-1]
+    analyses = latest_assistant["metadata"]["conversation_state"]["uploaded_document_analyses"]
+
+    assert analyses
+    assert analyses[0]["document_type"] == "legal_notice"
+    assert analyses[0]["procedural_stage"] == "notice stage"
+    assert any("within 15 days" in item.lower() for item in analyses[0]["deadlines"])
+    assert any("section 138" in item.lower() for item in analyses[0]["authorities"])
+    assert analyses[0]["entities"]["sections"][0]["section"] == "138"
+    assert latest_assistant["metadata"]["uploaded_document_analyses"][0]["document_type"] == "legal_notice"
+    legal_entities = latest_assistant["metadata"]["conversation_state"]["legal_entities"]
+    assert legal_entities["sections"][0]["section"] == "138"
+    assert any("within 15 days" in item.lower() for item in legal_entities["deadlines"])

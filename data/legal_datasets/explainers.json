@@ -1,0 +1,247 @@
+{
+  "constitutional_explainers": {
+    "fundamental_rights": {
+      "title": "Fundamental Rights under the Constitution of India",
+      "short_explanation": "Fundamental Rights are the core constitutional rights that protect individual liberty, equality, freedom, and legal safeguards against improper State action.",
+      "points": [
+        "They are enforceable constitutional protections.",
+        "They broadly cover equality rights, freedom rights, protections in criminal-law situations, freedom of religion, cultural and educational rights, and constitutional remedies."
+      ],
+      "legal_position": "In simple terms, they are enforceable constitutional protections. They broadly cover equality rights, freedom rights, protections in criminal-law situations, freedom of religion, cultural and educational rights, and constitutional remedies.",
+      "next_steps": "If you only need the concept, start with the constitutional grouping of the rights and the article ranges. If you need to act on a violation, identify the exact right affected, the State action involved, and the relevant documents or timeline first.",
+      "article_references": [
+        "Articles 12-13: define the State for Part III and make laws inconsistent with Fundamental Rights vulnerable to challenge.",
+        "Articles 14-18: Right to Equality, including equality before law, non-discrimination, equality of opportunity, abolition of untouchability, and abolition of titles.",
+        "Articles 19-22: Right to Freedom, including freedoms under Article 19 and criminal-law protections under Articles 20, 21, and 22.",
+        "Articles 23-24: Right against Exploitation, including prohibition of trafficking, forced labour, and child labour in hazardous work.",
+        "Articles 25-28: Freedom of Religion.",
+        "Articles 29-30: Cultural and Educational Rights, especially for minorities.",
+        "Article 32: Right to Constitutional Remedies before the Supreme Court.",
+        "Articles 33-35: special provisions on modification, application, and implementation of certain Fundamental Rights."
+      ],
+      "aliases": [
+        "fundamental rights",
+        "basic rights in constitution",
+        "rights under constitution"
+      ],
+      "keywords": [
+        "fundamental rights",
+        "constitutional rights",
+        "part iii",
+        "right to equality",
+        "right to freedom"
+      ],
+      "sources": "Constitution of India | Fundamental Rights overview",
+      "jurisdiction": "India",
+      "domain": "constitutional",
+      "likely_forum": "Constitution of India",
+      "documents_to_keep": ["relevant order or notice", "timeline", "supporting records"],
+      "caution": "The exact remedy depends on which specific right is involved and the facts of the alleged violation.",
+      "disclaimer_mode": "medium_risk"
+    },
+    "fundamental_duties": {
+      "title": "Fundamental Duties under the Constitution of India",
+      "short_explanation": "Fundamental Duties are constitutional expectations placed on citizens to uphold constitutional values, public spirit, and civic responsibility.",
+      "points": [
+        "They guide civic conduct and constitutional values.",
+        "They are not usually framed like ordinary personal claims against the State.",
+        "They can still matter for constitutional interpretation and public-policy issues."
+      ],
+      "legal_position": "In simple terms, they are not usually framed like ordinary personal claims against the State, but they remain an important constitutional guide to civic conduct and constitutional interpretation.",
+      "next_steps": "If you need a basic explanation, focus on their role as citizen duties under the Constitution. If your question is tied to a dispute, identify the exact policy, restriction, or public issue involved before going further.",
+      "article_references": [
+        "Article 51A(a): respect the Constitution, its ideals and institutions, the National Flag, and the National Anthem.",
+        "Article 51A(b): cherish and follow the ideals of the freedom struggle.",
+        "Article 51A(c): uphold and protect the sovereignty, unity, and integrity of India.",
+        "Article 51A(d): defend the country and render national service when called upon.",
+        "Article 51A(e): promote harmony and the spirit of common brotherhood, and renounce practices derogatory to the dignity of women.",
+        "Article 51A(f): value and preserve the rich heritage of the country's composite culture.",
+        "Article 51A(g): protect and improve the natural environment and have compassion for living creatures.",
+        "Article 51A(h): develop scientific temper, humanism, and the spirit of inquiry and reform.",
+        "Article 51A(i): safeguard public property and abjure violence.",
+        "Article 51A(j): strive toward excellence in all spheres of individual and collective activity.",
+        "Article 51A(k): parent or guardian duty to provide education opportunities to children between six and fourteen years."
+      ],
+      "aliases": [
+        "fundamental duties",
+        "what are duties in constitution",
+        "duties under constitution"
+      ],
+      "keywords": [
+        "fundamental duties",
+        "article 51a",
+        "constitutional duties",
+        "citizen duties"
+      ],
+      "sources": "Constitution of India | Fundamental Duties overview",
+      "jurisdiction": "India",
+      "domain": "constitutional",
+      "likely_forum": "Constitution of India",
+      "documents_to_keep": ["relevant notice or policy", "communications", "supporting records"],
+      "caution": "A general explanation of fundamental duties is different from a case-specific constitutional remedy analysis.",
+      "disclaimer_mode": "medium_risk"
+    },
+    "directive_principles": {
+      "title": "Directive Principles of State Policy under the Constitution of India",
+      "short_explanation": "Directive Principles of State Policy are constitutional principles meant to guide governance and public policy in India.",
+      "points": [
+        "They are constitutional governance goals.",
+        "They are not directly enforceable in court like Fundamental Rights.",
+        "They help explain the social-welfare and policy direction of the State."
+      ],
+      "legal_position": "In simple terms, they are constitutional governance goals rather than ordinary directly enforceable personal rights. They often help explain the social-welfare and policy direction of the State under the Constitution.",
+      "next_steps": "If you need only the concept, read them as constitutional policy principles. If your issue concerns a government action or challenge, identify the exact policy, scheme, or constitutional question involved first.",
+      "article_references": [
+        "Articles 36-37: define the DPSP framework and clarify that these principles guide governance even though they are not directly enforceable in court like Fundamental Rights.",
+        "Articles 38-39: promote social justice, welfare, adequate livelihood, equal pay, and prevention of concentration of wealth.",
+        "Article 39A: equal justice and free legal aid.",
+        "Article 40: organization of village panchayats.",
+        "Article 41: right to work, education, and public assistance in certain cases.",
+        "Article 42: just and humane conditions of work and maternity relief.",
+        "Article 43: living wage and decent standard of life for workers.",
+        "Article 43A: participation of workers in management of industries.",
+        "Article 43B: promotion of cooperative societies.",
+        "Article 44: Uniform Civil Code.",
+        "Article 45: early childhood care and education for children.",
+        "Article 46: promotion of educational and economic interests of Scheduled Castes, Scheduled Tribes, and other weaker sections.",
+        "Article 47: nutrition, public health, and prohibition of intoxicating drinks and drugs harmful to health.",
+        "Article 48: agriculture and animal husbandry.",
+        "Article 48A: protection and improvement of the environment and safeguarding forests and wildlife.",
+        "Article 49: protection of monuments and places of national importance.",
+        "Article 50: separation of judiciary from executive in public services.",
+        "Article 51: promotion of international peace and security."
+      ],
+      "aliases": [
+        "directive principles",
+        "directive principles of state policy",
+        "dpsp"
+      ],
+      "keywords": [
+        "directive principles",
+        "dpsp",
+        "part iv",
+        "state policy",
+        "constitutional principles"
+      ],
+      "sources": "Constitution of India | Directive Principles of State Policy overview",
+      "jurisdiction": "India",
+      "domain": "constitutional",
+      "likely_forum": "Constitution of India",
+      "documents_to_keep": ["relevant policy or order", "scheme documents", "supporting records"],
+      "caution": "A DPSP explanation does not by itself answer whether a specific legal challenge or remedy is maintainable on your facts.",
+      "disclaimer_mode": "medium_risk"
+    }
+  },
+  "general_legal_explainers": {
+    "arbitration": {
+      "title": "Arbitration",
+      "short_explanation": "a private dispute-resolution process where the parties agree to have their dispute decided by an arbitrator instead of going through a full court trial.",
+      "points": [
+        "It usually depends on an arbitration clause or a later agreement between the parties.",
+        "The arbitrator hears both sides and gives an award.",
+        "The award can be binding subject to the limited court challenge framework under arbitration law."
+      ],
+      "legal_position": "In practice, it usually depends on an arbitration clause or a later agreement between the parties. The arbitrator hears both sides and gives an award, which can be binding subject to the limited court challenge framework under arbitration law.",
+      "next_steps": "If you are checking whether arbitration applies to your dispute, start by reading the contract for an arbitration clause and identifying the seat, forum, and procedure mentioned there.",
+      "article_references": [],
+      "aliases": [
+        "what is arbitration",
+        "what arbitration is",
+        "explain arbitration",
+        "meaning of arbitration",
+        "define arbitration",
+        "arbitration meaning"
+      ],
+      "keywords": ["arbitration", "arbitrator", "arbitral award", "private dispute resolution"],
+      "jurisdiction": "India",
+      "domain": "civil",
+      "disclaimer_mode": "low_risk"
+    },
+    "fir": {
+      "title": "First Information Report (FIR)",
+      "short_explanation": "the formal police record of information about a cognizable offence that sets the criminal process in motion.",
+      "points": [
+        "It is the starting point for police investigation in cognizable criminal matters.",
+        "Its significance depends on the offence category, the facts disclosed, and the later investigation record."
+      ],
+      "legal_position": "In practice, it is the starting point for police investigation in cognizable criminal matters. Its exact significance depends on the offence category, the facts disclosed, and the later investigation record.",
+      "next_steps": "If you are dealing with a real incident, first organize the date, place, people involved, and any supporting evidence before approaching the police or reviewing the FIR text.",
+      "article_references": [],
+      "aliases": [
+        "what is fir",
+        "what is an fir",
+        "explain fir",
+        "fir meaning",
+        "define fir"
+      ],
+      "keywords": ["fir", "first information report", "police complaint", "cognizable offence"],
+      "jurisdiction": "India",
+      "domain": "criminal",
+      "disclaimer_mode": "low_risk"
+    },
+    "bail": {
+      "title": "Bail",
+      "short_explanation": "the legal release of an accused person from custody subject to the conditions imposed by the court or the law.",
+      "points": [
+        "Bail concerns liberty during the criminal process, not a final decision on guilt.",
+        "Whether it is granted depends on the offence, case stage, statutory limits, and facts placed before the court."
+      ],
+      "legal_position": "In broad terms, bail is about liberty during the criminal process, not a final decision on guilt. Whether it is granted depends on the offence, the stage of the case, statutory limits, and the facts placed before the court.",
+      "next_steps": "If your question is practical, first identify the offence sections, the arrest or notice stage, and the court handling the matter before deciding the next bail step.",
+      "article_references": [],
+      "aliases": [
+        "what is bail",
+        "explain bail",
+        "bail meaning",
+        "define bail"
+      ],
+      "keywords": ["bail", "custody", "release", "criminal process"],
+      "jurisdiction": "India",
+      "domain": "criminal",
+      "disclaimer_mode": "medium_risk"
+    },
+    "anticipatory_bail": {
+      "title": "Anticipatory Bail",
+      "short_explanation": "the pre-arrest bail protection a court may grant where a person reasonably expects arrest in a non-bailable matter.",
+      "points": [
+        "It is a preventive liberty remedy.",
+        "The result depends on the offence, alleged facts, custodial interrogation needs, and the court's view at that stage."
+      ],
+      "legal_position": "In practice, it is a preventive liberty remedy. The result depends on the offence, the facts alleged, the need for custodial interrogation, and the court's view of the case at that stage.",
+      "next_steps": "If this relates to a real dispute, first identify the likely offence sections, the police station or complaint stage, and the documents you would rely on before taking the next step.",
+      "article_references": [],
+      "aliases": [
+        "what is anticipatory bail",
+        "explain anticipatory bail",
+        "anticipatory bail meaning",
+        "define anticipatory bail"
+      ],
+      "keywords": ["anticipatory bail", "pre arrest bail", "non bailable", "custodial interrogation"],
+      "jurisdiction": "India",
+      "domain": "criminal",
+      "disclaimer_mode": "medium_risk"
+    },
+    "legal_notice": {
+      "title": "Legal Notice",
+      "short_explanation": "a formal written communication used to state a legal demand, allegation, or proposed action before the dispute moves further.",
+      "points": [
+        "It helps set out the claim clearly.",
+        "It preserves the sender's position.",
+        "It gives the other side a chance to respond before litigation or another formal step."
+      ],
+      "legal_position": "In practice, it helps set out the claim clearly, preserve the sender's position, and give the other side a chance to respond before litigation or another formal step.",
+      "next_steps": "If you are dealing with an actual notice, read the demand, timeline, and supporting documents carefully before replying or sending one.",
+      "article_references": [],
+      "aliases": [
+        "what is legal notice",
+        "explain legal notice",
+        "legal notice meaning",
+        "define legal notice"
+      ],
+      "keywords": ["legal notice", "demand notice", "reply notice", "pre litigation"],
+      "jurisdiction": "India",
+      "domain": "civil",
+      "disclaimer_mode": "low_risk"
+    }
+  }
+}

@@ -65,8 +65,10 @@ def parse_json_object(raw_value: str | None) -> dict[str, Any]:
 
 def transform_row(table_name: str, row: dict[str, Any]) -> dict[str, Any]:
     document = dict(row)
-    if table_name == "users" and document.get("google_sub") is None:
-        document.pop("google_sub", None)
+    if table_name == "users":
+        if document.get("google_sub") is None:
+            document.pop("google_sub", None)
+        document["role"] = document.get("role") or "user"
     elif table_name == "chat_sessions":
         document["state"] = parse_json_object(document.pop("state_json", None))
     elif table_name == "chat_messages":

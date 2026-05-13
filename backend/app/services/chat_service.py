@@ -4,6 +4,7 @@ import json
 import re
 import difflib
 from datetime import datetime, timezone
+from pathlib import Path
 from time import monotonic
 from typing import Any
 from urllib.parse import urlparse
@@ -17,7 +18,9 @@ from backend.app.services.domain_packs import LegalDomainPackService
 from backend.app.services.google_custom_search_service import GoogleCustomSearchService
 
 from backend.app.services.indiankanoon_service import IndianKanoonService, SOURCE_AUTHORITY_SCORES
+from backend.app.services.legal_document_analysis import LegalDocumentAnalysisService
 from backend.app.services.legal_dataset_service import LegalProvisionMatch, LocalLegalDatasetService
+from backend.app.services.legal_entity_extraction import LegalEntityExtractionService
 from backend.app.services.legal_hybrid_retrieval import LegalHybridRetrievalService
 from backend.app.services.intent_service import IntentRoutingService
 from backend.app.services.legal_domain_classifier import LegalDomainClassifier
@@ -189,148 +192,114 @@ FAST_AUTHORITY_LOOKUPS: dict[str, dict[str, Any]] = {
     },
 }
 
-CONSTITUTIONAL_EXPLAINER_LOOKUPS: dict[str, dict[str, Any]] = {
-    "fundamental_rights": {
-        "title": "Fundamental Rights under the Constitution of India",
-        "summary": "Fundamental Rights are the core constitutional rights that protect individual liberty, equality, freedom, and legal safeguards against improper State action.",
-        "legal_position": "In simple terms, they are enforceable constitutional protections. They broadly cover equality rights, freedom rights, protections in criminal-law situations, freedom of religion, cultural and educational rights, and constitutional remedies.",
-        "next_steps": "If you only need the concept, start with the constitutional grouping of the rights and the article ranges. If you need to act on a violation, identify the exact right affected, the State action involved, and the relevant documents or timeline first.",
-    
-        "article_breakdown": [
-            "Articles 12-13: define the State for Part III and make laws inconsistent with Fundamental Rights vulnerable to challenge.",
-            "Articles 14-18: Right to Equality, including equality before law, non-discrimination, equality of opportunity, abolition of untouchability, and abolition of titles.",
-            "Articles 19-22: Right to Freedom, including freedoms under Article 19 and criminal-law protections under Articles 20, 21, and 22.",
-            "Articles 23-24: Right against Exploitation, including prohibition of trafficking, forced labour, and child labour in hazardous work.",
-            "Articles 25-28: Freedom of Religion.",
-            "Articles 29-30: Cultural and Educational Rights, especially for minorities.",
-            "Article 32: Right to Constitutional Remedies before the Supreme Court.",
-            "Articles 33-35: special provisions on modification, application, and implementation of certain Fundamental Rights.",
-        ],
-    
-        "sources": "Constitution of India | Fundamental Rights overview",
-        "domain": "constitutional",
-        "likely_forum": "Constitution of India",
-        "documents_to_keep": ["relevant order or notice", "timeline", "supporting records"],
-        "caution": "The exact remedy depends on which specific right is involved and the facts of the alleged violation.",
-        "disclaimer_mode": "medium_risk",
-    },
-    
-    "fundamental_duties": {
-        "title": "Fundamental Duties under the Constitution of India",
-        "summary": "Fundamental Duties are constitutional expectations placed on citizens to uphold constitutional values, public spirit, and civic responsibility.",
-        "legal_position": "In simple terms, they are not usually framed like ordinary personal claims against the State, but they remain an important constitutional guide to civic conduct and constitutional interpretation.",
-        "next_steps": "If you need a basic explanation, focus on their role as citizen duties under the Constitution. If your question is tied to a dispute, identify the exact policy, restriction, or public issue involved before going further.",
-    
-        "article_breakdown": [
-            "Article 51A(a): respect the Constitution, its ideals and institutions, the National Flag, and the National Anthem.",
-            "Article 51A(b): cherish and follow the ideals of the freedom struggle.",
-            "Article 51A(c): uphold and protect the sovereignty, unity, and integrity of India.",
-            "Article 51A(d): defend the country and render national service when called upon.",
-            "Article 51A(e): promote harmony and the spirit of common brotherhood, and renounce practices derogatory to the dignity of women.",
-            "Article 51A(f): value and preserve the rich heritage of the country's composite culture.",
-            "Article 51A(g): protect and improve the natural environment and have compassion for living creatures.",
-            "Article 51A(h): develop scientific temper, humanism, and the spirit of inquiry and reform.",
-            "Article 51A(i): safeguard public property and abjure violence.",
-            "Article 51A(j): strive toward excellence in all spheres of individual and collective activity.",
-            "Article 51A(k): parent or guardian duty to provide education opportunities to children between six and fourteen years.",
-        ],
-    
-        "sources": "Constitution of India | Fundamental Duties overview",
-        "domain": "constitutional",
-        "likely_forum": "Constitution of India",
-        "documents_to_keep": ["relevant notice or policy", "communications", "supporting records"],
-        "caution": "A general explanation of fundamental duties is different from a case-specific constitutional remedy analysis.",
-        "disclaimer_mode": "medium_risk",
-    },
-    
-    "directive_principles": {
-        "title": "Directive Principles of State Policy under the Constitution of India",
-        "summary": "Directive Principles of State Policy are constitutional principles meant to guide governance and public policy in India.",
-        "legal_position": "In simple terms, they are constitutional governance goals rather than ordinary directly enforceable personal rights. They often help explain the social-welfare and policy direction of the State under the Constitution.",
-        "next_steps": "If you need only the concept, read them as constitutional policy principles. If your issue concerns a government action or challenge, identify the exact policy, scheme, or constitutional question involved first.",
-    
-        "article_breakdown": [
-            "Articles 36-37: define the DPSP framework and clarify that these principles guide governance even though they are not directly enforceable in court like Fundamental Rights.",
-            "Articles 38-39: promote social justice, welfare, adequate livelihood, equal pay, and prevention of concentration of wealth.",
-            "Article 39A: equal justice and free legal aid.",
-            "Article 40: organization of village panchayats.",
-            "Article 41: right to work, education, and public assistance in certain cases.",
-            "Article 42: just and humane conditions of work and maternity relief.",
-            "Article 43: living wage and decent standard of life for workers.",
-            "Article 43A: participation of workers in management of industries.",
-            "Article 43B: promotion of cooperative societies.",
-            "Article 44: Uniform Civil Code.",
-            "Article 45: early childhood care and education for children.",
-            "Article 46: promotion of educational and economic interests of Scheduled Castes, Scheduled Tribes, and other weaker sections.",
-            "Article 47: nutrition, public health, and prohibition of intoxicating drinks and drugs harmful to health.",
-            "Article 48: agriculture and animal husbandry.",
-            "Article 48A: protection and improvement of the environment and safeguarding forests and wildlife.",
-            "Article 49: protection of monuments and places of national importance.",
-            "Article 50: separation of judiciary from executive in public services.",
-            "Article 51: promotion of international peace and security.",
-        ],
-    
-        "sources": "Constitution of India | Directive Principles of State Policy overview",
-        "domain": "constitutional",
-        "likely_forum": "Constitution of India",
-        "documents_to_keep": ["relevant policy or order", "scheme documents", "supporting records"],
-        "caution": "A DPSP explanation does not by itself answer whether a specific legal challenge or remedy is maintainable on your facts.",
-        "disclaimer_mode": "medium_risk",
-    },
-}
+EXPLAINER_CATALOG_PATH = Path(__file__).resolve().parents[3] / "data" / "legal_datasets" / "explainers.json"
 
-GENERAL_LEGAL_EXPLAINER_LOOKUPS: dict[str, dict[str, Any]] = {
-    "arbitration": {
-        "title": "Arbitration",
-        "summary": "a private dispute-resolution process where the parties agree to have their dispute decided by an arbitrator instead of going through a full court trial.",
-        "legal_position": "In practice, it usually depends on an arbitration clause or a later agreement between the parties. The arbitrator hears both sides and gives an award, which can be binding subject to the limited court challenge framework under arbitration law.",
-        "next_steps": "If you are checking whether arbitration applies to your dispute, start by reading the contract for an arbitration clause and identifying the seat, forum, and procedure mentioned there.",
-        "domain": "civil",
-        "disclaimer_mode": "low_risk",
-    },
-    
-    "fir": {
-        "title": "First Information Report (FIR)",
-        "summary": "the formal police record of information about a cognizable offence that sets the criminal process in motion.",
-        "legal_position": "In practice, it is the starting point for police investigation in cognizable criminal matters. Its exact significance depends on the offence category, the facts disclosed, and the later investigation record.",
-        "next_steps": "If you are dealing with a real incident, first organize the date, place, people involved, and any supporting evidence before approaching the police or reviewing the FIR text.",
-        "domain": "criminal",
-        "disclaimer_mode": "low_risk",
-    },
-    
-    "bail": {
-        "title": "Bail",
-        "summary": "the legal release of an accused person from custody subject to the conditions imposed by the court or the law.",
-        "legal_position": "In broad terms, bail is about liberty during the criminal process, not a final decision on guilt. Whether it is granted depends on the offence, the stage of the case, statutory limits, and the facts placed before the court.",
-        "next_steps": "If your question is practical, first identify the offence sections, the arrest or notice stage, and the court handling the matter before deciding the next bail step.",
-        "domain": "criminal",
-        "disclaimer_mode": "medium_risk",
-    },
-    
-    "anticipatory_bail": {
-        "title": "Anticipatory Bail",
-        "summary": "the pre-arrest bail protection a court may grant where a person reasonably expects arrest in a non-bailable matter.",
-        "legal_position": "In practice, it is a preventive liberty remedy. The result depends on the offence, the facts alleged, the need for custodial interrogation, and the court's view of the case at that stage.",
-        "next_steps": "If this relates to a real dispute, first identify the likely offence sections, the police station or complaint stage, and the documents you would rely on before taking the next step.",
-        "domain": "criminal",
-        "disclaimer_mode": "medium_risk",
-    },
-    
-    "legal_notice": {
-        "title": "Legal Notice",
-        "summary": "a formal written communication used to state a legal demand, allegation, or proposed action before the dispute moves further.",
-        "legal_position": "In practice, it helps set out the claim clearly, preserve the sender's position, and give the other side a chance to respond before litigation or another formal step.",
-        "next_steps": "If you are dealing with an actual notice, read the demand, timeline, and supporting documents carefully before replying or sending one.",
-        "domain": "civil",
-        "disclaimer_mode": "low_risk",
-    },
-}
+
+def _coerce_explainer_string_list(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [value.strip()] if value.strip() else []
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return []
+
+
+def _normalize_explainer_catalog_section(section: Any, *, default_domain: str) -> dict[str, dict[str, Any]]:
+    if isinstance(section, list):
+        raw_items = {
+            str(item.get("key") or "").strip(): item
+            for item in section
+            if isinstance(item, dict) and str(item.get("key") or "").strip()
+        }
+    elif isinstance(section, dict):
+        raw_items = {str(key).strip(): value for key, value in section.items() if str(key).strip()}
+    else:
+        return {}
+
+    normalized: dict[str, dict[str, Any]] = {}
+    for key, raw_payload in raw_items.items():
+        if not isinstance(raw_payload, dict):
+            continue
+        title = str(raw_payload.get("title") or key.replace("_", " ").title()).strip()
+        summary = str(raw_payload.get("summary") or raw_payload.get("short_explanation") or "").strip()
+        article_references = _coerce_explainer_string_list(
+            raw_payload.get("article_references") or raw_payload.get("article_breakdown")
+        )
+        aliases = _coerce_explainer_string_list(raw_payload.get("aliases"))
+        keywords = _coerce_explainer_string_list(raw_payload.get("keywords"))
+        if not aliases:
+            aliases = [key.replace("_", " ")]
+        normalized[key] = {
+            **raw_payload,
+            "title": title,
+            "summary": summary,
+            "short_explanation": str(raw_payload.get("short_explanation") or summary).strip(),
+            "points": _coerce_explainer_string_list(raw_payload.get("points")),
+            "article_breakdown": article_references,
+            "article_references": article_references,
+            "aliases": aliases,
+            "keywords": keywords,
+            "jurisdiction": str(raw_payload.get("jurisdiction") or "India").strip(),
+            "domain": str(raw_payload.get("domain") or default_domain).strip(),
+            "legal_position": str(raw_payload.get("legal_position") or "").strip(),
+            "next_steps": str(raw_payload.get("next_steps") or "").strip(),
+            "documents_to_keep": _coerce_explainer_string_list(raw_payload.get("documents_to_keep")),
+            "sources": str(raw_payload.get("sources") or raw_payload.get("source") or "").strip(),
+            "disclaimer_mode": str(raw_payload.get("disclaimer_mode") or "medium_risk").strip(),
+        }
+    return normalized
+
+
+def _load_explainer_catalogs(path: Path = EXPLAINER_CATALOG_PATH) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    try:
+        raw_payload = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        logger.warning("explainer catalog file missing path=%s", path)
+        return {}, {}
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.warning("explainer catalog load failed path=%s error=%s", path, exc)
+        return {}, {}
+
+    if not isinstance(raw_payload, dict):
+        logger.warning("explainer catalog ignored non-object payload path=%s", path)
+        return {}, {}
+
+    return (
+        _normalize_explainer_catalog_section(
+            raw_payload.get("constitutional_explainers"),
+            default_domain="constitutional",
+        ),
+        _normalize_explainer_catalog_section(
+            raw_payload.get("general_legal_explainers"),
+            default_domain="general",
+        ),
+    )
+
+
+def _match_explainer_catalog_key(catalog: dict[str, dict[str, Any]], normalized: str) -> str | None:
+    best_key: str | None = None
+    best_length = 0
+    for key, payload in catalog.items():
+        phrases = (
+            _coerce_explainer_string_list(payload.get("aliases"))
+            + _coerce_explainer_string_list(payload.get("keywords"))
+            + [key.replace("_", " ")]
+        )
+        for phrase in phrases:
+            if phrase and phrase in normalized and len(phrase) > best_length:
+                best_key = key
+                best_length = len(phrase)
+    return best_key
+
+
+CONSTITUTIONAL_EXPLAINER_LOOKUPS, GENERAL_LEGAL_EXPLAINER_LOOKUPS = _load_explainer_catalogs()
 
 class ChatService:
     def __init__(self, settings: Settings, store: SessionStoreProtocol) -> None:
         self.settings = settings
         self.store = store
         self.extractor = FileExtractionService(settings)
+        self.entity_extractor = LegalEntityExtractionService()
+        self.document_analyzer = LegalDocumentAnalysisService(entity_extractor=self.entity_extractor)
         self.intent_router = IntentRoutingService()
         self.domain_classifier = LegalDomainClassifier()
         self.domain_packs = LegalDomainPackService(settings)
@@ -497,6 +466,10 @@ class ChatService:
             fallback_state=fallback_state,
             uploaded_texts=uploaded_texts or [],
         )
+        conversation_state = self._merge_legal_entities_into_state(
+            conversation_state=conversation_state,
+            texts=[message, *(uploaded_texts or [])],
+        )
 
         retrieval_query = self._retrieval_query_for_turn(message=message, conversation_state=conversation_state)
         domain = self._classify_domain_for_turn(
@@ -588,6 +561,13 @@ class ChatService:
                 },
             }
         )
+        next_state = self._update_compressed_memory_state(
+            conversation_state=next_state,
+            previous_messages=previous_messages,
+            user_message=message,
+            assistant_answer=internal.answer,
+            uploaded_texts=uploaded_texts or [],
+        )
 
         assistant_metadata = {
             "domain": internal.domain,
@@ -608,6 +588,9 @@ class ChatService:
             "disclaimer_mode": (internal.raw_json or {}).get("disclaimer_mode"),
             "playbook_id": (internal.raw_json or {}).get("playbook_id"),
             "route_classification": route_classification,
+            "uploaded_document_analyses": next_state.uploaded_document_analyses,
+            "legal_entities": next_state.legal_entities,
+            "citation_source_map": (internal.raw_json or {}).get("citation_source_map"),
         }
 
         try:
@@ -624,16 +607,19 @@ class ChatService:
                     "conversation_state": conversation_state.model_dump(),
                     "pipeline": next_state.active_intent or "indiankanoon_rag",
                     "route_classification": route_classification,
+                    "uploaded_document_analyses": conversation_state.uploaded_document_analyses,
+                    "legal_entities": conversation_state.legal_entities,
                 },
 
                 user_id=user_id,
             )
 
-            self.store.add_message(chat_id, "assistant", internal.answer, metadata=assistant_metadata, user_id=user_id)
+            assistant_message = self.store.add_message(chat_id, "assistant", internal.answer, metadata=assistant_metadata, user_id=user_id)
             self.store.update_conversation_state(chat_id, next_state.model_dump(), user_id=user_id)
 
         except Exception:
             logger.exception("chat persistence failed chat_id=%s user_id=%s", chat_id, user_id)
+            assistant_message = {}
 
         session = self.store.get_session(chat_id, user_id=user_id)
         created_at = datetime.fromisoformat(session["updated_at"]) if session is not None else datetime.now(timezone.utc)
@@ -644,6 +630,7 @@ class ChatService:
             title=title,
             answer=internal.answer,
             created_at=created_at,
+            assistant_message_id=assistant_message.get("id") if isinstance(assistant_message, dict) else None,
             domain=internal.domain,
             follow_up_question=internal.follow_up_question,
             citations=internal.citations,
@@ -685,11 +672,23 @@ class ChatService:
         request_case_stage = (request.case_stage or "").strip() or None
         case_state = request_state or current_state.case_state or fallback_state or self.settings.default_state
         uploaded_summaries = list(current_state.uploaded_document_summaries or [])
+        uploaded_analyses = list(current_state.uploaded_document_analyses or [])
 
         for summary in self._summarize_uploaded_texts(uploaded_texts):
 
             if summary not in uploaded_summaries:
                 uploaded_summaries.append(summary)
+        existing_analysis_keys = {
+            json.dumps(analysis, sort_keys=True)
+            for analysis in uploaded_analyses
+            if isinstance(analysis, dict)
+        }
+        analyzer = getattr(self, "document_analyzer", None) or LegalDocumentAnalysisService()
+        for analysis in analyzer.analyze_uploads(uploaded_texts):
+            analysis_key = json.dumps(analysis, sort_keys=True)
+            if analysis_key not in existing_analysis_keys:
+                uploaded_analyses.append(analysis)
+                existing_analysis_keys.add(analysis_key)
 
         return current_state.model_copy(
 
@@ -699,8 +698,20 @@ class ChatService:
                 "case_stage": request_case_stage or current_state.case_stage,
                 "is_own_matter": request.is_own_matter if request.is_own_matter is not None else current_state.is_own_matter,
                 "uploaded_document_summaries": uploaded_summaries,
+                "uploaded_document_analyses": uploaded_analyses[:10],
             }
         )
+
+    def _merge_legal_entities_into_state(
+        self,
+        *,
+        conversation_state: ConversationState,
+        texts: list[str],
+    ) -> ConversationState:
+        extractor = getattr(self, "entity_extractor", None) or LegalEntityExtractionService()
+        extracted = extractor.extract_many(texts)
+        merged = extractor.merge(conversation_state.legal_entities or {}, extracted)
+        return conversation_state.model_copy(update={"legal_entities": merged})
 
     def _generate_chat_result(
         self,
@@ -1021,6 +1032,7 @@ class ChatService:
 
         citations = self._build_citations(context_documents)
         authorities = self._build_authorities(context_documents)
+        citation_source_map = self._build_citation_source_map(context_documents)
         evidence_packet = self._build_evidence_packet(
             query=user_message,
             retrieval_query=message,
@@ -1029,6 +1041,7 @@ class ChatService:
             documents=context_documents,
             citations=citations,
             authorities=authorities,
+            citation_source_map=citation_source_map,
             query_profile=query_profile,
             source_sufficiency=source_sufficiency,
         )
@@ -1053,7 +1066,7 @@ class ChatService:
             state=resolved_state,
             context=grounded_context,
             citations=citations,
-            conversation=self._conversation_for_llm(previous_messages),
+            conversation=self._conversation_for_llm(previous_messages, conversation_state=conversation_state),
             documents=context_documents,
             evidence_packet=evidence_packet,
             response_mode=str(strategy.get("response_mode") or "research"),
@@ -1096,6 +1109,7 @@ class ChatService:
 
         if response_mode != "authority":
             answer = self._normalize_final_answer(answer, citations=citations)
+            answer = self._apply_inline_evidence_references(answer, citation_source_map)
             answer = self._ensure_upload_context_reflected(answer, uploaded_documents)
             answer = self._ensure_scope_notes_reflected(answer, evidence_packet)
         strict_grounded_validation = self._should_use_strict_grounded_validation(
@@ -1184,6 +1198,7 @@ class ChatService:
                 "doctypes_options": doctypes_options,
                 "documents": documents,
                 "uploaded_documents": uploaded_documents,
+                "citation_source_map": citation_source_map,
                 "evidence_packet": evidence_packet,
                 "llm_payload": llm_payload,
                 "validation_flags": validation_flags,
@@ -1239,7 +1254,7 @@ class ChatService:
             if mixed_constitutional_result is not None:
                 return mixed_constitutional_result
 
-        if answer_intent == "general_explainer":
+        if answer_intent == "general_explainer" and query_profile.get("flow_type") != "uploaded_document_query":
             general_explainer_result = self._route_general_legal_explainer(
                 message=message,
                 domain=domain,
@@ -2640,11 +2655,12 @@ class ChatService:
                 seen.add(marker)
                 components.append({"kind": "authority", "key": key})
 
-        for explainer_key, phrases in {
-            "fundamental_duties": {"fundamental duties", "what are duties in constitution", "duties under constitution"},
-            "directive_principles": {"directive principles", "directive principles of state policy", "dpsp"},
-            "fundamental_rights": {"fundamental rights", "basic rights in constitution", "rights under constitution"},
-        }.items():
+        for explainer_key, payload in CONSTITUTIONAL_EXPLAINER_LOOKUPS.items():
+            phrases = {
+                *_coerce_explainer_string_list(payload.get("aliases")),
+                *_coerce_explainer_string_list(payload.get("keywords")),
+                explainer_key.replace("_", " "),
+            }
         
             if any(phrase in normalized_query for phrase in phrases):
                 marker = ("explainer", explainer_key)
@@ -3610,12 +3626,15 @@ class ChatService:
     @staticmethod
 
     def _format_local_legal_dataset_answer(match: LegalProvisionMatch) -> str:
+        source = match.source
+        if match.statute_name and match.statute_name.lower() not in source.lower():
+            source = f"{match.statute_name} | {source}"
         return ChatService._format_authority_structured_answer(
             matched_query=match.provision_number,
             title=match.title,
             text=match.text,
             explanation=match.explanation,
-            source=match.source,
+            source=source,
         )
 
     @staticmethod
@@ -4269,8 +4288,8 @@ class ChatService:
         cleaned = re.sub(r"\s{2,}", " ", cleaned).strip(" .;,-|")
         return cleaned or "Retrieved legal source"
 
-    @staticmethod
     def _should_use_local_legal_dataset_fast_path(
+        self,
         *,
         normalized_query: str,
         authority_key: str | None,
@@ -4286,23 +4305,37 @@ class ChatService:
 
         formatting_tail = r"(?:\s+(?:in short|briefly|short|step by step|in points|pointwise))?"
 
-        if re.fullmatch(rf"article\s+[0-9]+[a-z]?{formatting_tail}", compact):
+        section_ref = r"[0-9]+(?:\.[0-9]+)*[a-z]?"
+
+        if re.fullmatch(rf"article\s+{section_ref}{formatting_tail}", compact):
             return True
 
-        if re.fullmatch(rf"section\s+[0-9]+[a-z]?{formatting_tail}", compact):
+        if re.fullmatch(rf"section\s+{section_ref}{formatting_tail}", compact):
             return True
 
-        if re.fullmatch(rf"(?:ipc|indian penal code)\s+[0-9]+[a-z]?{formatting_tail}", compact):
+        if re.fullmatch(rf"(?:ipc|indian penal code)\s+{section_ref}{formatting_tail}", compact):
             return True
 
-        if re.fullmatch(rf"section\s+[0-9]+[a-z]?\s+(?:ipc|indian penal code){formatting_tail}", compact):
+        if re.fullmatch(rf"section\s+{section_ref}\s+(?:ipc|indian penal code){formatting_tail}", compact):
             return True
 
-        if re.search(r"\b(?:explain|what is|tell me about)\s+article\s+[0-9]+[a-z]?\b", compact):
+        aliases = self.legal_dataset.aliases_for_dataset(local_match.dataset)
+        aliases_pattern = "|".join(re.escape(alias.lower()) for alias in sorted(aliases, key=len, reverse=True))
+        if aliases_pattern:
+            if re.fullmatch(rf"(?:{aliases_pattern})\s+(?:section\s+)?{section_ref}{formatting_tail}", compact):
+                return True
+            if re.fullmatch(rf"section\s+{section_ref}\s+(?:of\s+the\s+)?(?:{aliases_pattern}){formatting_tail}", compact):
+                return True
+
+        if re.search(rf"\b(?:explain|what is|tell me about)\s+article\s+{section_ref}\b", compact):
+            return True
+
+        if re.search(rf"\b(?:explain|what is|tell me about)\s+section\s+{section_ref}\s+(?:ipc|indian penal code)\b", compact):
             return True
 
         return bool(
-            re.search(r"\b(?:explain|what is|tell me about)\s+section\s+[0-9]+[a-z]?\s+(?:ipc|indian penal code)\b", compact)
+            aliases_pattern
+            and re.search(rf"\b(?:explain|what is|tell me about)\s+section\s+{section_ref}\s+(?:{aliases_pattern})\b", compact)
         )
 
     @staticmethod
@@ -4560,9 +4593,14 @@ class ChatService:
 
         return cleaned
 
-    @staticmethod
-    def _build_uploaded_documents(uploaded_texts: list[str]) -> list[dict[str, Any]]:
+    def _build_uploaded_documents(self, uploaded_texts: list[str]) -> list[dict[str, Any]]:
         documents: list[dict[str, Any]] = []
+        analyzer = getattr(self, "document_analyzer", None) or LegalDocumentAnalysisService()
+        analyses_by_id = {
+            str(analysis.get("document_id")): analysis
+            for analysis in analyzer.analyze_uploads(uploaded_texts)
+            if isinstance(analysis, dict)
+        }
 
         for index, text in enumerate(uploaded_texts, start=1):
             cleaned = re.sub(r"\s+", " ", str(text or "").strip())
@@ -4572,6 +4610,10 @@ class ChatService:
 
             excerpt = cleaned[:1800]
             title = f"Uploaded Document {index}"
+            analysis = analyses_by_id.get(f"upload-{index}") or {}
+            document_type = str(analysis.get("document_type") or "").replace("_", " ").title()
+            if document_type:
+                title = f"{title} ({document_type})"
 
             documents.append(
 
@@ -4589,6 +4631,7 @@ class ChatService:
                     "score": 100.0 - index,
                     "source_kind": "user_upload",
                     "authority_type": "user_upload",
+                    "document_analysis": analysis,
                 }
             )
         return documents
@@ -4633,11 +4676,29 @@ class ChatService:
             f"Grounded retrieved context:\n{context}\n"
         )
 
-    @staticmethod
-    def _conversation_for_llm(previous_messages: list[dict[str, Any]]) -> list[dict[str, str]]:
+    def _conversation_for_llm(
+        self,
+        previous_messages: list[dict[str, Any]],
+        conversation_state: ConversationState | None = None,
+    ) -> list[dict[str, str]]:
         conversation: list[dict[str, str]] = []
+        memory_summary = str(getattr(conversation_state, "compressed_memory_summary", "") or "").strip()
+        memory_facts = [
+            str(item).strip()
+            for item in (getattr(conversation_state, "compressed_memory_facts", []) or [])
+            if str(item).strip()
+        ]
+        if memory_summary or memory_facts:
+            fact_block = "\n".join(f"- {item}" for item in memory_facts[:10])
+            memory_text = "Saved legal context summary from earlier turns:\n"
+            if memory_summary:
+                memory_text += memory_summary
+            if fact_block:
+                memory_text += f"\nKey saved facts:\n{fact_block}"
+            conversation.append({"role": "user", "content": memory_text.strip()})
 
-        for item in previous_messages[-6:]:
+        recent_limit = 4 if memory_summary or memory_facts else 6
+        for item in previous_messages[-recent_limit:]:
             role = str(item.get("role") or "")
             content = str(item.get("content") or "").strip()
 
@@ -4646,6 +4707,162 @@ class ChatService:
             conversation.append({"role": role, "content": content})
 
         return conversation
+
+    def _update_compressed_memory_state(
+        self,
+        *,
+        conversation_state: ConversationState,
+        previous_messages: list[dict[str, Any]],
+        user_message: str,
+        assistant_answer: str,
+        uploaded_texts: list[str],
+    ) -> ConversationState:
+        turn_count = int(conversation_state.memory_turn_count or 0) + 1
+        should_refresh = bool(
+            turn_count >= 4
+            or conversation_state.compressed_memory_summary
+            or conversation_state.compressed_memory_facts
+            or conversation_state.uploaded_document_summaries
+            or conversation_state.legal_entities
+            or conversation_state.collected_facts
+        )
+        if not should_refresh:
+            return conversation_state.model_copy(update={"memory_turn_count": turn_count})
+
+        summary = self._build_compressed_memory_summary(
+            conversation_state=conversation_state,
+            previous_messages=previous_messages,
+            user_message=user_message,
+            assistant_answer=assistant_answer,
+            uploaded_texts=uploaded_texts,
+        )
+        facts = self._build_compressed_memory_facts(conversation_state=conversation_state)
+        return conversation_state.model_copy(
+            update={
+                "compressed_memory_summary": summary,
+                "compressed_memory_facts": facts,
+                "memory_turn_count": turn_count,
+                "memory_updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+
+    def _build_compressed_memory_summary(
+        self,
+        *,
+        conversation_state: ConversationState,
+        previous_messages: list[dict[str, Any]],
+        user_message: str,
+        assistant_answer: str,
+        uploaded_texts: list[str],
+    ) -> str:
+        parts: list[str] = []
+        case_bits = [
+            str(item).strip()
+            for item in [
+                conversation_state.case_state,
+                conversation_state.district,
+                conversation_state.case_stage,
+                conversation_state.issue_type,
+                conversation_state.legal_domain,
+            ]
+            if str(item or "").strip()
+        ]
+        if case_bits:
+            parts.append("Case context: " + "; ".join(case_bits) + ".")
+        if conversation_state.last_user_issue:
+            parts.append("Current legal issue: " + self._clean_memory_text(conversation_state.last_user_issue, 220))
+        if conversation_state.uploaded_document_summaries:
+            uploads = "; ".join(self._clean_memory_text(item, 160) for item in conversation_state.uploaded_document_summaries[:3])
+            parts.append("Uploaded documents: " + uploads + ".")
+        if conversation_state.uploaded_document_analyses:
+            analysis_bits: list[str] = []
+            for analysis in conversation_state.uploaded_document_analyses[:3]:
+                if not isinstance(analysis, dict):
+                    continue
+                details = [
+                    str(analysis.get("document_type") or "").replace("_", " "),
+                    str(analysis.get("procedural_stage") or ""),
+                ]
+                deadlines = analysis.get("deadlines") or []
+                if deadlines:
+                    details.append("deadline: " + self._clean_memory_text(str(deadlines[0]), 90))
+                analysis_bits.append(", ".join(item for item in details if item))
+            if analysis_bits:
+                parts.append("Document findings: " + "; ".join(analysis_bits) + ".")
+        if conversation_state.collected_facts:
+            fact_text = "; ".join(
+                f"{key}: {self._clean_memory_text(value, 90)}"
+                for key, value in list(conversation_state.collected_facts.items())[:8]
+                if str(value).strip()
+            )
+            if fact_text:
+                parts.append("Collected facts: " + fact_text + ".")
+        recent = self._summarize_recent_turns(
+            previous_messages=previous_messages,
+            user_message=user_message,
+            assistant_answer=assistant_answer,
+        )
+        if recent:
+            parts.append("Recent progress: " + recent)
+        if uploaded_texts:
+            upload_note = "; ".join(self._clean_memory_text(item, 140) for item in self._summarize_uploaded_texts(uploaded_texts)[:2])
+            if upload_note:
+                parts.append("Latest upload context: " + upload_note + ".")
+        summary = " ".join(part for part in parts if part).strip()
+        return self._clean_memory_text(summary, 1400)
+
+    def _build_compressed_memory_facts(self, *, conversation_state: ConversationState) -> list[str]:
+        facts: list[str] = []
+
+        def add(label: str, value: Any, limit: int = 140) -> None:
+            cleaned = self._clean_memory_text(str(value or ""), limit)
+            if cleaned and f"{label}: {cleaned}" not in facts:
+                facts.append(f"{label}: {cleaned}")
+
+        add("state", conversation_state.case_state)
+        add("district", conversation_state.district)
+        add("case stage", conversation_state.case_stage)
+        add("issue type", conversation_state.issue_type)
+        add("last issue", conversation_state.last_user_issue, 220)
+        for key, values in (conversation_state.legal_entities or {}).items():
+            if not values:
+                continue
+            display_values: list[str] = []
+            for value in values[:4]:
+                if isinstance(value, dict):
+                    display_values.append(str(value.get("normalized") or value.get("raw") or value))
+                else:
+                    display_values.append(str(value))
+            add(key.replace("_", " "), ", ".join(display_values), 220)
+        for index, summary in enumerate(conversation_state.uploaded_document_summaries[:3], start=1):
+            add(f"uploaded document {index}", summary, 180)
+        return facts[:14]
+
+    def _summarize_recent_turns(
+        self,
+        *,
+        previous_messages: list[dict[str, Any]],
+        user_message: str,
+        assistant_answer: str,
+    ) -> str:
+        recent_bits: list[str] = []
+        for item in previous_messages[-4:]:
+            role = str(item.get("role") or "")
+            content = self._clean_memory_text(str(item.get("content") or ""), 120)
+            if role in {"user", "assistant"} and content:
+                recent_bits.append(f"{role}: {content}")
+        latest_user = self._clean_memory_text(user_message, 120)
+        latest_assistant = self._clean_memory_text(assistant_answer, 160)
+        if latest_user:
+            recent_bits.append(f"user: {latest_user}")
+        if latest_assistant:
+            recent_bits.append(f"assistant: {latest_assistant}")
+        return " | ".join(recent_bits[-6:])
+
+    def _clean_memory_text(self, text: str, max_chars: int) -> str:
+        cleaned = self._clean_search_snippet(str(text or ""))
+        cleaned = re.sub(r"\s+", " ", cleaned).strip(" ;,-")
+        return cleaned[:max_chars].strip()
 
     def _build_grounded_context(self, documents: list[dict[str, Any]]) -> str:
         blocks: list[str] = []
@@ -4671,6 +4888,25 @@ class ChatService:
 
             if doc.get("publishdate"):
                 lines.append(f"Date: {doc.get('publishdate')}")
+            analysis = doc.get("document_analysis")
+            if isinstance(analysis, dict) and analysis:
+                lines.append(f"Detected document type: {analysis.get('document_type') or 'legal_document'}")
+                if analysis.get("procedural_stage"):
+                    lines.append(f"Procedural stage: {analysis.get('procedural_stage')}")
+                if analysis.get("parties"):
+                    lines.append("Parties: " + ", ".join(str(item) for item in analysis.get("parties", [])[:5]))
+                if analysis.get("dates"):
+                    lines.append("Important dates: " + ", ".join(str(item) for item in analysis.get("dates", [])[:5]))
+                if analysis.get("deadlines"):
+                    lines.append("Deadlines: " + "; ".join(str(item) for item in analysis.get("deadlines", [])[:4]))
+                if analysis.get("authorities"):
+                    lines.append("Authorities mentioned: " + ", ".join(str(item) for item in analysis.get("authorities", [])[:6]))
+                if analysis.get("obligations"):
+                    lines.append("Obligations or directions: " + " | ".join(str(item) for item in analysis.get("obligations", [])[:3]))
+                if analysis.get("risk_indicators"):
+                    lines.append("Risk indicators: " + ", ".join(str(item) for item in analysis.get("risk_indicators", [])[:6]))
+                if analysis.get("actionable_next_steps"):
+                    lines.append("Document-analysis next steps: " + " | ".join(str(item) for item in analysis.get("actionable_next_steps", [])[:3]))
 
             if doc.get("headline"):
                 lines.append(f"Search snippet: {self._clean_search_snippet(str(doc.get('headline') or ''))}")
@@ -4912,6 +5148,96 @@ class ChatService:
             if authority and authority not in authorities:
                 authorities.append(authority)
         return authorities[:5]
+
+    def _build_citation_source_map(self, documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        source_map: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for doc in documents:
+            title = str(doc.get("title") or "Untitled").strip()
+            authority = str(doc.get("docsource") or "Indian Kanoon").strip()
+            source_kind = str(doc.get("source_kind") or "").strip() or (
+                "internal" if authority.startswith("internal:") else "indiankanoon"
+            )
+            raw_excerpt = str(doc.get("fragment_excerpt") or doc.get("doc_excerpt") or doc.get("fragment_headline") or doc.get("headline") or "")
+            snippet = self._clean_evidence_snippet(raw_excerpt)
+            url = str(doc.get("url") or "").strip()
+            date = str(doc.get("publishdate") or "").strip()
+            citation = self._citation_entry_for_document(doc)
+            identity = "|".join([title.lower(), authority.lower(), url.lower(), snippet.lower()[:80]])
+            if identity in seen:
+                continue
+            seen.add(identity)
+            ref_id = f"S{len(source_map) + 1}"
+            source_map.append(
+                {
+                    "ref_id": ref_id,
+                    "citation": citation,
+                    "title": title,
+                    "authority": authority,
+                    "authority_type": str(doc.get("authority_type") or "").strip(),
+                    "source_kind": source_kind,
+                    "jurisdiction": str(doc.get("jurisdiction") or "").strip(),
+                    "date": date,
+                    "url": url,
+                    "snippet": snippet,
+                    "score": float(doc.get("rerank_score") or doc.get("score") or 0.0),
+                }
+            )
+            if len(source_map) >= 5:
+                break
+        return source_map
+
+    @staticmethod
+    def _citation_entry_for_document(doc: dict[str, Any]) -> str:
+        title = str(doc.get("title") or "Untitled")
+        source = str(doc.get("docsource") or "Indian Kanoon")
+        date = str(doc.get("publishdate") or "").strip()
+        url = str(doc.get("url") or "").strip()
+        entry = f"{title} | {source}"
+        if date:
+            entry += f" | {date}"
+        if url:
+            entry += f" | {url}"
+        return entry
+
+    def _clean_evidence_snippet(self, text: str, *, max_chars: int = 280) -> str:
+        cleaned = self._clean_search_snippet(text)
+        cleaned = re.sub(r"\b(?:traceback|debug|stack trace|request_id|errmsg)\b\s*:?\s*[^.;]*", " ", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip(" ;,-")
+        return cleaned[:max_chars]
+
+    @staticmethod
+    def _apply_inline_evidence_references(answer: str, source_map: list[dict[str, Any]]) -> str:
+        if not answer or not source_map:
+            return answer
+        if re.search(r"\[S\d+\]", answer):
+            return answer
+        primary_ref = str(source_map[0].get("ref_id") or "S1")
+        secondary_ref = str(source_map[1].get("ref_id") or primary_ref) if len(source_map) > 1 else primary_ref
+        annotated = answer
+        replacements = (
+            (r"(Legal Position:\s*)(.*?)(\nPractical Next Steps:)", primary_ref),
+            (r"(Practical Next Steps:\s*)(.*?)(\nSources:)", secondary_ref),
+            (r"(\n?2\.\s*(?:Meaning|Legal Position):\s*)(.*?)(\n3\.\s*)", primary_ref),
+            (r"(\n?5\.\s*(?:Practical use|Practical Next Steps):\s*)(.*?)(\n6\.\s*)", secondary_ref),
+        )
+        for pattern, ref_id in replacements:
+            match = re.search(pattern, annotated, flags=re.IGNORECASE | re.DOTALL)
+            if not match:
+                continue
+            section_text = match.group(2).strip()
+            if not section_text or f"[{ref_id}]" in section_text:
+                continue
+            updated = f"{section_text} [{ref_id}]"
+            annotated = f"{annotated[:match.start(2)]}{updated}{annotated[match.end(2):]}"
+        source_match = re.search(r"((?:Sources:|6\.\s*Source:)\s*)(.*?)(\nDisclaimer:|$)", annotated, flags=re.IGNORECASE | re.DOTALL)
+        if source_match:
+            source_text = source_match.group(2).strip()
+            refs = " ".join(f"[{str(item.get('ref_id') or '').strip()}]" for item in source_map[:3] if str(item.get("ref_id") or "").strip())
+            if refs and refs not in source_text:
+                updated_source = f"{source_text} {refs}".strip()
+                annotated = f"{annotated[:source_match.start(2)]}{updated_source}{annotated[source_match.end(2):]}"
+        return annotated
 
     def _build_structured_grounded_payload(
         self,
@@ -6663,8 +6989,10 @@ class ChatService:
         authorities: list[str],
         query_profile: dict[str, Any],
         source_sufficiency: dict[str, Any],
+        citation_source_map: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         top_docs = documents[:3]
+        citation_source_map = citation_source_map or self._build_citation_source_map(documents)
         domain_pack = self.domain_packs.pack_for(
             domain=domain,
             issue_type=str(query_profile.get("issue_type") or ""),
@@ -6677,8 +7005,9 @@ class ChatService:
                 "jurisdiction": str(doc.get("jurisdiction") or ""),
                 "recency_bucket": str(doc.get("recency_bucket") or ""),
                 "score": float(doc.get("rerank_score") or doc.get("score") or 0.0),
+                "ref_id": str((citation_source_map[index] or {}).get("ref_id") or f"S{index + 1}") if index < len(citation_source_map) else f"S{index + 1}",
             }
-            for doc in top_docs
+            for index, doc in enumerate(top_docs)
         ]
         disclaimer_mode = self._select_disclaimer_mode(
             route=query_profile.get("route_target", "grounded"),
@@ -6697,6 +7026,7 @@ class ChatService:
             "jurisdiction_note": source_sufficiency.get("jurisdiction_note") or "",
             "recency_note": source_sufficiency.get("recency_note") or "",
             "top_sources": source_cards,
+            "citation_source_map": citation_source_map[:5],
             "citations": citations[:3],
             "authorities": authorities[:5],
         }
@@ -6796,13 +7126,7 @@ class ChatService:
         normalized = re.sub(r"\s+", " ", normalized).strip()
         if not normalized:
             return None
-        if any(phrase in normalized for phrase in {"fundamental duties", "what are duties in constitution", "duties under constitution"}):
-            return "fundamental_duties"
-        if any(phrase in normalized for phrase in {"directive principles", "directive principles of state policy", "dpsp"}):
-            return "directive_principles"
-        if any(phrase in normalized for phrase in {"fundamental rights", "basic rights in constitution", "rights under constitution"}):
-            return "fundamental_rights"
-        return None
+        return _match_explainer_catalog_key(CONSTITUTIONAL_EXPLAINER_LOOKUPS, normalized)
 
     @staticmethod
     def _general_legal_explainer_key(message: str) -> str | None:
@@ -6810,45 +7134,7 @@ class ChatService:
         normalized = re.sub(r"\s+", " ", normalized).strip()
         if not normalized:
             return None
-        explainer_phrases = {
-            "arbitration": {
-                "what is arbitration",
-                "what arbitration is",
-                "explain arbitration",
-                "meaning of arbitration",
-                "define arbitration",
-                "arbitration meaning",
-            },
-            "fir": {
-                "what is fir",
-                "what is an fir",
-                "explain fir",
-                "fir meaning",
-                "define fir",
-            },
-            "bail": {
-                "what is bail",
-                "explain bail",
-                "bail meaning",
-                "define bail",
-            },
-            "anticipatory_bail": {
-                "what is anticipatory bail",
-                "explain anticipatory bail",
-                "anticipatory bail meaning",
-                "define anticipatory bail",
-            },
-            "legal_notice": {
-                "what is legal notice",
-                "explain legal notice",
-                "legal notice meaning",
-                "define legal notice",
-            },
-        }
-        for key, phrases in explainer_phrases.items():
-            if any(phrase in normalized for phrase in phrases):
-                return key
-        return None
+        return _match_explainer_catalog_key(GENERAL_LEGAL_EXPLAINER_LOOKUPS, normalized)
 
     @staticmethod
     def _mixed_constitutional_components(message: str) -> list[dict[str, str]]:
@@ -6880,12 +7166,12 @@ class ChatService:
             if marker not in seen:
                 seen.add(marker)
                 components.append({"kind": "authority", "key": key})
-        explainer_phrases = {
-            "fundamental_duties": {"fundamental duties", "what are duties in constitution", "duties under constitution"},
-            "directive_principles": {"directive principles", "directive principles of state policy", "dpsp"},
-            "fundamental_rights": {"fundamental rights", "basic rights in constitution", "rights under constitution"},
-        }
-        for explainer_key, phrases in explainer_phrases.items():
+        for explainer_key, payload in CONSTITUTIONAL_EXPLAINER_LOOKUPS.items():
+            phrases = {
+                *_coerce_explainer_string_list(payload.get("aliases")),
+                *_coerce_explainer_string_list(payload.get("keywords")),
+                explainer_key.replace("_", " "),
+            }
             if any(phrase in lowered for phrase in phrases):
                 marker = ("explainer", explainer_key)
                 if marker not in seen:

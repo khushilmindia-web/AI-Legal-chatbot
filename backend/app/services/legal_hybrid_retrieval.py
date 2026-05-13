@@ -438,6 +438,16 @@ class LegalHybridRetrievalService:
                 continue
             seen_doc_ids.add(doc_id)
             documents.append(document)
+        if not documents and hasattr(self.legal_dataset_service, "search_documents"):
+            for variant in variants:
+                for document in self.legal_dataset_service.search_documents(variant, max_results=4):
+                    doc_id = str(document.get("doc_id") or "")
+                    if not doc_id or doc_id in seen_doc_ids:
+                        continue
+                    seen_doc_ids.add(doc_id)
+                    documents.append(document)
+                    if len(documents) >= 4:
+                        return documents
         return documents
 
     def _search_google(self, *, query: str, site_restrict: str | None, trusted_only: bool) -> list[dict[str, Any]]:
@@ -612,6 +622,14 @@ class LegalHybridRetrievalService:
                 current = combined.get(doc_id)
                 if current is None or float(document.get("score") or 0.0) > float(current.get("score") or 0.0):
                     combined[doc_id] = document
+            if hasattr(self.legal_dataset_service, "search_documents"):
+                for document in self.legal_dataset_service.search_documents(variant, max_results=6):
+                    doc_id = str(document.get("doc_id") or "")
+                    if not doc_id:
+                        continue
+                    current = combined.get(doc_id)
+                    if current is None or float(document.get("score") or 0.0) > float(current.get("score") or 0.0):
+                        combined[doc_id] = document
         ranked = sorted(combined.values(), key=lambda item: float(item.get("score") or 0.0), reverse=True)
         return ranked[:6]
 

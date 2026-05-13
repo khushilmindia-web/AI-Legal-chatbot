@@ -12,11 +12,14 @@ from backend.app.models.schemas import (
     ChatRequest,
     ChatSessionSummary,
     ChatUploadResponse,
+    MessageFeedbackRequest,
 )
 from backend.app.services.chat_service import ChatService
 
 
 router = APIRouter(tags=["chat"])
+MAINTENANCE_MESSAGE = "The system is temporarily under maintenance. Please try again later."
+BLOCKED_USER_MESSAGE = "Your account is blocked. Please contact an administrator."
 
 
 def get_chat_service(request: Request) -> ChatService:
@@ -27,9 +30,29 @@ def get_chat_service(request: Request) -> ChatService:
     return service
 
 
+def require_chat_available(request: Request, user: dict) -> None:
+    if user.get("status") == "blocked":
+        raise HTTPException(status_code=403, detail=BLOCKED_USER_MESSAGE)
+    maintenance_mode = bool(getattr(request.app.state.settings, "maintenance_mode", False))
+    getter = getattr(request.app.state.session_store, "get_runtime_config_bool", None)
+    if callable(getter):
+        try:
+            runtime_value = getter("maintenance_mode")
+            if isinstance(runtime_value, bool):
+                maintenance_mode = runtime_value
+        except Exception:
+            maintenance_mode = bool(getattr(request.app.state.settings, "maintenance_mode", False))
+    if not maintenance_mode:
+        return
+    if user.get("role") == "admin":
+        return
+    raise HTTPException(status_code=503, detail=MAINTENANCE_MESSAGE)
+
+
 @router.post("/chat", response_model=ChatUploadResponse)
 async def chat(request_body: ChatRequest, request: Request) -> ChatUploadResponse:
     user = require_current_user(request)
+    require_chat_available(request, user)
     service = get_chat_service(request)
     try:
         return await service.handle_chat(request_body, user_id=user["id"], fallback_state=user.get("state"))
@@ -50,6 +73,7 @@ async def chat_upload(
     files: list[UploadFile] = File(default_factory=list),
 ) -> ChatUploadResponse:
     user = require_current_user(request)
+    require_chat_available(request, user)
     service = get_chat_service(request)
     image_url_list = [item.strip() for item in (image_urls or "").split(",") if item.strip()]
     extraction = await service.extractor.extract_uploads(files=files, image_urls=image_url_list)
@@ -76,6 +100,7 @@ async def chat_upload(
 @router.get("/chat/history", response_model=ChatHistoryResponse)
 def chat_history(request: Request) -> ChatHistoryResponse:
     user = require_current_user(request)
+    require_chat_available(request, user)
     store = request.app.state.session_store
     items = [
         ChatSessionSummary(
@@ -93,6 +118,7 @@ def chat_history(request: Request) -> ChatHistoryResponse:
 @router.get("/chat/{chat_id}/messages", response_model=ChatMessagesResponse)
 def chat_messages(chat_id: int, request: Request) -> ChatMessagesResponse:
     user = require_current_user(request)
+    require_chat_available(request, user)
     store = request.app.state.session_store
     session = store.get_session(chat_id, user["id"])
     if session is None:
@@ -111,9 +137,26 @@ def chat_messages(chat_id: int, request: Request) -> ChatMessagesResponse:
     return ChatMessagesResponse(items=items)
 
 
+@router.post("/chat/messages/{message_id}/feedback")
+def submit_message_feedback(message_id: int, payload: MessageFeedbackRequest, request: Request) -> dict:
+    user = require_current_user(request)
+    require_chat_available(request, user)
+    store = request.app.state.session_store
+    feedback = store.add_message_feedback(
+        message_id=message_id,
+        user_id=user["id"],
+        rating=payload.rating,
+        comment=payload.comment,
+    )
+    if feedback is None:
+        raise HTTPException(status_code=404, detail="Assistant message not found")
+    return {"status": "ok", "feedback": feedback}
+
+
 @router.delete("/chat/history")
 def clear_history(request: Request) -> dict[str, str]:
     user = require_current_user(request)
+    require_chat_available(request, user)
     request.app.state.session_store.clear_history(user["id"])
     return {"status": "ok"}
 
@@ -121,6 +164,7 @@ def clear_history(request: Request) -> dict[str, str]:
 @router.delete("/chat/{chat_id}")
 def delete_chat(chat_id: int, request: Request) -> dict[str, str]:
     user = require_current_user(request)
+    require_chat_available(request, user)
     deleted = request.app.state.session_store.delete_session(chat_id, user["id"])
     if not deleted:
         raise HTTPException(status_code=404, detail="Chat session not found")

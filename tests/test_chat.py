@@ -5,7 +5,7 @@ import requests
 
 from backend.app.main import create_app
 from backend.app.models.schemas import ConversationState, InternalChatResult
-from backend.app.services.chat_service import ChatService
+from backend.app.services.chat_service import ChatService, _match_explainer_catalog_key, _normalize_explainer_catalog_section
 from backend.app.services.google_custom_search_service import GoogleSearchResult, GoogleCustomSearchService
 from backend.app.services.indiankanoon_service import IndianKanoonService
 from backend.app.services.legal_dataset_service import LocalLegalDatasetService
@@ -694,6 +694,68 @@ def test_grounded_metadata_includes_query_profile_source_sufficiency_and_disclai
     assert latest_assistant["metadata"]["query_profile"]["query_type"] in {"statute_lookup", "mixed"}
     assert latest_assistant["metadata"]["source_sufficiency"]["label"] in {"strong", "partial", "weak"}
     assert latest_assistant["metadata"]["disclaimer_mode"] in {"low_risk", "medium_risk", "high_risk"}
+
+
+def test_grounded_answer_includes_inline_source_refs_and_clean_evidence_map(client, monkeypatch):
+    def fake_retrieve_grounded_documents(self, query_variants, doctypes_options, max_results=4):
+        return [
+            {
+                "doc_id": "101",
+                "title": "Sample Supreme Court Cheque Dishonour Decision",
+                "headline": "Supreme Court explains cheque dishonour limitation.",
+                "fragment_headline": "Notice and limitation must be checked from the cheque return and demand notice.",
+                "doc_excerpt": "The court held that cheque dishonour complaints depend on the bank return memo, demand notice, service, and filing timeline.",
+                "docsource": "supremecourt",
+                "citations": ["2024 SCC 100"],
+                "publishdate": "02-02-2024",
+                "url": "https://indiankanoon.org/doc/101/",
+            }
+        ]
+
+    def fake_generate_json(self, user_prompt, conversation):
+        return {
+            "answer": (
+                "Summary: Cheque dishonour limitation depends on the notice and filing timeline.\n"
+                "Legal Position: The bank return memo, statutory notice, service, and complaint filing timeline are material.\n"
+                "Practical Next Steps: Keep the cheque, return memo, notice copy, dispatch proof, and timeline together.\n"
+                "Sources: Sample Supreme Court Cheque Dishonour Decision.\n"
+                "Disclaimer: This is general legal information."
+            ),
+            "follow_up_question": None,
+            "likely_forum": "Criminal Court",
+            "caution": "Check exact dates.",
+            "documents_to_keep": ["cheque", "return memo", "notice"],
+        }
+
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", fake_retrieve_grounded_documents)
+    monkeypatch.setattr(OpenAIResponsesService, "generate_json", fake_generate_json)
+    monkeypatch.setattr(ChatService, "_route_direct_response", lambda self, **kwargs: None)
+    monkeypatch.setattr(
+        ChatService,
+        "_run_semantic_support_check",
+        lambda self, answer, query, documents, source_sufficiency: {
+            "status": "supported",
+            "confidence": 0.99,
+            "reason": "test override",
+        },
+    )
+
+    response = client.post(
+        "/chat",
+        json={"message": "recent Supreme Court judgment on cheque dishonour limitation", "state": "Gujarat"},
+    )
+
+    assert response.status_code == 200
+    answer = response.json()["answer"]
+    assert "[S1]" in answer
+    chat_id = response.json()["chat_id"]
+    latest_assistant = [item for item in client.get(f"/chat/{chat_id}/messages").json()["items"] if item["role"] == "assistant"][-1]
+    source_map = latest_assistant["metadata"]["citation_source_map"]
+    assert source_map[0]["ref_id"] == "S1"
+    assert source_map[0]["citation"].startswith("Sample Supreme Court Cheque Dishonour Decision | supremecourt")
+    assert "bank return memo" in source_map[0]["snippet"].lower()
+    assert "debug" not in source_map[0]["snippet"].lower()
+    assert latest_assistant["metadata"]["retrieval"]["evidence_packet"]["citation_source_map"][0]["ref_id"] == "S1"
 
 
 def test_legal_help_interview_records_playbook_metadata(client, monkeypatch):
@@ -2040,6 +2102,27 @@ def test_understand_legal_query_classifies_common_low_risk_legal_explainers_dire
     assert fir["clarification_hint"] is None
     assert bail["answer_intent"] == "general_explainer"
     assert bail["clarification_hint"] is None
+
+
+def test_explainer_catalog_loader_supports_new_aliases_without_code_changes():
+    catalog = _normalize_explainer_catalog_section(
+        {
+            "mediation": {
+                "title": "Mediation",
+                "short_explanation": "a voluntary settlement process.",
+                "points": ["A neutral mediator helps parties explore settlement."],
+                "aliases": ["what is mediation", "explain mediation"],
+                "keywords": ["settlement process"],
+                "jurisdiction": "India",
+            }
+        },
+        default_domain="civil",
+    )
+
+    assert catalog["mediation"]["summary"] == "a voluntary settlement process."
+    assert catalog["mediation"]["article_breakdown"] == []
+    assert catalog["mediation"]["domain"] == "civil"
+    assert _match_explainer_catalog_key(catalog, "please explain mediation") == "mediation"
 
 
 def test_pipeline_classifier_marks_general_legal_explainer_as_medium_path():
@@ -3873,7 +3956,8 @@ def test_bns_query_uses_local_dataset_when_external_sources_fail(client, monkeyp
     assert response.status_code == 200
     payload = response.json()
     answer = payload["answer"].lower()
-    assert "section 34 bns" in answer
+    assert "section 34" in answer
+    assert "bharatiya nyaya sanhita" in answer
     assert "private defence" in answer
     assert "devgan.in/bns/section/34" in answer
     assert "bns dataset/source unavailable" not in answer
@@ -3883,7 +3967,7 @@ def test_bns_query_uses_local_dataset_when_external_sources_fail(client, monkeyp
     assert "i am not seeing a clear enough legal match yet" not in answer
 
 
-def test_non_local_provision_query_uses_grounded_indiankanoon_flow_after_local_miss(client, monkeypatch):
+def test_discovered_ni_act_dataset_uses_local_fast_path_without_external_lookup(client, monkeypatch):
     calls = {"count": 0}
 
     def fake_retrieve_grounded_documents(self, query_variants, doctypes_options, max_results=4):
@@ -3915,14 +3999,63 @@ def test_non_local_provision_query_uses_grounded_indiankanoon_flow_after_local_m
 
     assert response.status_code == 200
     payload = response.json()
-    assert calls["count"] == 1
+    assert calls["count"] == 0
     _assert_pure_authority_response(payload)
     assert "Section 138" in payload["answer"]
+    assert "Negotiable Instruments Act, 1881" in payload["answer"]
     messages = client.get(f"/chat/{payload['chat_id']}/messages").json()["items"]
     assistant_message = [item for item in messages if item["role"] == "assistant"][-1]
     assert assistant_message["metadata"]["query_profile"]["flow_type"] == "provision_lookup"
     assert assistant_message["metadata"]["query_profile"]["response_mode"] == "authority"
-    assert assistant_message["metadata"]["retrieval"]["source"] != "local_legal_dataset"
+    assert assistant_message["metadata"]["retrieval"]["source"] == "local_legal_dataset"
+
+
+def test_new_bsa_dataset_uses_local_fast_path_without_external_lookup(client, monkeypatch):
+    def fail_if_called(self, query_variants, doctypes_options, max_results=4):
+        raise AssertionError("External grounded retrieval should not run when the local BSA dataset has the section")
+
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", fail_if_called)
+
+    response = client.post(
+        "/chat",
+        json={
+            "message": "section 3 bsa",
+            "state": "Gujarat",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    _assert_pure_authority_response(payload)
+    assert "Section 3" in payload["answer"]
+    assert "Bharatiya Sakshya Adhiniyam, 2023" in payload["answer"]
+    messages = client.get(f"/chat/{payload['chat_id']}/messages").json()["items"]
+    assistant_message = [item for item in messages if item["role"] == "assistant"][-1]
+    assert assistant_message["metadata"]["retrieval"]["source"] == "local_legal_dataset"
+
+
+def test_new_arms_dataset_uses_local_fast_path_without_external_lookup(client, monkeypatch):
+    def fail_if_called(self, query_variants, doctypes_options, max_results=4):
+        raise AssertionError("External grounded retrieval should not run when the local Arms Act dataset has the section")
+
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", fail_if_called)
+
+    response = client.post(
+        "/chat",
+        json={
+            "message": "section 3 arms act",
+            "state": "Gujarat",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    _assert_pure_authority_response(payload)
+    assert "Section 3" in payload["answer"]
+    assert "Arms Act, 1959" in payload["answer"]
+    messages = client.get(f"/chat/{payload['chat_id']}/messages").json()["items"]
+    assistant_message = [item for item in messages if item["role"] == "assistant"][-1]
+    assert assistant_message["metadata"]["retrieval"]["source"] == "local_legal_dataset"
 
 
 def test_local_legal_dataset_keeps_authority_format_for_explicit_ipc_lookup(client, monkeypatch):
@@ -4685,6 +4818,32 @@ def test_chat_persists_case_details_in_conversation_state_metadata(client, monke
     assert "Legal notice demanding payment" in conversation_state["uploaded_document_summaries"][0]
 
 
+def test_chat_persists_structured_legal_entities_from_normal_turn(client, monkeypatch):
+    def no_external_docs(self, query_variants, doctypes_options, max_results=4):
+        return []
+
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", no_external_docs)
+
+    response = client.post(
+        "/chat",
+        json={
+            "message": "I filed FIR No. 45/2026 at Navrangpura Police Station for fraud of Rs. 50,000.",
+            "state": "Gujarat",
+        },
+    )
+
+    assert response.status_code == 200
+    chat_id = response.json()["chat_id"]
+    messages = client.get(f"/chat/{chat_id}/messages").json()["items"]
+    latest_assistant = [item for item in messages if item["role"] == "assistant"][-1]
+    entities = latest_assistant["metadata"]["conversation_state"]["legal_entities"]
+
+    assert "FIR 45/2026" in entities["fir_numbers"]
+    assert "Navrangpura Police Station" in entities["police_stations"]
+    assert entities["money_amounts"][0]["normalized"] == "INR 50000"
+    assert latest_assistant["metadata"]["legal_entities"]["fir_numbers"] == ["FIR 45/2026"]
+
+
 def test_case_details_are_reused_within_chat_and_isolated_for_new_chat(client, monkeypatch):
     def no_external_docs(self, query_variants, doctypes_options, max_results=4):
         return []
@@ -4793,6 +4952,70 @@ def test_uploaded_context_is_reused_on_follow_up_in_same_chat(client, monkeypatc
     assert latest_state["uploaded_document_summaries"]
     assert "Legal notice demanding payment" in latest_state["uploaded_document_summaries"][0]
     assert latest_state["district"] == "Ahmedabad"
+
+
+def test_long_chat_persists_compressed_memory_summary(client, monkeypatch):
+    def no_external_docs(self, query_variants, doctypes_options, max_results=4):
+        return []
+
+    def no_google_docs(self, **kwargs):
+        return GoogleSearchResult(documents=[], from_cache=False, trusted_result_count=0)
+
+    monkeypatch.setattr(IndianKanoonService, "retrieve_grounded_documents", no_external_docs)
+    monkeypatch.setattr(GoogleCustomSearchService, "search", no_google_docs)
+
+    first = client.post(
+        "/chat",
+        json={
+            "message": "My legal notice matter is about invoice INV-42.",
+            "state": "Gujarat",
+            "district": "Ahmedabad",
+            "case_stage": "Notice",
+        },
+    )
+    assert first.status_code == 200
+    chat_id = first.json()["chat_id"]
+
+    for message in [
+        "The notice asks me to reply within 15 days.",
+        "The seller also has my payment proof and WhatsApp messages.",
+        "What should I do next without missing the deadline?",
+    ]:
+        response = client.post("/chat", json={"chat_id": chat_id, "message": message})
+        assert response.status_code == 200
+
+    messages = client.get(f"/chat/{chat_id}/messages").json()["items"]
+    latest_state = [item for item in messages if item["role"] == "assistant"][-1]["metadata"]["conversation_state"]
+
+    assert latest_state["memory_turn_count"] >= 4
+    assert latest_state["compressed_memory_summary"]
+    assert "Ahmedabad" in latest_state["compressed_memory_summary"]
+    assert "Notice" in latest_state["compressed_memory_summary"]
+    assert latest_state["compressed_memory_facts"]
+    assert any("district: Ahmedabad" == item for item in latest_state["compressed_memory_facts"])
+
+
+def test_conversation_for_llm_prepends_compressed_memory_before_recent_turns():
+    service = ChatService.__new__(ChatService)
+    state = ConversationState(
+        compressed_memory_summary="Case context: Gujarat; Ahmedabad; notice stage. Uploaded document mentions invoice INV-42.",
+        compressed_memory_facts=["district: Ahmedabad", "uploaded document 1: notice demanding payment"],
+    )
+    previous = [
+        {"role": "user", "content": f"old user turn {index}"}
+        if index % 2
+        else {"role": "assistant", "content": f"old assistant turn {index}"}
+        for index in range(8)
+    ]
+
+    conversation = service._conversation_for_llm(previous, conversation_state=state)
+
+    assert conversation[0]["role"] == "user"
+    assert "Saved legal context summary" in conversation[0]["content"]
+    assert "invoice INV-42" in conversation[0]["content"]
+    assert "district: Ahmedabad" in conversation[0]["content"]
+    assert len(conversation) == 5
+    assert conversation[-1]["content"] == "old user turn 7"
 
 
 def test_follow_up_decision_normalizer_stays_issue_sensitive():

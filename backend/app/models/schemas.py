@@ -20,6 +20,7 @@ class ChatUploadResponse(BaseModel):
     title: str
     answer: str
     created_at: datetime
+    assistant_message_id: int | None = None
     domain: str | None = None
     follow_up_question: str | None = None
     citations: list[str] = Field(default_factory=list)
@@ -55,6 +56,11 @@ class ChatMessagesResponse(BaseModel):
     items: list[ChatMessageRecord]
 
 
+class MessageFeedbackRequest(BaseModel):
+    rating: str = Field(pattern="^(up|down)$")
+    comment: str | None = Field(default=None, max_length=500)
+
+
 class AuthSignupRequest(BaseModel):
     full_name: str
     email: str
@@ -71,6 +77,8 @@ class AuthUser(BaseModel):
     id: int
     full_name: str
     email: str
+    role: str = "user"
+    status: str = "active"
     state: str | None = None
     created_at: datetime
 
@@ -143,6 +151,12 @@ class ConversationState(BaseModel):
     case_stage: str | None = None
     is_own_matter: bool | None = None
     uploaded_document_summaries: list[str] = Field(default_factory=list)
+    uploaded_document_analyses: list[dict[str, Any]] = Field(default_factory=list)
+    legal_entities: dict[str, list[Any]] = Field(default_factory=dict)
+    compressed_memory_summary: str | None = None
+    compressed_memory_facts: list[str] = Field(default_factory=list)
+    memory_turn_count: int = 0
+    memory_updated_at: str | None = None
     city: str | None = None
     police_station: str | None = None
     bank_name: str | None = None

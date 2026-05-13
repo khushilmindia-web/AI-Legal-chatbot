@@ -3,8 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 import logging
+import time
+from datetime import datetime, timezone
 
 from backend.app.api.auth_utils import get_optional_current_user
+from backend.app.api.routes.admin import router as admin_router
 from backend.app.api.routes.auth import router as auth_router
 from backend.app.api.routes.chat import router as chat_router
 from backend.app.api.routes.debug import router as debug_router
@@ -15,9 +18,7 @@ from backend.app.services.chat_service import ChatService
 from backend.app.services.storage import create_session_store
 from backend.app.utils.request_context import RequestContextMiddleware
 
-
 logger = logging.getLogger(__name__)
-
 
 def create_app() -> FastAPI:
     settings = get_settings()
@@ -32,6 +33,8 @@ def create_app() -> FastAPI:
 
     app = FastAPI(title="Lawyer AI", version="0.1.0")
     app.state.settings = settings
+    app.state.started_at = datetime.now(timezone.utc)
+    app.state.health_metrics = {"chat_response_times_ms": []}
     # SQLite temporarily disabled during MongoDB migration.
     # The old SQLite SessionStore code remains in backend/app/services/session_store.py
     # as a backup, but runtime storage is intentionally created through MongoDB only.
@@ -51,6 +54,7 @@ def create_app() -> FastAPI:
     async def frontend_auth_guard(request, call_next):
         protected_paths = {
             settings.frontend_app_path.lower(),
+            "/frontend/admin.html",
             "/frontend/index.html",
             "/frontend/index.html".lower(),
         }
@@ -106,6 +110,17 @@ def create_app() -> FastAPI:
 
         return await call_next(request)
 
+    @app.middleware("http")
+    async def chat_health_metrics(request, call_next):
+        started = time.perf_counter()
+        try:
+            return await call_next(request)
+        finally:
+            if request.url.path in {"/chat", "/chat/upload"}:
+                samples = app.state.health_metrics.setdefault("chat_response_times_ms", [])
+                samples.append((time.perf_counter() - started) * 1000)
+                del samples[:-100]
+
     if settings.frontend_dir.exists():
         app.mount("/frontend", StaticFiles(directory=str(settings.frontend_dir)), name="frontend")
 
@@ -113,6 +128,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(debug_router)
     app.include_router(chat_router)
+    app.include_router(admin_router)
     return app
 
 

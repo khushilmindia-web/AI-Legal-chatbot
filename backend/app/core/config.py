@@ -81,6 +81,7 @@ class Settings(BaseSettings):
     local_text_similarity_model: str = Field(default="", alias="LOCAL_TEXT_SIMILARITY_MODEL")
     local_support_check_enabled: bool = Field(default=True, alias="LOCAL_SUPPORT_CHECK_ENABLED")
     local_support_check_threshold: float = Field(default=0.58, alias="LOCAL_SUPPORT_CHECK_THRESHOLD")
+    maintenance_mode: bool = Field(default=False, alias="MAINTENANCE_MODE")
 
     @field_validator("debug", mode="before")
     @classmethod
@@ -122,6 +123,7 @@ class Settings(BaseSettings):
         "local_model_assist_enabled",
         "local_support_check_enabled",
         "google_search_enabled",
+        "maintenance_mode",
         mode="before",
     )
     @classmethod

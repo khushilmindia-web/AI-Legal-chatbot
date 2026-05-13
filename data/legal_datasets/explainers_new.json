@@ -1,0 +1,1744 @@
+{
+  "zero_fir_india": {
+    "topic_id": "zero_fir_india",
+    "title": "Zero FIR",
+    "short_explanation": "A Zero FIR is an FIR registered by any police station even if the offence happened outside its local area. It is later transferred to the police station that has proper jurisdiction.",
+    "simple_explanation": "If a serious offence has happened and you are not near the correct police station, you can still approach the nearest police station. The police should not refuse only because the incident happened somewhere else. They can record the information as a Zero FIR and forward it to the correct police station for investigation.",
+    "legal_position": "Under Section 173 of the Bharatiya Nagarik Suraksha Sanhita, 2023, information relating to a cognizable offence may be given to the officer in charge of a police station irrespective of the area where the offence was committed. This supports Zero FIR registration. The police station receiving the information records it and the matter may then be transferred to the police station having territorial jurisdiction.",
+    "important_points": [
+      "Zero FIR is used for cognizable offences.",
+      "It helps victims report urgent offences without jurisdiction delay.",
+      "The police should give a free copy of the recorded information.",
+      "The case is usually transferred to the correct police station later.",
+      "Zero FIR does not decide guilt; it starts the criminal process.",
+      "It is especially important in sexual offences, accidents, kidnapping, assault, cyber fraud, and urgent threats."
+    ],
+    "common_situations": [
+      "A crime happened in another city but the victim is currently elsewhere.",
+      "Police refuse to register FIR saying it is not their area.",
+      "A woman needs urgent reporting after a sexual offence.",
+      "A traveller faces theft, assault, accident, or fraud away from home.",
+      "A cyber fraud victim does not know which police station has jurisdiction."
+    ],
+    "user_questions": [
+      "What is Zero FIR?",
+      "Can I file FIR in any police station?",
+      "Can police refuse FIR because of jurisdiction?",
+      "What happens after Zero FIR is registered?",
+      "Is Zero FIR valid in India?",
+      "Can Zero FIR be filed online?"
+    ],
+    "step_by_step_process": [
+      "Go to the nearest police station or use an official online reporting route where available.",
+      "Clearly say that the information relates to a cognizable offence and ask for Zero FIR if jurisdiction is disputed.",
+      "Give the facts: date, time, place, people involved, evidence, and urgency.",
+      "Check the written information before signing it.",
+      "Ask for the FIR number or acknowledgement and a free copy.",
+      "Ask where the FIR will be transferred and keep follow-up details.",
+      "For cyber financial fraud, also call 1930 and report on cybercrime.gov.in immediately."
+    ],
+    "documents_needed": [
+      "Written complaint or statement of facts",
+      "Identity and contact details of complainant, if available",
+      "Incident location and date details",
+      "Evidence such as photos, videos, screenshots, medical papers, receipts, or transaction records",
+      "Witness details, if any",
+      "Any prior complaint or emergency call record"
+    ],
+    "authority_to_contact": [
+      "Nearest police station",
+      "Senior police officer if police refuse",
+      "Police station having final territorial jurisdiction",
+      "Women police station or help desk where relevant",
+      "Cyber crime police station or National Cyber Crime Reporting Portal for cyber offences",
+      "Jurisdictional Magistrate if police still refuse action"
+    ],
+    "possible_remedies": [
+      "Registration of Zero FIR",
+      "Transfer of FIR to correct police station",
+      "Investigation by competent police station",
+      "Written complaint to Superintendent of Police if refused",
+      "Application to Magistrate for investigation direction",
+      "Emergency protection or medical support where needed"
+    ],
+    "important_law_references": [
+      "Bharatiya Nagarik Suraksha Sanhita, 2023, Section 173",
+      "Bharatiya Nagarik Suraksha Sanhita, 2023, Sections 175 and 176",
+      "Bharatiya Nyaya Sanhita, 2023 for substantive offences",
+      "Lalita Kumari v. Government of Uttar Pradesh, Supreme Court of India, on FIR registration principles"
+    ],
+    "court_or_forum": "Nearest police station for initial Zero FIR; correct jurisdictional police station for investigation; Magistrate if police refuse to act; High Court only in exceptional cases.",
+    "estimated_timeframe": "Zero FIR may be recorded immediately in urgent cognizable cases. Transfer to the correct police station may take days depending on police process and state practice.",
+    "estimated_cost_range": "Filing a Zero FIR is free. Lawyer fees may arise only if police refuse, the matter is serious, or court intervention is needed.",
+    "risk_level": "Medium to High, because the report can start a criminal investigation and may lead to arrest depending on the offence and facts.",
+    "when_to_contact_lawyer": [
+      "Police refuse Zero FIR despite a serious offence.",
+      "The matter involves sexual offence, child offence, death, grievous injury, kidnapping, or major fraud.",
+      "You are named as an accused.",
+      "There is risk of arrest or retaliation.",
+      "You need to approach a Magistrate or High Court."
+    ],
+    "common_mistakes": [
+      "Accepting police refusal only because of jurisdiction.",
+      "Not asking for a copy or acknowledgement.",
+      "Giving incomplete location details.",
+      "Deleting digital evidence.",
+      "Waiting too long in urgent offences."
+    ],
+    "related_topics": [
+      "FIR",
+      "Police complaint",
+      "Cognizable offence",
+      "Cyber crime complaint",
+      "Magistrate complaint"
+    ],
+    "keywords": [
+      "Zero FIR",
+      "file FIR anywhere",
+      "jurisdiction FIR",
+      "police refused FIR",
+      "FIR transfer",
+      "BNSS Section 173"
+    ],
+    "aliases": [
+      "Zero FIR kya hota hai",
+      "zero FIR kaise kare",
+      "kisi bhi police station me FIR",
+      "jurisdiction nahi hai FIR",
+      "FIR transfer",
+      "police station area issue"
+    ],
+    "practical_tips": [
+      "Use the words Zero FIR if the police say the offence happened elsewhere.",
+      "Mention urgency clearly.",
+      "Keep a copy of every complaint and acknowledgement.",
+      "For cyber fraud, do not wait for jurisdiction clarity before reporting.",
+      "If refused, escalate in writing to senior police."
+    ],
+    "state_variation_possible": true,
+    "disclaimer": "This is general legal information for India and not a substitute for advice from a qualified lawyer. Police practice and online systems vary by state.",
+    "jurisdiction": "India",
+    "last_updated": "2026-05-13",
+    "primary_sources": [
+      {
+        "type": "statute",
+        "name": "Bharatiya Nagarik Suraksha Sanhita, 2023",
+        "citation": "Act No. 46 of 2023, Section 173",
+        "official_source_url": "https://www.indiacode.nic.in/bitstream/123456789/21544/1/the_bharatiya_nagarik_suraksha_sanhita%2C_2023.pdf",
+        "relevance": "Allows information relating to a cognizable offence to be given irrespective of the area where the offence was committed."
+      },
+      {
+        "type": "court_case",
+        "name": "Lalita Kumari v. Government of Uttar Pradesh",
+        "citation": "(2014) 2 SCC 1; Supreme Court of India",
+        "official_source_url": "https://main.sci.gov.in/jonew/judis/40960.pdf",
+        "relevance": "Important authority on mandatory FIR registration where cognizable offence is disclosed, read with current BNSS provisions."
+      }
+    ],
+    "legal_accuracy_notes": [
+      "Zero FIR is not a separate trial category; it is a way to record information despite territorial jurisdiction issues.",
+      "The matter is normally transferred to the police station having jurisdiction after registration.",
+      "Whether police must register depends on whether the facts disclose a cognizable offence."
+    ],
+    "jurisdiction_notes": [
+      "Applicable across India, but transfer practice and online FIR facilities vary by state.",
+      "Emergency reporting should not be delayed because of jurisdiction confusion."
+    ],
+    "enforcement_practicality": {
+      "easy_to_use_for_common_person": true,
+      "usually_requires_lawyer": false,
+      "police_involvement_possible": true,
+      "court_process_likely": true
+    },
+    "severity_indicators": {
+      "possible_arrest": true,
+      "financial_risk": "medium",
+      "reputation_risk": "high",
+      "urgent_action_needed": true
+    },
+    "ai_response_guidelines": {
+      "safe_response_style": "Explain that Zero FIR helps overcome jurisdiction refusal, ask what happened and where, and avoid guaranteeing registration or arrest.",
+      "avoid_definitive_outcomes": true,
+      "must_recommend_lawyer_for": [
+        "Police refusal despite serious cognizable offence",
+        "Sexual offence, child offence, death, kidnapping, or major financial fraud",
+        "User is accused or fears arrest"
+      ],
+      "should_ask_followup_questions_for": [
+        "Where did the incident happen?",
+        "Which police station refused?",
+        "Is there immediate danger?",
+        "What evidence is available?"
+      ]
+    }
+  },
+  "police_complaint_india": {
+    "topic_id": "police_complaint_india",
+    "title": "Police Complaint",
+    "short_explanation": "A police complaint is information given to police about a problem, offence, threat, dispute, or incident. It may or may not become an FIR depending on whether it discloses a cognizable offence.",
+    "simple_explanation": "People often use the word complaint for any report made to police. If the facts show a cognizable offence, police may register an FIR. If it is non-cognizable or a general dispute, police may make a diary entry, NC complaint, or refer the person to the Magistrate or civil forum.",
+    "legal_position": "Under BNSS 2023, police deal differently with cognizable and non-cognizable information. Section 173 applies to information in cognizable cases. Section 174 applies to non-cognizable cases and requires police to enter the information and refer the informant to the Magistrate. A police complaint by itself is not always an FIR.",
+    "important_points": [
+      "A complaint is broader than an FIR.",
+      "FIR is used for cognizable offences.",
+      "NC complaint is used for non-cognizable offences.",
+      "Always ask for acknowledgement or diary number.",
+      "Give facts, not legal conclusions.",
+      "False complaints can have legal consequences."
+    ],
+    "common_situations": [
+      "Neighbour harassment or threats",
+      "Lost phone or missing documents",
+      "Minor assault or verbal abuse",
+      "Online harassment or fraud",
+      "Domestic dispute",
+      "Landlord-tenant conflict",
+      "Employer or salary dispute with possible cheating allegations"
+    ],
+    "user_questions": [
+      "How do I file a police complaint?",
+      "Is police complaint same as FIR?",
+      "Can police refuse to take my complaint?",
+      "What is a complaint number?",
+      "Can I file police complaint online?",
+      "What happens after police complaint?"
+    ],
+    "step_by_step_process": [
+      "Write a short complaint with date, time, place, facts, names, and evidence.",
+      "Submit it at the police station or official online portal where available.",
+      "Ask whether it is being treated as FIR, NC complaint, or diary entry.",
+      "Take acknowledgement with stamp, diary number, or complaint number.",
+      "Preserve evidence and follow up with the officer.",
+      "If no action is taken in a cognizable offence, escalate to senior police or Magistrate."
+    ],
+    "documents_needed": [
+      "Written complaint",
+      "Identity and contact details",
+      "Evidence such as messages, photos, screenshots, documents, receipts, or recordings",
+      "Witness names and contact details",
+      "Prior complaint numbers, if any"
+    ],
+    "authority_to_contact": [
+      "Local police station",
+      "Senior police officer",
+      "Cyber cell for cyber issues",
+      "Women help desk for women safety issues",
+      "Magistrate for legally appropriate directions",
+      "Emergency helpline 112 in urgent danger"
+    ],
+    "possible_remedies": [
+      "Diary entry or complaint acknowledgement",
+      "FIR registration if cognizable offence is disclosed",
+      "NC complaint entry and referral to Magistrate",
+      "Preventive police action in urgent situations",
+      "Written escalation to senior police",
+      "Court complaint or Magistrate application where needed"
+    ],
+    "important_law_references": [
+      "BNSS 2023, Section 173",
+      "BNSS 2023, Section 174",
+      "BNSS 2023, Section 175",
+      "BNSS 2023, Section 210"
+    ],
+    "court_or_forum": "Police station first; senior police officer for escalation; Magistrate if police action is legally required and not taken.",
+    "estimated_timeframe": "Acknowledgement may be immediate. FIR or NC classification may happen immediately or after preliminary review depending on facts and local procedure.",
+    "estimated_cost_range": "Police complaint filing is free. Lawyer fees may arise for drafting, escalation, Magistrate complaint, bail, or court proceedings.",
+    "risk_level": "Low to High depending on the allegations, because some complaints can become criminal proceedings.",
+    "when_to_contact_lawyer": [
+      "Police refuse action in a serious offence.",
+      "The complaint involves serious criminal allegations.",
+      "You may be accused of filing a false complaint.",
+      "You are responding to a complaint against you.",
+      "The dispute overlaps with family, property, business, or employment issues."
+    ],
+    "common_mistakes": [
+      "Not taking acknowledgement.",
+      "Assuming complaint means FIR.",
+      "Writing vague allegations without facts.",
+      "Not preserving evidence.",
+      "Making exaggerated allegations."
+    ],
+    "related_topics": [
+      "FIR",
+      "Zero FIR",
+      "NC complaint",
+      "Cognizable offence",
+      "Magistrate complaint"
+    ],
+    "keywords": [
+      "police complaint",
+      "complaint to police",
+      "police station complaint",
+      "complaint acknowledgement",
+      "online police complaint",
+      "police diary entry"
+    ],
+    "aliases": [
+      "police complaint kaise kare",
+      "thane me complaint",
+      "police application",
+      "police me arzi",
+      "complaint number",
+      "online police complaint India"
+    ],
+    "practical_tips": [
+      "Keep the complaint factual and chronological.",
+      "Submit copies, not originals, unless required.",
+      "Ask what legal category the police are recording it under.",
+      "Use email or registered post for escalation where appropriate.",
+      "Do not publish accusations online while the matter is pending."
+    ],
+    "state_variation_possible": true,
+    "disclaimer": "This is general information for India. Police formats, online portals, and complaint handling practices differ by state.",
+    "jurisdiction": "India",
+    "last_updated": "2026-05-13",
+    "primary_sources": [
+      {
+        "type": "statute",
+        "name": "Bharatiya Nagarik Suraksha Sanhita, 2023",
+        "citation": "Act No. 46 of 2023, Sections 173, 174, 175 and 210",
+        "official_source_url": "https://www.indiacode.nic.in/bitstream/123456789/21544/1/the_bharatiya_nagarik_suraksha_sanhita%2C_2023.pdf",
+        "relevance": "Provides the framework for police information, non-cognizable entries, investigation, and Magistrate cognizance."
+      }
+    ],
+    "legal_accuracy_notes": [
+      "Police complaint is a practical term, not always a formal FIR.",
+      "The legal route depends on whether the facts disclose a cognizable or non-cognizable offence.",
+      "Civil disputes do not automatically become criminal cases unless criminal ingredients are present."
+    ],
+    "jurisdiction_notes": [
+      "Police is state-administered, so portals and escalation hierarchy vary.",
+      "Core criminal procedure is governed by central law."
+    ],
+    "enforcement_practicality": {
+      "easy_to_use_for_common_person": true,
+      "usually_requires_lawyer": false,
+      "police_involvement_possible": true,
+      "court_process_likely": false
+    },
+    "severity_indicators": {
+      "possible_arrest": true,
+      "financial_risk": "medium",
+      "reputation_risk": "medium",
+      "urgent_action_needed": false
+    },
+    "ai_response_guidelines": {
+      "safe_response_style": "Ask whether the user wants to report a cognizable offence, non-cognizable issue, missing item, threat, or civil dispute; explain next steps without promising FIR.",
+      "avoid_definitive_outcomes": true,
+      "must_recommend_lawyer_for": [
+        "Serious criminal allegations",
+        "Police refusal in cognizable offence",
+        "User is accused in a complaint",
+        "Complex family, property, or business dispute"
+      ],
+      "should_ask_followup_questions_for": [
+        "What happened?",
+        "When and where did it happen?",
+        "Has police given a complaint number?",
+        "Is there immediate danger?",
+        "What evidence do you have?"
+      ]
+    }
+  },
+  "nc_complaint_india": {
+    "topic_id": "nc_complaint_india",
+    "title": "NC Complaint",
+    "short_explanation": "An NC complaint is a police record for a non-cognizable offence, where police generally cannot investigate or arrest without a Magistrate's order.",
+    "simple_explanation": "If the offence is less serious or classified as non-cognizable, the police may not register an FIR. Instead, they may enter the information in the station record as an NC complaint and refer you to the Magistrate. Police investigation usually needs a Magistrate's order.",
+    "legal_position": "BNSS Section 174 deals with information about non-cognizable cases. Police must enter the substance of the information and refer the informant to the Magistrate. Police cannot investigate a non-cognizable case without an order of a Magistrate having power to try or commit the case, and even after such order, police do not get power to arrest without warrant.",
+    "important_points": [
+      "NC means non-cognizable.",
+      "NC complaint is not the same as FIR.",
+      "Police usually cannot arrest without warrant in NC cases.",
+      "Police need Magistrate order to investigate.",
+      "If one offence in the case is cognizable, the case may be treated as cognizable.",
+      "Always take a copy or acknowledgement of the NC entry."
+    ],
+    "common_situations": [
+      "Minor verbal abuse",
+      "Simple non-serious quarrel",
+      "Defamation-type complaint",
+      "Minor intimidation depending on facts",
+      "Neighbour nuisance without serious offence",
+      "Low-level dispute where police say court order is needed"
+    ],
+    "user_questions": [
+      "What is NC complaint?",
+      "Is NC complaint same as FIR?",
+      "Can police arrest in NC complaint?",
+      "What should I do after NC complaint?",
+      "Can NC complaint become FIR?",
+      "Do I need Magistrate permission for NC case?"
+    ],
+    "step_by_step_process": [
+      "Give police a clear written complaint.",
+      "Ask whether it is being recorded as NC and ask for the NC number.",
+      "Take a copy or acknowledgement.",
+      "Ask whether police are referring you to the Magistrate.",
+      "If you want investigation, prepare an application before the Magistrate.",
+      "Attach evidence and the NC acknowledgement.",
+      "Consult a lawyer if the matter is escalating or involves counter-allegations."
+    ],
+    "documents_needed": [
+      "Written complaint",
+      "NC acknowledgement or diary number",
+      "Identity and contact details",
+      "Evidence such as messages, photos, audio, documents, or witness details",
+      "Any prior complaints"
+    ],
+    "authority_to_contact": [
+      "Local police station",
+      "Jurisdictional Magistrate",
+      "Senior police officer for procedural refusal",
+      "Legal aid authority if lawyer support is needed"
+    ],
+    "possible_remedies": [
+      "NC entry by police",
+      "Magistrate order permitting investigation",
+      "Private complaint before Magistrate",
+      "Preventive action if there is threat to peace",
+      "Civil remedy if the dispute is mainly civil"
+    ],
+    "important_law_references": [
+      "BNSS 2023, Section 174",
+      "BNSS 2023, Section 210",
+      "BNSS 2023, Sections 223 to 227 for complaint proceedings before Magistrate"
+    ],
+    "court_or_forum": "Police station for NC entry; Magistrate Court for investigation order or complaint proceedings.",
+    "estimated_timeframe": "NC entry may be immediate. Magistrate proceedings may take days to weeks or longer depending on court workload.",
+    "estimated_cost_range": "NC entry is free. Court filing and lawyer fees vary. Legal aid may be available for eligible persons.",
+    "risk_level": "Low to Medium, but it can become serious if facts show a cognizable offence or if counter-complaints arise.",
+    "when_to_contact_lawyer": [
+      "You need to approach the Magistrate.",
+      "Police wrongly treat a serious offence as NC.",
+      "There are threats, repeated harassment, or risk of violence.",
+      "You are facing an NC complaint and need to respond.",
+      "The issue overlaps with civil litigation."
+    ],
+    "common_mistakes": [
+      "Thinking NC complaint is an FIR.",
+      "Not collecting the NC number.",
+      "Assuming police will investigate without Magistrate order.",
+      "Ignoring repeated incidents.",
+      "Not escalating when facts disclose a cognizable offence."
+    ],
+    "related_topics": [
+      "Police complaint",
+      "Non-cognizable offence",
+      "FIR",
+      "Magistrate complaint",
+      "Cognizable offence"
+    ],
+    "keywords": [
+      "NC complaint",
+      "non-cognizable complaint",
+      "NC report",
+      "police NC",
+      "Magistrate order for NC",
+      "BNSS Section 174"
+    ],
+    "aliases": [
+      "NC complaint kya hota hai",
+      "non cognizable report",
+      "NC report police",
+      "thane me NC",
+      "NC ka matlab",
+      "police ne NC likha"
+    ],
+    "practical_tips": [
+      "Ask the police to clearly mention the NC number.",
+      "Keep evidence of repeated incidents.",
+      "If the situation becomes threatening, report the new facts immediately.",
+      "For Magistrate application, arrange facts and documents in date order.",
+      "Do not assume NC means the matter is unimportant."
+    ],
+    "state_variation_possible": true,
+    "disclaimer": "This is general legal information for India. Classification of an offence depends on facts and the applicable law.",
+    "jurisdiction": "India",
+    "last_updated": "2026-05-13",
+    "primary_sources": [
+      {
+        "type": "statute",
+        "name": "Bharatiya Nagarik Suraksha Sanhita, 2023",
+        "citation": "Act No. 46 of 2023, Section 174",
+        "official_source_url": "https://www.indiacode.nic.in/bitstream/123456789/21544/1/the_bharatiya_nagarik_suraksha_sanhita%2C_2023.pdf",
+        "relevance": "Directly governs information about non-cognizable cases and investigation only with Magistrate order."
+      }
+    ],
+    "legal_accuracy_notes": [
+      "NC complaint is commonly used for non-cognizable information.",
+      "If the same facts include at least one cognizable offence, BNSS treats the case as cognizable.",
+      "Police cannot use NC classification to avoid FIR where cognizable offence is clearly disclosed."
+    ],
+    "jurisdiction_notes": [
+      "Police record formats may vary by state.",
+      "Magistrate procedure is governed by BNSS but local filing practice varies."
+    ],
+    "enforcement_practicality": {
+      "easy_to_use_for_common_person": true,
+      "usually_requires_lawyer": false,
+      "police_involvement_possible": true,
+      "court_process_likely": true
+    },
+    "severity_indicators": {
+      "possible_arrest": false,
+      "financial_risk": "low",
+      "reputation_risk": "medium",
+      "urgent_action_needed": false
+    },
+    "ai_response_guidelines": {
+      "safe_response_style": "Explain NC as non-cognizable recording and ask whether any facts show a cognizable offence or immediate danger.",
+      "avoid_definitive_outcomes": true,
+      "must_recommend_lawyer_for": [
+        "Police classify serious offence as NC",
+        "Magistrate application is needed",
+        "Repeated harassment or threats",
+        "Counter-complaints exist"
+      ],
+      "should_ask_followup_questions_for": [
+        "What exact offence or conduct occurred?",
+        "Did police give an NC number?",
+        "Is there any injury, threat, fraud, or repeated conduct?",
+        "Which state and police station are involved?"
+      ]
+    }
+  },
+  "cognizable_offence_india": {
+    "topic_id": "cognizable_offence_india",
+    "title": "Cognizable Offence",
+    "short_explanation": "A cognizable offence is an offence where police can register an FIR and investigate without needing prior permission from a Magistrate.",
+    "simple_explanation": "Serious offences such as theft, robbery, serious assault, rape, kidnapping, and many cheating or cyber fraud cases may be cognizable depending on the law and facts. If the complaint discloses a cognizable offence, police can begin investigation and may arrest without warrant where the law permits and facts justify it.",
+    "legal_position": "BNSS defines a cognizable offence as one for which a police officer may arrest without warrant in accordance with the First Schedule or any other law. Section 173 deals with information in cognizable cases, and Section 175 permits police investigation of cognizable cases without Magistrate order.",
+    "important_points": [
+      "Cognizable does not mean the accused is guilty.",
+      "It means police have stronger powers to investigate.",
+      "FIR is usually registered for cognizable offences.",
+      "Arrest is possible but not automatic.",
+      "The classification depends on the offence and applicable law.",
+      "Some special laws also classify offences as cognizable."
+    ],
+    "common_situations": [
+      "Police say your complaint is serious and register FIR.",
+      "A victim reports theft, assault, sexual offence, kidnapping, or fraud.",
+      "Police begin investigation without court order.",
+      "An accused fears arrest after FIR.",
+      "A person wants to know if police must register FIR."
+    ],
+    "user_questions": [
+      "What is cognizable offence?",
+      "Can police arrest without warrant?",
+      "Is theft a cognizable offence?",
+      "Is cheating cognizable?",
+      "Does cognizable mean non-bailable?",
+      "What happens after cognizable offence complaint?"
+    ],
+    "step_by_step_process": [
+      "Identify the facts and likely offence.",
+      "Check whether the offence is cognizable under the applicable law or schedule.",
+      "Report the matter to police with evidence.",
+      "Ask for FIR copy if FIR is registered.",
+      "Cooperate with investigation as complainant or witness.",
+      "If you are accused, seek legal advice quickly, especially if arrest is possible."
+    ],
+    "documents_needed": [
+      "Written facts of incident",
+      "Identity and contact details",
+      "Evidence related to the offence",
+      "Medical papers for injury cases",
+      "Transaction records for financial fraud",
+      "Witness details"
+    ],
+    "authority_to_contact": [
+      "Police station",
+      "Senior police officer",
+      "Special police unit such as cyber cell or women cell where relevant",
+      "Magistrate if police refuse action",
+      "Lawyer for accused or serious matters"
+    ],
+    "possible_remedies": [
+      "FIR registration",
+      "Police investigation",
+      "Protection request in threat cases",
+      "Arrest where legally justified",
+      "Bail or anticipatory bail for accused",
+      "Magistrate application if police refuse"
+    ],
+    "important_law_references": [
+      "BNSS 2023, Section 2 definition of cognizable offence",
+      "BNSS 2023, Section 173",
+      "BNSS 2023, Section 175",
+      "BNSS 2023, First Schedule",
+      "Bharatiya Nyaya Sanhita, 2023"
+    ],
+    "court_or_forum": "Police station for FIR and investigation; Magistrate Court for oversight and cognizance; Sessions Court or High Court for bail in serious matters.",
+    "estimated_timeframe": "FIR may be registered quickly if cognizable offence is disclosed. Investigation may take weeks to months or longer.",
+    "estimated_cost_range": "Reporting to police is free. Lawyer fees vary if bail, court applications, or defence are needed.",
+    "risk_level": "High for accused persons because arrest and criminal investigation may follow depending on facts.",
+    "when_to_contact_lawyer": [
+      "You are accused of a cognizable offence.",
+      "There is arrest risk.",
+      "Police refuse FIR despite serious facts.",
+      "The offence involves violence, sexual allegations, child victim, or large financial fraud.",
+      "You need bail or anticipatory bail."
+    ],
+    "common_mistakes": [
+      "Confusing cognizable with bailable or non-bailable.",
+      "Assuming arrest is automatic.",
+      "Assuming police need court permission to investigate.",
+      "Giving vague facts to police.",
+      "Ignoring police notice after FIR."
+    ],
+    "related_topics": [
+      "FIR",
+      "Zero FIR",
+      "Non-cognizable offence",
+      "Bail",
+      "Anticipatory bail"
+    ],
+    "keywords": [
+      "cognizable offence",
+      "FIR offence",
+      "police arrest without warrant",
+      "police investigation",
+      "BNSS cognizable",
+      "serious criminal offence"
+    ],
+    "aliases": [
+      "cognizable offence kya hota hai",
+      "sangey apradh",
+      "police bina warrant arrest",
+      "FIR wala offence",
+      "cognizable ka matlab",
+      "serious offence police"
+    ],
+    "practical_tips": [
+      "Focus on facts first, not legal labels.",
+      "If accused, do not ignore summons or police calls.",
+      "Preserve evidence immediately.",
+      "Ask for FIR copy as complainant or obtain it through lawful means as accused.",
+      "Seek urgent legal help where arrest risk exists."
+    ],
+    "state_variation_possible": false,
+    "disclaimer": "This is general legal information for India. Whether an offence is cognizable depends on the exact facts and applicable statute.",
+    "jurisdiction": "India",
+    "last_updated": "2026-05-13",
+    "primary_sources": [
+      {
+        "type": "statute",
+        "name": "Bharatiya Nagarik Suraksha Sanhita, 2023",
+        "citation": "Act No. 46 of 2023, Sections 2, 173, 175 and First Schedule",
+        "official_source_url": "https://www.indiacode.nic.in/bitstream/123456789/21544/1/the_bharatiya_nagarik_suraksha_sanhita%2C_2023.pdf",
+        "relevance": "Defines cognizable offence and sets out FIR and police investigation powers."
+      },
+      {
+        "type": "statute",
+        "name": "Bharatiya Nyaya Sanhita, 2023",
+        "citation": "Act No. 45 of 2023",
+        "official_source_url": "https://www.mha.gov.in/sites/default/files/250883_english_01042024.pdf",
+        "relevance": "Contains many substantive offences whose classification may determine police powers."
+      }
+    ],
+    "legal_accuracy_notes": [
+      "Cognizable classification concerns police powers, not guilt.",
+      "Arrest without warrant is legally possible in cognizable offences but must still satisfy legal safeguards.",
+      "Bailable and cognizable are different classifications."
+    ],
+    "jurisdiction_notes": [
+      "Classification is generally under central criminal law but special state or central laws may also apply.",
+      "Police practice may vary, but statutory classification controls."
+    ],
+    "enforcement_practicality": {
+      "easy_to_use_for_common_person": true,
+      "usually_requires_lawyer": false,
+      "police_involvement_possible": true,
+      "court_process_likely": true
+    },
+    "severity_indicators": {
+      "possible_arrest": true,
+      "financial_risk": "medium",
+      "reputation_risk": "high",
+      "urgent_action_needed": true
+    },
+    "ai_response_guidelines": {
+      "safe_response_style": "Explain classification and ask facts before saying whether an offence may be cognizable; avoid final legal classification without statute check.",
+      "avoid_definitive_outcomes": true,
+      "must_recommend_lawyer_for": [
+        "Accused fears arrest",
+        "Serious offence alleged",
+        "Police refuse FIR",
+        "Special law offence is involved"
+      ],
+      "should_ask_followup_questions_for": [
+        "What exact act happened?",
+        "Was there injury, threat, fraud, theft, or sexual allegation?",
+        "Which law or FIR section is mentioned?",
+        "Are you complainant or accused?"
+      ]
+    }
+  },
+  "non_cognizable_offence_india": {
+    "topic_id": "non_cognizable_offence_india",
+    "title": "Non-Cognizable Offence",
+    "short_explanation": "A non-cognizable offence is an offence where police generally cannot investigate or arrest without a Magistrate's order or warrant.",
+    "simple_explanation": "Some offences are treated as less serious for police powers. In such cases, police may record an NC complaint and refer the complainant to the Magistrate. Police investigation normally starts only after a Magistrate permits it.",
+    "legal_position": "BNSS defines non-cognizable offence as an offence for which a police officer has no authority to arrest without warrant. BNSS Section 174 says police must enter the information, refer the informant to the Magistrate, and cannot investigate without the Magistrate's order. If the case has two or more offences and at least one is cognizable, the case is treated as cognizable.",
+    "important_points": [
+      "Non-cognizable does not mean legal remedy is unavailable.",
+      "Police usually record an NC complaint instead of FIR.",
+      "Magistrate order is generally needed for police investigation.",
+      "Police cannot arrest without warrant in such cases.",
+      "If facts also show a cognizable offence, FIR may be possible.",
+      "The classification depends on the exact offence."
+    ],
+    "common_situations": [
+      "Police record NC instead of FIR.",
+      "A person is told to approach court.",
+      "Minor quarrel or verbal dispute is reported.",
+      "A complainant wants police investigation in an NC matter.",
+      "A dispute has both civil and minor criminal elements."
+    ],
+    "user_questions": [
+      "What is non-cognizable offence?",
+      "Can police investigate NC offence?",
+      "Can police arrest in non-cognizable case?",
+      "How to convert NC to FIR?",
+      "Do I need Magistrate order?",
+      "Is NC complaint useless?"
+    ],
+    "step_by_step_process": [
+      "Ask police to record the information and give NC acknowledgement.",
+      "Collect all evidence and witness details.",
+      "Check if facts also disclose any cognizable offence.",
+      "If investigation is needed, approach the Magistrate with the NC record.",
+      "Follow court directions if investigation is ordered.",
+      "Consider civil remedies if the dispute is mainly civil."
+    ],
+    "documents_needed": [
+      "NC complaint copy",
+      "Written statement of facts",
+      "Identity and address details",
+      "Evidence and witness details",
+      "Any prior police complaint or legal notice"
+    ],
+    "authority_to_contact": [
+      "Police station",
+      "Jurisdictional Magistrate",
+      "Senior police officer if police refuse even to record information",
+      "Legal aid authority"
+    ],
+    "possible_remedies": [
+      "NC entry",
+      "Magistrate order for investigation",
+      "Private complaint case",
+      "Summons or warrant through court process where legally justified",
+      "Civil suit or injunction if the issue is civil"
+    ],
+    "important_law_references": [
+      "BNSS 2023, Section 2 definition of non-cognizable offence",
+      "BNSS 2023, Section 174",
+      "BNSS 2023, Sections 210 and 223 to 227"
+    ],
+    "court_or_forum": "Police station for NC entry; Magistrate Court for investigation order or complaint case.",
+    "estimated_timeframe": "NC entry can be immediate. Magistrate process may take days to weeks or more.",
+    "estimated_cost_range": "Police entry is free. Court and lawyer costs vary; free legal aid may be available.",
+    "risk_level": "Low to Medium, depending on whether the facts later disclose more serious offences.",
+    "when_to_contact_lawyer": [
+      "You need Magistrate permission for investigation.",
+      "Police wrongly classify a serious complaint as non-cognizable.",
+      "You receive court summons.",
+      "There are repeated threats or escalation.",
+      "The dispute involves defamation, property, business, or family conflict."
+    ],
+    "common_mistakes": [
+      "Thinking non-cognizable means no case can be filed.",
+      "Not taking NC acknowledgement.",
+      "Not approaching Magistrate when investigation is needed.",
+      "Ignoring mixed offences where one offence may be cognizable.",
+      "Using police complaint for purely civil pressure."
+    ],
+    "related_topics": [
+      "NC complaint",
+      "Cognizable offence",
+      "Police complaint",
+      "Magistrate complaint",
+      "FIR"
+    ],
+    "keywords": [
+      "non-cognizable offence",
+      "NC offence",
+      "police cannot investigate",
+      "Magistrate order",
+      "non cognizable case",
+      "BNSS Section 174"
+    ],
+    "aliases": [
+      "non cognizable offence kya hai",
+      "asangey apradh",
+      "NC offence",
+      "police bina court order investigation nahi",
+      "non cognizable ka matlab",
+      "Magistrate permission police"
+    ],
+    "practical_tips": [
+      "Ask police to write the reason if they treat it as NC.",
+      "Preserve proof of repeated incidents.",
+      "Use court process instead of repeated verbal follow-ups.",
+      "Check whether any serious fact has been missed.",
+      "Get legal help if court drafting is needed."
+    ],
+    "state_variation_possible": false,
+    "disclaimer": "This is general legal information for India. Classification depends on the exact offence and applicable law.",
+    "jurisdiction": "India",
+    "last_updated": "2026-05-13",
+    "primary_sources": [
+      {
+        "type": "statute",
+        "name": "Bharatiya Nagarik Suraksha Sanhita, 2023",
+        "citation": "Act No. 46 of 2023, Sections 2 and 174",
+        "official_source_url": "https://www.indiacode.nic.in/bitstream/123456789/21544/1/the_bharatiya_nagarik_suraksha_sanhita%2C_2023.pdf",
+        "relevance": "Defines non-cognizable offence and explains police handling of non-cognizable information."
+      }
+    ],
+    "legal_accuracy_notes": [
+      "Non-cognizable classification limits police powers; it does not erase the offence.",
+      "Police investigation generally requires Magistrate order.",
+      "Mixed cases with at least one cognizable offence may be treated as cognizable."
+    ],
+    "jurisdiction_notes": [
+      "The legal classification is national, but police record formats vary by state.",
+      "Special laws may alter the usual classification."
+    ],
+    "enforcement_practicality": {
+      "easy_to_use_for_common_person": true,
+      "usually_requires_lawyer": false,
+      "police_involvement_possible": true,
+      "court_process_likely": true
+    },
+    "severity_indicators": {
+      "possible_arrest": false,
+      "financial_risk": "low",
+      "reputation_risk": "medium",
+      "urgent_action_needed": false
+    },
+    "ai_response_guidelines": {
+      "safe_response_style": "Explain that police powers are limited and ask whether the facts include any cognizable element or urgent threat.",
+      "avoid_definitive_outcomes": true,
+      "must_recommend_lawyer_for": [
+        "Magistrate complaint needed",
+        "Wrong police classification suspected",
+        "Court summons received",
+        "Repeated harassment or threats"
+      ],
+      "should_ask_followup_questions_for": [
+        "What exact conduct occurred?",
+        "Did police give NC number?",
+        "Is there injury, theft, fraud, or threat?",
+        "Do you want investigation or only record of complaint?"
+      ]
+    }
+  },
+  "bail_india": {
+    "topic_id": "bail_india",
+    "title": "Bail",
+    "short_explanation": "Bail is a legal process by which an arrested or detained person may be released from custody, usually with conditions to appear before police or court.",
+    "simple_explanation": "Bail does not mean the case is over. It means the accused is released while investigation or trial continues. In bailable offences, bail is generally a right. In non-bailable offences, the court considers the facts, seriousness, evidence, risk of absconding, and other factors.",
+    "legal_position": "BNSS Chapter XXXV deals with bail and bonds. Section 478 deals with cases where bail is to be taken. Section 480 deals with bail in non-bailable offences. Section 479 addresses maximum undertrial detention. Courts may impose conditions, and bail may be cancelled if conditions are violated.",
+    "important_points": [
+      "Bail is not acquittal.",
+      "Bailable and non-bailable offences are different.",
+      "Police may grant bail in some bailable cases.",
+      "Court bail is usually needed in non-bailable cases.",
+      "Conditions must be followed strictly.",
+      "Bail can be rejected or cancelled depending on facts."
+    ],
+    "common_situations": [
+      "A person is arrested after FIR.",
+      "Family wants to know how to get accused released.",
+      "Police ask for surety or bond.",
+      "Court rejects bail.",
+      "Accused violates bail conditions.",
+      "Chargesheet is delayed and default bail may be considered."
+    ],
+    "user_questions": [
+      "How to get bail in India?",
+      "What is bailable offence?",
+      "What is non-bailable offence?",
+      "Can police give bail?",
+      "How long does bail take?",
+      "Can bail be cancelled?"
+    ],
+    "step_by_step_process": [
+      "Find out the FIR number, sections, police station, and whether the offence is bailable.",
+      "If bailable, request bail from police or court as applicable.",
+      "If non-bailable, prepare bail application before the appropriate court.",
+      "Attach relevant documents and grounds such as cooperation, roots in society, medical needs, or false implication.",
+      "Arrange surety or bond if required.",
+      "Attend hearings and follow all bail conditions.",
+      "Do not contact witnesses or tamper with evidence."
+    ],
+    "documents_needed": [
+      "FIR copy or case details",
+      "Arrest memo or remand papers",
+      "Identity and address proof",
+      "Surety documents if required",
+      "Medical records if relevant",
+      "Employment or family documents if relevant",
+      "Previous bail or court orders, if any"
+    ],
+    "authority_to_contact": [
+      "Police officer in bailable cases where applicable",
+      "Judicial Magistrate",
+      "Sessions Court",
+      "High Court",
+      "Legal aid authority"
+    ],
+    "possible_remedies": [
+      "Police bail in bailable cases",
+      "Regular bail from court",
+      "Interim bail",
+      "Default bail where statutory conditions are met",
+      "Modification of bail conditions",
+      "Appeal or fresh bail application if rejected",
+      "Cancellation of bail by prosecution or complainant in appropriate cases"
+    ],
+    "important_law_references": [
+      "BNSS 2023, Chapter XXXV",
+      "BNSS 2023, Sections 478, 479, 480, 481, 483",
+      "Constitution of India, Article 21"
+    ],
+    "court_or_forum": "Police station for limited bailable situations; Magistrate Court, Sessions Court, or High Court depending on offence and stage.",
+    "estimated_timeframe": "Bailable offence release may be quick. Non-bailable bail can take from the same day to several days or longer depending on court availability, case seriousness, and objections.",
+    "estimated_cost_range": "Court fees are usually modest, but lawyer fees vary widely. Surety or bond requirements depend on court order. Free legal aid may be available.",
+    "risk_level": "High for accused persons because custody, bail rejection, and criminal trial consequences may be involved.",
+    "when_to_contact_lawyer": [
+      "A person has been arrested.",
+      "The offence is non-bailable.",
+      "Police seek custody or remand.",
+      "Bail was rejected.",
+      "Bail conditions are difficult to comply with.",
+      "The matter involves serious offences or special laws."
+    ],
+    "common_mistakes": [
+      "Thinking bail ends the case.",
+      "Ignoring bail conditions.",
+      "Contacting complainant or witnesses improperly.",
+      "Providing false surety details.",
+      "Missing court dates.",
+      "Delaying lawyer consultation after arrest."
+    ],
+    "related_topics": [
+      "Anticipatory bail",
+      "FIR",
+      "Cognizable offence",
+      "Arrest",
+      "Quashing of FIR"
+    ],
+    "keywords": [
+      "bail",
+      "regular bail",
+      "bailable offence",
+      "non-bailable offence",
+      "court bail",
+      "police bail",
+      "default bail"
+    ],
+    "aliases": [
+      "bail kaise milegi",
+      "jamanat",
+      "regular bail India",
+      "court se bail",
+      "police bail",
+      "non bailable bail"
+    ],
+    "practical_tips": [
+      "Get the FIR sections before drafting bail.",
+      "Keep surety documents ready.",
+      "Do not violate any police or court condition.",
+      "Attend every court date.",
+      "Use legal aid if you cannot afford a lawyer."
+    ],
+    "state_variation_possible": true,
+    "disclaimer": "This is general legal information for India. Bail depends heavily on facts, offence, court discretion, and applicable special laws.",
+    "jurisdiction": "India",
+    "last_updated": "2026-05-13",
+    "primary_sources": [
+      {
+        "type": "statute",
+        "name": "Bharatiya Nagarik Suraksha Sanhita, 2023",
+        "citation": "Act No. 46 of 2023, Chapter XXXV, Sections 478 to 483",
+        "official_source_url": "https://www.indiacode.nic.in/bitstream/123456789/21544/1/the_bharatiya_nagarik_suraksha_sanhita%2C_2023.pdf",
+        "relevance": "Primary statutory framework for bail and bonds."
+      },
+      {
+        "type": "constitution",
+        "name": "Constitution of India",
+        "citation": "Article 21",
+        "official_source_url": "https://www.india.gov.in/sites/upload_files/npi/files/coi_part_full.pdf",
+        "relevance": "Personal liberty principles are relevant to bail."
+      }
+    ],
+    "legal_accuracy_notes": [
+      "Bail depends on offence classification, facts, criminal history, custody stage, and court discretion.",
+      "Bailable offence bail is different from non-bailable offence bail.",
+      "Special laws may impose stricter bail conditions."
+    ],
+    "jurisdiction_notes": [
+      "Procedure is national under BNSS, but local filing and listing practice varies by court.",
+      "High Court and Sessions Court practices may differ by state."
+    ],
+    "enforcement_practicality": {
+      "easy_to_use_for_common_person": false,
+      "usually_requires_lawyer": true,
+      "police_involvement_possible": true,
+      "court_process_likely": true
+    },
+    "severity_indicators": {
+      "possible_arrest": true,
+      "financial_risk": "medium",
+      "reputation_risk": "high",
+      "urgent_action_needed": true
+    },
+    "ai_response_guidelines": {
+      "safe_response_style": "Explain bail options by stage and offence type, ask for FIR sections and custody status, and avoid predicting grant of bail.",
+      "avoid_definitive_outcomes": true,
+      "must_recommend_lawyer_for": [
+        "Person is arrested",
+        "Non-bailable offence",
+        "Custody or remand hearing",
+        "Bail rejection",
+        "Special law offences"
+      ],
+      "should_ask_followup_questions_for": [
+        "Is the person already arrested?",
+        "What FIR sections are mentioned?",
+        "Which court or police station is involved?",
+        "Is the offence bailable or non-bailable?",
+        "Any prior criminal record?"
+      ]
+    }
+  },
+  "anticipatory_bail_india": {
+    "topic_id": "anticipatory_bail_india",
+    "title": "Anticipatory Bail",
+    "short_explanation": "Anticipatory bail is a pre-arrest protection order for a person who has reason to believe they may be arrested for a non-bailable offence.",
+    "simple_explanation": "If someone fears arrest because of an FIR, complaint, or serious accusation, they may apply to the Sessions Court or High Court for anticipatory bail. If granted, the person is protected from arrest subject to conditions. It is not automatic and depends on facts.",
+    "legal_position": "BNSS Section 482 provides for direction for grant of bail to a person apprehending arrest. A person who has reason to believe they may be arrested on accusation of a non-bailable offence may apply to the High Court or Court of Session. The court may grant protection with conditions or reject it.",
+    "important_points": [
+      "It is sought before arrest.",
+      "It applies to apprehended arrest in non-bailable offences.",
+      "Sessions Court or High Court may hear it.",
+      "Protection may be interim or final depending on court order.",
+      "Conditions may include cooperation with investigation.",
+      "It does not quash the FIR or end investigation."
+    ],
+    "common_situations": [
+      "A person is named in FIR and fears arrest.",
+      "Police are calling repeatedly after a complaint.",
+      "Family dispute has criminal allegations.",
+      "Business dispute includes cheating allegations.",
+      "Accused fears arrest in cyber or financial fraud case."
+    ],
+    "user_questions": [
+      "How to get anticipatory bail?",
+      "Can I get bail before arrest?",
+      "Which court gives anticipatory bail?",
+      "How long does anticipatory bail last?",
+      "Can anticipatory bail be rejected?",
+      "Can police arrest after anticipatory bail?"
+    ],
+    "step_by_step_process": [
+      "Collect FIR, complaint, notice, or details showing arrest apprehension.",
+      "Consult a criminal lawyer urgently.",
+      "Prepare anticipatory bail application with facts and grounds.",
+      "File before Sessions Court or High Court as legally appropriate.",
+      "Request interim protection if arrest risk is immediate.",
+      "Attend hearing and follow court directions.",
+      "If granted, cooperate with investigation and obey all conditions."
+    ],
+    "documents_needed": [
+      "FIR copy or complaint details",
+      "Police notice or call details, if any",
+      "Identity and address proof",
+      "Documents showing cooperation or defence",
+      "Medical or family documents if relevant",
+      "Previous court orders, if any"
+    ],
+    "authority_to_contact": [
+      "Sessions Court",
+      "High Court",
+      "Criminal defence lawyer",
+      "Legal aid authority",
+      "Investigating officer after protection, if court directs cooperation"
+    ],
+    "possible_remedies": [
+      "Interim anticipatory bail",
+      "Final anticipatory bail",
+      "Protection from arrest subject to conditions",
+      "Direction to cooperate with investigation",
+      "Fresh application or High Court approach if rejected",
+      "Regular bail if arrest has already happened"
+    ],
+    "important_law_references": [
+      "BNSS 2023, Section 482",
+      "BNSS 2023, Section 483",
+      "Constitution of India, Article 21"
+    ],
+    "court_or_forum": "Court of Session or High Court.",
+    "estimated_timeframe": "Urgent interim relief may be sought quickly, sometimes the same day or within a few days depending on court listing. Final hearing may take longer.",
+    "estimated_cost_range": "Court expenses are usually modest, but lawyer fees vary widely based on city, urgency, court, and case complexity. Legal aid may be available.",
+    "risk_level": "High because arrest and custody may be involved.",
+    "when_to_contact_lawyer": [
+      "You fear arrest.",
+      "FIR has non-bailable sections.",
+      "Police have issued notice or are searching for you.",
+      "The allegations involve serious offences or special laws.",
+      "A previous bail application was rejected."
+    ],
+    "common_mistakes": [
+      "Waiting until after arrest to ask for anticipatory bail.",
+      "Hiding from police without legal strategy.",
+      "Ignoring court conditions.",
+      "Contacting complainant or witnesses improperly.",
+      "Assuming anticipatory bail means the case is finished."
+    ],
+    "related_topics": [
+      "Bail",
+      "FIR",
+      "Cognizable offence",
+      "Quashing of FIR",
+      "Police complaint"
+    ],
+    "keywords": [
+      "anticipatory bail",
+      "pre arrest bail",
+      "arrest protection",
+      "BNSS Section 482",
+      "Sessions Court bail",
+      "High Court bail"
+    ],
+    "aliases": [
+      "anticipatory bail kaise milegi",
+      "agrim jamanat",
+      "arrest se pehle bail",
+      "pre arrest bail India",
+      "FIR ke baad arrest protection",
+      "advance bail"
+    ],
+    "practical_tips": [
+      "Act quickly if arrest is likely.",
+      "Keep FIR sections and police station details ready.",
+      "Do not make threats or settlement pressure calls.",
+      "Cooperate if the court directs it.",
+      "Carry a copy of the protection order when granted."
+    ],
+    "state_variation_possible": true,
+    "disclaimer": "This is general information for India. Anticipatory bail is discretionary and depends on the facts, offence, court, and applicable special laws.",
+    "jurisdiction": "India",
+    "last_updated": "2026-05-13",
+    "primary_sources": [
+      {
+        "type": "statute",
+        "name": "Bharatiya Nagarik Suraksha Sanhita, 2023",
+        "citation": "Act No. 46 of 2023, Section 482",
+        "official_source_url": "https://www.indiacode.nic.in/bitstream/123456789/21544/1/the_bharatiya_nagarik_suraksha_sanhita%2C_2023.pdf",
+        "relevance": "Primary provision for direction for grant of bail to a person apprehending arrest."
+      },
+      {
+        "type": "constitution",
+        "name": "Constitution of India",
+        "citation": "Article 21",
+        "official_source_url": "https://www.india.gov.in/sites/upload_files/npi/files/coi_part_full.pdf",
+        "relevance": "Personal liberty is a key constitutional background for pre-arrest bail."
+      }
+    ],
+    "legal_accuracy_notes": [
+      "Anticipatory bail is for apprehended arrest, not for a person already arrested.",
+      "It is generally linked to non-bailable accusations.",
+      "Special statutes may restrict or modify anticipatory bail availability."
+    ],
+    "jurisdiction_notes": [
+      "Sessions Court and High Court practice varies by state.",
+      "Some states and special laws may have specific procedural requirements."
+    ],
+    "enforcement_practicality": {
+      "easy_to_use_for_common_person": false,
+      "usually_requires_lawyer": true,
+      "police_involvement_possible": true,
+      "court_process_likely": true
+    },
+    "severity_indicators": {
+      "possible_arrest": true,
+      "financial_risk": "medium",
+      "reputation_risk": "high",
+      "urgent_action_needed": true
+    },
+    "ai_response_guidelines": {
+      "safe_response_style": "Treat arrest apprehension as urgent, ask for FIR sections and current custody status, and recommend a criminal lawyer without predicting outcome.",
+      "avoid_definitive_outcomes": true,
+      "must_recommend_lawyer_for": [
+        "Any non-bailable FIR",
+        "Police searching or calling accused",
+        "Serious offence or special law",
+        "Immediate arrest risk"
+      ],
+      "should_ask_followup_questions_for": [
+        "Has an FIR been registered?",
+        "What sections are mentioned?",
+        "Has police issued notice or visited home?",
+        "Are you already arrested?",
+        "Which court jurisdiction applies?"
+      ]
+    }
+  },
+  "quashing_of_fir_india": {
+    "topic_id": "quashing_of_fir_india",
+    "title": "Quashing of FIR",
+    "short_explanation": "Quashing of FIR is a High Court remedy where the court may stop an FIR or criminal proceeding in exceptional cases to prevent abuse of process or secure justice.",
+    "simple_explanation": "If an FIR is legally defective, clearly false, based on a civil dispute dressed as crime, settled in a legally acceptable category, or does not disclose an offence, the accused may approach the High Court for quashing. This is not routine and the High Court does not conduct a full trial at this stage.",
+    "legal_position": "BNSS Section 528 saves the inherent powers of the High Court to pass orders necessary to give effect to the Sanhita, prevent abuse of process of any Court, or secure the ends of justice. Quashing principles have been developed through Supreme Court case law under the earlier CrPC framework and continue to guide courts, read with BNSS.",
+    "important_points": [
+      "Only High Court usually handles FIR quashing through inherent jurisdiction.",
+      "Quashing is exceptional, not automatic.",
+      "The court usually looks at the FIR and admitted material, not full evidence trial.",
+      "Serious offences are harder to quash, especially if public interest is involved.",
+      "Settlement may help in some private disputes but not all offences.",
+      "Quashing is different from bail."
+    ],
+    "common_situations": [
+      "False FIR after family or property dispute",
+      "Business transaction converted into cheating case",
+      "Matrimonial dispute settled between parties",
+      "FIR does not disclose basic offence ingredients",
+      "Multiple criminal cases filed for pressure",
+      "Accused wants criminal proceedings stopped"
+    ],
+    "user_questions": [
+      "How to quash FIR?",
+      "Can false FIR be cancelled?",
+      "Which court can quash FIR?",
+      "Can FIR be quashed after settlement?",
+      "Is quashing same as bail?",
+      "How long does FIR quashing take?"
+    ],
+    "step_by_step_process": [
+      "Get FIR copy and all relevant documents.",
+      "Identify legal grounds for quashing, not just factual denial.",
+      "Consult a High Court criminal lawyer.",
+      "Prepare petition under BNSS inherent powers and constitutional remedies where appropriate.",
+      "Attach FIR, settlement documents if any, and key records.",
+      "File in the jurisdictional High Court.",
+      "Attend hearings and comply with any notice to State or complainant.",
+      "If quashing is refused, consider bail, discharge, or trial remedies."
+    ],
+    "documents_needed": [
+      "FIR copy",
+      "Complaint and police papers if available",
+      "Settlement deed or compromise, if any",
+      "Documents showing civil nature or impossibility of allegations",
+      "Identity documents",
+      "Relevant messages, contracts, bank records, or court orders",
+      "Previous case history"
+    ],
+    "authority_to_contact": [
+      "High Court",
+      "High Court criminal lawyer",
+      "State prosecutor through court process",
+      "Complainant for lawful settlement discussions where appropriate",
+      "Mediation forum if court refers"
+    ],
+    "possible_remedies": [
+      "Quashing of FIR",
+      "Quashing of criminal proceedings",
+      "Interim protection from coercive steps in appropriate cases",
+      "Direction for fair investigation",
+      "Liberty to seek bail or discharge if quashing is refused",
+      "Compromise-based disposal where legally permissible"
+    ],
+    "important_law_references": [
+      "BNSS 2023, Section 528",
+      "Constitution of India, Articles 226 and 227 where invoked",
+      "State of Haryana v. Bhajan Lal, 1992 Supp (1) SCC 335",
+      "Gian Singh v. State of Punjab, (2012) 10 SCC 303"
+    ],
+    "court_or_forum": "Jurisdictional High Court.",
+    "estimated_timeframe": "Urgent interim hearing may happen quickly if listed. Final quashing may take weeks to months or longer depending on court workload, notice, and case complexity.",
+    "estimated_cost_range": "High Court lawyer fees and filing expenses vary widely by state, urgency, seniority, and complexity. Legal aid may be available in eligible cases.",
+    "risk_level": "High because criminal proceedings, arrest risk, reputation, and High Court litigation may be involved.",
+    "when_to_contact_lawyer": [
+      "You are named in FIR and believe it is false or legally defective.",
+      "You want quashing after settlement.",
+      "The FIR involves non-bailable offences.",
+      "Police investigation is ongoing and arrest is possible.",
+      "There are multiple related civil and criminal cases."
+    ],
+    "common_mistakes": [
+      "Thinking every false FIR will be quashed immediately.",
+      "Using quashing as a substitute for bail in urgent arrest situations.",
+      "Filing without clear legal grounds.",
+      "Hiding material facts or related cases.",
+      "Assuming settlement can quash serious offences automatically."
+    ],
+    "related_topics": [
+      "FIR",
+      "Bail",
+      "Anticipatory bail",
+      "Police complaint",
+      "Magistrate complaint"
+    ],
+    "keywords": [
+      "quashing of FIR",
+      "false FIR quashing",
+      "High Court quashing",
+      "BNSS Section 528",
+      "criminal case quashing",
+      "FIR cancellation"
+    ],
+    "aliases": [
+      "FIR quash kaise kare",
+      "jhoothi FIR quash",
+      "High Court FIR cancel",
+      "FIR radd karna",
+      "criminal case quashing",
+      "false case quashing"
+    ],
+    "practical_tips": [
+      "Separate emotional denial from legal grounds.",
+      "Prepare a clean timeline and document set.",
+      "Consider anticipatory bail separately if arrest risk is immediate.",
+      "Do not pressure the complainant into settlement.",
+      "Disclose all related proceedings to your lawyer."
+    ],
+    "state_variation_possible": true,
+    "disclaimer": "This is general information for India. FIR quashing is discretionary and fact-specific. A High Court may refuse quashing even if the accused disputes the allegations.",
+    "jurisdiction": "India",
+    "last_updated": "2026-05-13",
+    "primary_sources": [
+      {
+        "type": "statute",
+        "name": "Bharatiya Nagarik Suraksha Sanhita, 2023",
+        "citation": "Act No. 46 of 2023, Section 528",
+        "official_source_url": "https://www.indiacode.nic.in/bitstream/123456789/21544/1/the_bharatiya_nagarik_suraksha_sanhita%2C_2023.pdf",
+        "relevance": "Saves inherent powers of the High Court used for quashing proceedings in appropriate cases."
+      },
+      {
+        "type": "constitution",
+        "name": "Constitution of India",
+        "citation": "Articles 226 and 227",
+        "official_source_url": "https://www.india.gov.in/sites/upload_files/npi/files/coi_part_full.pdf",
+        "relevance": "Constitutional supervisory and writ jurisdiction may be invoked in criminal process challenges."
+      },
+      {
+        "type": "court_case",
+        "name": "State of Haryana v. Bhajan Lal",
+        "citation": "1992 Supp (1) SCC 335",
+        "official_source_url": "",
+        "relevance": "Leading Supreme Court authority commonly cited for illustrative categories where quashing may be considered."
+      }
+    ],
+    "legal_accuracy_notes": [
+      "BNSS Section 528 corresponds to High Court inherent power; quashing remains exceptional.",
+      "Case law under CrPC Section 482 remains relevant but must be read with current BNSS provisions.",
+      "Serious offences with public impact are usually not quashed merely because parties settle."
+    ],
+    "jurisdiction_notes": [
+      "The High Court with territorial jurisdiction over the FIR or proceedings is usually approached.",
+      "High Court rules and filing formats vary by state."
+    ],
+    "enforcement_practicality": {
+      "easy_to_use_for_common_person": false,
+      "usually_requires_lawyer": true,
+      "police_involvement_possible": true,
+      "court_process_likely": true
+    },
+    "severity_indicators": {
+      "possible_arrest": true,
+      "financial_risk": "high",
+      "reputation_risk": "high",
+      "urgent_action_needed": true
+    },
+    "ai_response_guidelines": {
+      "safe_response_style": "Explain quashing as an exceptional High Court remedy, ask for FIR sections and grounds, and avoid saying the FIR will be quashed.",
+      "avoid_definitive_outcomes": true,
+      "must_recommend_lawyer_for": [
+        "Any FIR quashing request",
+        "Non-bailable offences",
+        "Settlement-based quashing",
+        "Immediate arrest risk",
+        "Serious offences or special laws"
+      ],
+      "should_ask_followup_questions_for": [
+        "What FIR sections are mentioned?",
+        "Which High Court jurisdiction applies?",
+        "Is there any settlement?",
+        "Why do you say the FIR is false or legally defective?",
+        "Is arrest risk immediate?"
+      ]
+    }
+  },
+  "cyber_crime_complaint_india": {
+    "topic_id": "cyber_crime_complaint_india",
+    "title": "Cyber Crime Complaint",
+    "short_explanation": "A cyber crime complaint is a report about online fraud, hacking, identity theft, cyber harassment, or other computer or internet-related offences.",
+    "simple_explanation": "If you lose money in online fraud, face social media harassment, account hacking, fake profiles, blackmail, or misuse of photos, report quickly. For financial fraud, call 1930 and file a complaint on the National Cyber Crime Reporting Portal as soon as possible. You may also approach the local cyber cell or police station.",
+    "legal_position": "Cyber offences may involve the Information Technology Act, 2000, Bharatiya Nyaya Sanhita, 2023, and BNSS 2023 procedure for reporting and investigation. BNSS Section 173 allows information about cognizable offences to be given orally or electronically. BNSS Section 202 also addresses jurisdiction for offences committed through electronic communications in relevant situations.",
+    "important_points": [
+      "Speed is critical in cyber financial fraud.",
+      "Call 1930 quickly for online financial fraud.",
+      "Use cybercrime.gov.in for official reporting.",
+      "Save screenshots, URLs, transaction IDs, and account details.",
+      "Do not delete chats or emails.",
+      "Police station, cyber cell, and national portal may all be relevant."
+    ],
+    "common_situations": [
+      "UPI or bank fraud",
+      "Fake investment or job scam",
+      "Social media account hacked",
+      "Fake profile or impersonation",
+      "Online blackmail with photos",
+      "Cyber stalking or harassment",
+      "Phishing link or OTP fraud"
+    ],
+    "user_questions": [
+      "How to file cyber crime complaint?",
+      "What is 1930 helpline?",
+      "Can I recover money from online fraud?",
+      "Where to report hacked account?",
+      "Can police register FIR for cyber crime?",
+      "What evidence is needed for cyber complaint?"
+    ],
+    "step_by_step_process": [
+      "For financial fraud, immediately call 1930.",
+      "File complaint on https://cybercrime.gov.in/ with full details.",
+      "Save complaint acknowledgement number.",
+      "Inform your bank or wallet provider and request blocking or dispute action.",
+      "Preserve screenshots, URLs, phone numbers, UPI IDs, account numbers, and chat history.",
+      "Visit local cyber cell or police station if FIR or urgent action is needed.",
+      "Do not communicate further with fraudsters except on police advice."
+    ],
+    "documents_needed": [
+      "Transaction ID and bank statement",
+      "UPI ID, account number, wallet ID, or merchant details",
+      "Screenshots of chats, profiles, emails, websites, or payment pages",
+      "Phone numbers, email IDs, URLs, and social media handles",
+      "Complaint acknowledgement from portal",
+      "Identity proof and contact details",
+      "Device details if account hacking is involved"
+    ],
+    "authority_to_contact": [
+      "National Cyber Crime Reporting Portal",
+      "Cyber fraud helpline 1930",
+      "Local cyber crime police station or cyber cell",
+      "Local police station",
+      "Bank or payment service provider",
+      "Emergency helpline 112 if physical threat exists"
+    ],
+    "possible_remedies": [
+      "Online cyber complaint registration",
+      "FIR where cognizable offence is disclosed",
+      "Freezing or blocking fraudulent transaction routes",
+      "Account recovery support through platform process",
+      "Takedown or reporting of fake profiles through platform mechanisms",
+      "Police investigation and charge sheet where evidence supports prosecution",
+      "Banking ombudsman or consumer remedies for service-related issues where appropriate"
+    ],
+    "important_law_references": [
+      "Information Technology Act, 2000",
+      "BNSS 2023, Sections 173, 175 and 202",
+      "Bharatiya Nyaya Sanhita, 2023 offences involving cheating, extortion, stalking, harassment, forgery, or related conduct where applicable"
+    ],
+    "court_or_forum": "National Cyber Crime Reporting Portal, cyber police station, local police station, Magistrate Court, and criminal court depending on investigation and charges.",
+    "estimated_timeframe": "Complaint can be filed immediately online. Action to freeze money is most effective when reported quickly. Investigation can take weeks to months or longer.",
+    "estimated_cost_range": "Reporting on cybercrime.gov.in and calling 1930 is free. Lawyer or expert fees may arise in complex cases or court proceedings.",
+    "risk_level": "Medium to High because financial loss, privacy harm, reputation harm, and criminal investigation may be involved.",
+    "when_to_contact_lawyer": [
+      "Large financial loss is involved.",
+      "Private photos or blackmail are involved.",
+      "Police refuse FIR or action.",
+      "You are accused in a cyber offence.",
+      "The matter involves company systems, data breach, or multiple victims.",
+      "Bank refuses reasonable fraud dispute support."
+    ],
+    "common_mistakes": [
+      "Waiting too long after financial fraud.",
+      "Deleting chats or screenshots.",
+      "Sharing OTP or passwords again with fraudsters.",
+      "Paying blackmailers repeatedly.",
+      "Reporting only to social media platform and not police in serious cases.",
+      "Not informing bank immediately."
+    ],
+    "related_topics": [
+      "FIR",
+      "Zero FIR",
+      "Police complaint",
+      "Cognizable offence",
+      "Bail"
+    ],
+    "keywords": [
+      "cyber crime complaint",
+      "online fraud complaint",
+      "1930 cyber helpline",
+      "cybercrime.gov.in",
+      "UPI fraud",
+      "hacked account",
+      "fake profile complaint"
+    ],
+    "aliases": [
+      "cyber crime complaint kaise kare",
+      "online fraud complaint",
+      "UPI fraud report",
+      "1930 helpline",
+      "cyber fraud paisa wapas",
+      "fake profile complaint",
+      "account hack complaint"
+    ],
+    "practical_tips": [
+      "Report financial fraud within minutes if possible.",
+      "Keep the phone number and transaction ID ready before calling 1930.",
+      "Take screenshots with visible date, username, URL, and transaction details.",
+      "Do not delete the app, chat, or email before preserving evidence.",
+      "Use official portals only and avoid fake recovery agents."
+    ],
+    "state_variation_possible": true,
+    "disclaimer": "This is general legal information for India. Recovery of money is not guaranteed and depends on timing, banking response, traceability, and investigation.",
+    "jurisdiction": "India",
+    "last_updated": "2026-05-13",
+    "primary_sources": [
+      {
+        "type": "government_portal",
+        "name": "National Cyber Crime Reporting Portal",
+        "citation": "Government of India cybercrime reporting portal",
+        "official_source_url": "https://cybercrime.gov.in/",
+        "relevance": "Official portal for reporting cybercrime and cyber financial fraud."
+      },
+      {
+        "type": "statute",
+        "name": "Information Technology Act, 2000",
+        "citation": "Act No. 21 of 2000",
+        "official_source_url": "https://www.indiacode.nic.in/handle/123456789/1999",
+        "relevance": "Primary Indian statute for many cyber law offences and electronic records issues."
+      },
+      {
+        "type": "statute",
+        "name": "Bharatiya Nagarik Suraksha Sanhita, 2023",
+        "citation": "Act No. 46 of 2023, Sections 173, 175 and 202",
+        "official_source_url": "https://www.indiacode.nic.in/bitstream/123456789/21544/1/the_bharatiya_nagarik_suraksha_sanhita%2C_2023.pdf",
+        "relevance": "Governs reporting, investigation, and jurisdictional aspects of offences including those using electronic communications."
+      }
+    ],
+    "legal_accuracy_notes": [
+      "Cyber complaints may involve both IT Act and BNS offences depending on facts.",
+      "Portal complaint is important but may not always equal FIR; police classification depends on facts.",
+      "Money recovery is time-sensitive and never guaranteed.",
+      "Jurisdiction in cyber offences can be complex because acts, victims, banks, and accused may be in different places."
+    ],
+    "jurisdiction_notes": [
+      "National portal is available across India.",
+      "State cyber cells and police stations handle local investigation.",
+      "BNSS includes jurisdiction rules for offences committed through electronic communications."
+    ],
+    "enforcement_practicality": {
+      "easy_to_use_for_common_person": true,
+      "usually_requires_lawyer": false,
+      "police_involvement_possible": true,
+      "court_process_likely": true
+    },
+    "severity_indicators": {
+      "possible_arrest": true,
+      "financial_risk": "high",
+      "reputation_risk": "high",
+      "urgent_action_needed": true
+    },
+    "ai_response_guidelines": {
+      "safe_response_style": "Prioritize immediate reporting for financial fraud, ask for timing and transaction details, and avoid promising recovery.",
+      "avoid_definitive_outcomes": true,
+      "must_recommend_lawyer_for": [
+        "Large financial loss",
+        "Private image blackmail",
+        "User is accused",
+        "Police inaction after serious cyber offence",
+        "Corporate data breach"
+      ],
+      "should_ask_followup_questions_for": [
+        "When did the fraud happen?",
+        "How much money was lost?",
+        "Have you called 1930?",
+        "Do you have transaction IDs and screenshots?",
+        "Which state are you in?"
+      ]
+    }
+  },
+  "magistrate_complaint_india": {
+    "topic_id": "magistrate_complaint_india",
+    "title": "Magistrate Complaint",
+    "short_explanation": "A Magistrate complaint is a criminal complaint filed before a Magistrate when a person seeks court action for an alleged offence, often after police refusal or inaction.",
+    "simple_explanation": "If police do not register FIR or the matter is non-cognizable and needs court direction, a person may approach the Magistrate. The Magistrate can examine the complainant, consider documents, postpone process for inquiry, dismiss the complaint, issue process, or order investigation where legally permitted.",
+    "legal_position": "BNSS Section 210 allows a Magistrate to take cognizance of offences upon receiving a complaint of facts, police report, information, or own knowledge, subject to law. Sections 223 to 227 deal with complaints to Magistrates, examination of complainant, postponement, dismissal, and issue of process. BNSS Section 175(3) also allows a Magistrate empowered under Section 210 to order investigation after considering an application supported by affidavit under Section 173(4), inquiry, and police submissions.",
+    "important_points": [
+      "Magistrate complaint is different from police complaint.",
+      "It is a court process and should be factually precise.",
+      "The complainant may be examined on oath.",
+      "The Magistrate may dismiss weak complaints.",
+      "The Magistrate may issue summons or order inquiry depending on facts.",
+      "For FIR refusal, written escalation to senior police may be required before Magistrate application under BNSS."
+    ],
+    "common_situations": [
+      "Police refuse to register FIR.",
+      "Police record NC and refer to Magistrate.",
+      "Complainant wants court to take cognizance.",
+      "Private complaint for defamation or similar offence.",
+      "Police inaction after written complaint.",
+      "Complaint against public servant requires special care."
+    ],
+    "user_questions": [
+      "How to file complaint before Magistrate?",
+      "Can Magistrate order FIR?",
+      "What if police refuse FIR?",
+      "Do I need affidavit for Magistrate application?",
+      "What happens after Magistrate complaint?",
+      "Can Magistrate dismiss my complaint?"
+    ],
+    "step_by_step_process": [
+      "Prepare a written complaint with clear facts, dates, places, accused details, and offences suspected.",
+      "Keep proof of police complaint and escalation to senior police where required.",
+      "Attach documents, witness list, and evidence.",
+      "File the complaint or application before the jurisdictional Magistrate.",
+      "Be ready for examination on oath if the court proceeds as a complaint case.",
+      "Attend all dates and produce witnesses or documents if directed.",
+      "Follow the Magistrate's order, whether investigation, inquiry, summons, or dismissal."
+    ],
+    "documents_needed": [
+      "Written Magistrate complaint",
+      "Police complaint copy",
+      "Proof of refusal or inaction, if available",
+      "Postal receipt or email proof to senior police where applicable",
+      "Affidavit where required for investigation direction",
+      "Evidence documents and witness list",
+      "Identity and address details",
+      "Court fee or filing forms as per local practice"
+    ],
+    "authority_to_contact": [
+      "Jurisdictional Judicial Magistrate",
+      "Court filing counter or e-filing system where available",
+      "Criminal lawyer",
+      "District Legal Services Authority",
+      "Police station if court orders investigation"
+    ],
+    "possible_remedies": [
+      "Magistrate-directed investigation",
+      "Complaint case taken on file",
+      "Examination of complainant and witnesses",
+      "Issue of summons to accused",
+      "Dismissal of complaint if no sufficient ground",
+      "Revision or High Court remedy in appropriate cases",
+      "Legal aid representation for eligible complainants or accused"
+    ],
+    "important_law_references": [
+      "BNSS 2023, Section 173(4)",
+      "BNSS 2023, Section 175(3)",
+      "BNSS 2023, Section 210",
+      "BNSS 2023, Sections 223 to 227"
+    ],
+    "court_or_forum": "Jurisdictional Judicial Magistrate Court; revision forum or High Court in appropriate challenge proceedings.",
+    "estimated_timeframe": "Filing may happen in a day if documents are ready. First hearing and orders may take days to weeks or longer depending on court workload and complexity.",
+    "estimated_cost_range": "Court filing costs are usually modest. Lawyer fees vary by city and complexity. Free legal aid may be available for eligible persons.",
+    "risk_level": "Medium to High because court process may lead to investigation, summons, or criminal trial.",
+    "when_to_contact_lawyer": [
+      "Police refused FIR in a serious matter.",
+      "You need an investigation order.",
+      "The complaint involves complex facts or documents.",
+      "The accused is a public servant.",
+      "Your complaint was dismissed.",
+      "You receive summons as accused in a complaint case."
+    ],
+    "common_mistakes": [
+      "Filing without first preserving proof of police approach where required.",
+      "Writing emotional allegations without offence facts.",
+      "Not attaching documents or witness details.",
+      "Using Magistrate complaint for purely civil pressure.",
+      "Missing hearing dates.",
+      "Not understanding difference between investigation order and private complaint case."
+    ],
+    "related_topics": [
+      "Police complaint",
+      "FIR",
+      "NC complaint",
+      "Cognizable offence",
+      "Quashing of FIR"
+    ],
+    "keywords": [
+      "Magistrate complaint",
+      "complaint before Magistrate",
+      "police refused FIR",
+      "BNSS Section 175",
+      "BNSS Section 210",
+      "private criminal complaint"
+    ],
+    "aliases": [
+      "Magistrate complaint kaise kare",
+      "court me criminal complaint",
+      "police FIR refuse Magistrate",
+      "private complaint case",
+      "156(3) CrPC new BNSS",
+      "Magistrate se FIR order"
+    ],
+    "practical_tips": [
+      "Keep proof that you approached police and senior police where applicable.",
+      "Use a date-wise chronology.",
+      "Attach only relevant documents and index them.",
+      "Be accurate because court complaints are sworn proceedings.",
+      "Get legal help for drafting if facts are serious or complex."
+    ],
+    "state_variation_possible": true,
+    "disclaimer": "This is general legal information for India. Magistrate procedure depends on facts, local court practice, and the exact remedy requested.",
+    "jurisdiction": "India",
+    "last_updated": "2026-05-13",
+    "primary_sources": [
+      {
+        "type": "statute",
+        "name": "Bharatiya Nagarik Suraksha Sanhita, 2023",
+        "citation": "Act No. 46 of 2023, Sections 173(4), 175(3), 210 and 223 to 227",
+        "official_source_url": "https://www.indiacode.nic.in/bitstream/123456789/21544/1/the_bharatiya_nagarik_suraksha_sanhita%2C_2023.pdf",
+        "relevance": "Primary provisions for police refusal escalation, Magistrate-ordered investigation, cognizance, and complaint proceedings."
+      }
+    ],
+    "legal_accuracy_notes": [
+      "Under BNSS, an application for Magistrate-ordered investigation after FIR refusal is linked to Section 173(4) and Section 175(3).",
+      "Magistrate complaint may proceed as a private complaint or may result in investigation direction depending on the request and facts.",
+      "Complaint against public servants may involve additional safeguards or sanction issues."
+    ],
+    "jurisdiction_notes": [
+      "The complaint is usually filed before the Magistrate having territorial and subject-matter jurisdiction.",
+      "Court filing formats and e-filing availability vary by state."
+    ],
+    "enforcement_practicality": {
+      "easy_to_use_for_common_person": false,
+      "usually_requires_lawyer": true,
+      "police_involvement_possible": true,
+      "court_process_likely": true
+    },
+    "severity_indicators": {
+      "possible_arrest": true,
+      "financial_risk": "medium",
+      "reputation_risk": "high",
+      "urgent_action_needed": false
+    },
+    "ai_response_guidelines": {
+      "safe_response_style": "Explain court complaint options carefully, ask what police steps were already taken, and recommend legal drafting support.",
+      "avoid_definitive_outcomes": true,
+      "must_recommend_lawyer_for": [
+        "Magistrate application for investigation",
+        "Serious offence",
+        "Complaint against public servant",
+        "Dismissed complaint",
+        "User receives summons as accused"
+      ],
+      "should_ask_followup_questions_for": [
+        "Did you file a police complaint first?",
+        "Did you send it to the Superintendent of Police?",
+        "What offence facts are involved?",
+        "Which district did the incident occur in?",
+        "Do you want investigation order or private complaint case?"
+      ]
+    }
+  }
+}

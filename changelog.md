@@ -2,6 +2,421 @@
 
 Historical note: entries before `2026-04-15` were previously maintained as date-grouped sections; starting with the `2026-04-15` section below, individual change bullets also carry explicit IST timestamps.
 
+## 2026-05-13
+
+### Rolling Compressed Legal Memory
+- `2026-05-13 12:55 IST` Updated [`backend/app/models/schemas.py`](d:/AI-Chatbot/backend/app/models/schemas.py) with compressed conversation-memory fields: `compressed_memory_summary`, `compressed_memory_facts`, `memory_turn_count`, and `memory_updated_at`.
+- `2026-05-13 12:55 IST` Updated [`backend/app/services/chat_service.py`](d:/AI-Chatbot/backend/app/services/chat_service.py) with deterministic rolling memory summarization that preserves case context, legal entities, uploaded-document summaries and analyses, collected interview facts, deadlines, procedural progress, and recent turn summaries.
+- `2026-05-13 12:55 IST` Grounded answer generation now prepends saved legal memory before recent conversation turns and reduces the raw history window when compressed memory exists, helping long chats preserve important facts without excessive prompt growth.
+- `2026-05-13 12:55 IST` Persisted compressed memory in the existing conversation-state path, so normal chat follow-ups and uploaded-document follow-ups can reuse the same saved context without introducing a new store.
+- `2026-05-13 12:55 IST` Added focused coverage in [`tests/test_chat.py`](d:/AI-Chatbot/tests/test_chat.py) for long-chat memory persistence and prompt construction with compressed memory.
+
+### Verified
+- `2026-05-13 12:55 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_chat.py::test_long_chat_persists_compressed_memory_summary tests\test_chat.py::test_conversation_for_llm_prepends_compressed_memory_before_recent_turns -q` (`2 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-13 12:55 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_chat.py::test_case_details_are_reused_within_chat_and_isolated_for_new_chat tests\test_chat.py::test_uploaded_context_is_reused_on_follow_up_in_same_chat tests\test_chat.py::test_chat_persists_structured_legal_entities_from_normal_turn -q` (`3 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-13 12:55 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\services\chat_service.py backend\app\models\schemas.py tests\test_chat.py`.
+
+### Citation-Aware Grounded Evidence Mapping
+- `2026-05-13 12:41 IST` Updated [`backend/app/services/chat_service.py`](d:/AI-Chatbot/backend/app/services/chat_service.py) to build grounded citation source maps with stable `S1`, `S2`, etc. references for retrieved authorities and uploaded documents.
+- `2026-05-13 12:41 IST` Each source-map entry now carries clean citation text, title, authority, authority type, source kind, jurisdiction, date, URL, score, and a scrubbed evidence snippet suitable for expandable inspection.
+- `2026-05-13 12:41 IST` Added citation source maps to the evidence packet, retrieval metadata, and assistant message metadata so downstream UI can show expandable supporting snippets without exposing raw retrieval artifacts.
+- `2026-05-13 12:41 IST` Annotated grounded answers with inline `[S1]` style references for both the five-section grounded answer format and the numbered authority-style answer format.
+- `2026-05-13 12:41 IST` Added focused coverage in [`tests/test_chat.py`](d:/AI-Chatbot/tests/test_chat.py) proving inline source refs and clean evidence maps are persisted.
+
+### Verified
+- `2026-05-13 12:41 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_chat.py::test_grounded_answer_includes_inline_source_refs_and_clean_evidence_map tests\test_chat.py::test_grounded_metadata_includes_query_profile_source_sufficiency_and_disclaimer_mode -q` (`2 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-13 12:41 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_upload.py -q` (`6 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-13 12:41 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\services\chat_service.py tests\test_chat.py`.
+
+### Structured Legal Entity Extraction
+- `2026-05-13 12:28 IST` Added [`backend/app/services/legal_entity_extraction.py`](d:/AI-Chatbot/backend/app/services/legal_entity_extraction.py), a reusable deterministic extractor for legal facts across normal chat turns and uploaded documents.
+- `2026-05-13 12:28 IST` The extractor normalizes people, organizations, courts, FIR numbers, case numbers, section/article references, canonical statute names, police stations, INR money amounts, addresses, dates, deadlines, and procedural events into a consistent metadata shape.
+- `2026-05-13 12:28 IST` Updated [`backend/app/models/schemas.py`](d:/AI-Chatbot/backend/app/models/schemas.py) and [`backend/app/services/chat_service.py`](d:/AI-Chatbot/backend/app/services/chat_service.py) so extracted `legal_entities` are merged into conversation state and persisted on user/assistant message metadata for downstream workflows.
+- `2026-05-13 12:28 IST` Updated [`backend/app/services/legal_document_analysis.py`](d:/AI-Chatbot/backend/app/services/legal_document_analysis.py) to reuse the shared entity extractor while preserving existing document-analysis fields such as parties, authorities, deadlines, money amounts, case numbers, and procedural events.
+- `2026-05-13 12:28 IST` Added focused coverage in [`tests/test_upload.py`](d:/AI-Chatbot/tests/test_upload.py) and [`tests/test_chat.py`](d:/AI-Chatbot/tests/test_chat.py) for normalized entity extraction, uploaded-document metadata, and normal chat-turn persistence.
+
+### Verified
+- `2026-05-13 12:28 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_upload.py -q` (`6 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-13 12:28 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_chat.py::test_chat_persists_structured_legal_entities_from_normal_turn tests\test_chat.py::test_chat_persists_case_details_in_conversation_state_metadata -q` (`2 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-13 12:28 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\services\legal_entity_extraction.py backend\app\services\legal_document_analysis.py backend\app\services\chat_service.py backend\app\models\schemas.py tests\test_upload.py tests\test_chat.py`.
+
+### Structured Legal Document Analysis Pipeline
+- `2026-05-13 12:16 IST` Added [`backend/app/services/legal_document_analysis.py`](d:/AI-Chatbot/backend/app/services/legal_document_analysis.py), a modular deterministic analyzer for uploaded notices, FIRs, agreements, complaints, court orders, and generic legal documents.
+- `2026-05-13 12:16 IST` The analyzer extracts structured document facts including parties, dates, relative deadlines, mentioned authorities, obligations or directions, risk indicators, procedural stage, procedural events, money amounts, case numbers, and actionable next steps.
+- `2026-05-13 12:16 IST` Updated [`backend/app/models/schemas.py`](d:/AI-Chatbot/backend/app/models/schemas.py) and [`backend/app/services/chat_service.py`](d:/AI-Chatbot/backend/app/services/chat_service.py) so uploaded-document analyses persist in conversation state and assistant metadata while preserving the existing `/chat/upload` contract.
+- `2026-05-13 12:16 IST` Attached structured upload analyses to uploaded retrieval documents and grounded context, so document-review answers can use extracted deadlines, authorities, parties, risks, and next steps without replacing the existing upload-grounding flow.
+- `2026-05-13 12:16 IST` Kept uploaded legal-notice review on the upload-grounded route instead of letting the direct legal-explainer path bypass uploaded-document context.
+- `2026-05-13 12:16 IST` Added focused coverage in [`tests/test_upload.py`](d:/AI-Chatbot/tests/test_upload.py) for notice-structure extraction and persisted upload analysis metadata.
+
+### Verified
+- `2026-05-13 12:16 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_upload.py -q` (`5 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-13 12:16 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_chat.py::test_merge_case_details_into_state_preserves_prior_values_and_adds_upload_summaries tests\test_chat.py::test_chat_persists_case_details_in_conversation_state_metadata tests\test_chat.py::test_uploaded_context_is_reused_on_follow_up_in_same_chat -q` (`3 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-13 12:16 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\services\legal_document_analysis.py backend\app\services\chat_service.py backend\app\models\schemas.py tests\test_upload.py`.
+
+### JSON-Backed Direct Explainer Catalogs
+- `2026-05-13 11:05 IST` Added [`data/legal_datasets/explainers.json`](d:/AI-Chatbot/data/legal_datasets/explainers.json) for constitutional and general legal explainers with editable keys, titles, short explanations, points, article references where relevant, aliases/keywords, jurisdiction, and existing runtime metadata.
+- `2026-05-13 11:05 IST` Updated [`backend/app/services/chat_service.py`](d:/AI-Chatbot/backend/app/services/chat_service.py) to load the explainer catalogs from JSON, normalize them into the existing direct-answer runtime shape, and match explainers through catalog aliases/keywords so new explainers can be added without code changes.
+- `2026-05-13 11:05 IST` Preserved existing direct-answer behavior and the admin direct-answer content inventory by keeping the existing `CONSTITUTIONAL_EXPLAINER_LOOKUPS` and `GENERAL_LEGAL_EXPLAINER_LOOKUPS` exports backed by the JSON loader.
+- `2026-05-13 11:05 IST` Added focused regression coverage in [`tests/test_chat.py`](d:/AI-Chatbot/tests/test_chat.py) proving a new catalog explainer alias can be recognized without adding code.
+
+### Verified
+- `2026-05-13 11:05 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_chat.py::test_explainer_catalog_loader_supports_new_aliases_without_code_changes tests\test_chat.py::test_understand_legal_query_classifies_general_legal_explainer_intent tests\test_chat.py::test_understand_legal_query_classifies_common_low_risk_legal_explainers_directly tests\test_chat.py::test_fundamental_duties_query_uses_direct_constitutional_explainer_path tests\test_chat.py::test_general_legal_explainer_query_uses_direct_medium_path_without_grounded_retrieval tests\test_auth_flow.py::test_admin_direct_answer_content_returns_inventory_without_dataset_contents -q` (`6 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-13 11:05 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\services\chat_service.py backend\app\api\routes\admin.py tests\test_chat.py`.
+
+### Admin Low-Quality Response Review Queue
+- `2026-05-13 10:43 IST` Added protected read-only `GET /admin/review/low-quality` in [`backend/app/api/routes/admin.py`](d:/AI-Chatbot/backend/app/api/routes/admin.py), with filters for `low_confidence`, `thumbs_down`, `unsupported_output`, and `fallback`.
+- `2026-05-13 10:43 IST` Extended [`backend/app/services/mongo_session_store.py`](d:/AI-Chatbot/backend/app/services/mongo_session_store.py) with safe review candidate selection from assistant metadata plus feedback ratings only.
+- `2026-05-13 10:43 IST` The review queue returns only message ID, chat ID, timestamp, confidence, fallback reason, validation flags, and feedback rating when available; it does not expose raw messages, full user identity, or sensitive auth fields.
+- `2026-05-13 10:43 IST` Added a Low Quality Review Queue section in [`Frontend/admin.html`](d:/AI-Chatbot/Frontend/admin.html) and [`Frontend/admin.js`](d:/AI-Chatbot/Frontend/admin.js), with filter/limit controls, pagination, metadata rows, loading/empty/error states, and quick Inspect Chat links into the existing chat inspection panel.
+- `2026-05-13 10:43 IST` Kept the feature read-only: no approve/edit/delete actions, export/download actions, or chatbot routing changes were added.
+- `2026-05-13 10:43 IST` Added focused backend/frontend coverage in [`tests/test_auth_flow.py`](d:/AI-Chatbot/tests/test_auth_flow.py) and [`tests/test_frontend_ui_static.py`](d:/AI-Chatbot/tests/test_frontend_ui_static.py).
+
+### Verified
+- `2026-05-13 10:43 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_auth_flow.py::test_admin_low_quality_review_queue_returns_safe_candidates_and_filters tests\test_frontend_ui_static.py::test_admin_low_quality_review_queue_ui_is_read_only_and_sanitized -q` (`2 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-13 10:43 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_frontend_ui_static.py -q` (`20 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-13 10:43 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_auth_flow.py -q` (`44 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-13 10:43 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\api\routes\admin.py backend\app\services\mongo_session_store.py backend\app\services\storage.py tests\test_auth_flow.py tests\test_frontend_ui_static.py`.
+
+### Admin Response Quality Score Analytics
+- `2026-05-13 10:33 IST` Added protected read-only `GET /admin/analytics/quality-score` in [`backend/app/api/routes/admin.py`](d:/AI-Chatbot/backend/app/api/routes/admin.py) with `24h`, `7d`, and `30d` period filters.
+- `2026-05-13 10:33 IST` Extended [`backend/app/services/mongo_session_store.py`](d:/AI-Chatbot/backend/app/services/mongo_session_store.py) with aggregate quality metrics from existing assistant metadata and feedback data only: average confidence, fallback rate, unsupported response rate, thumbs up/down rates, aggregate sample counts, and a 0-100 overall quality score.
+- `2026-05-13 10:33 IST` Kept the quality-score payload aggregate-only: no raw messages, message previews, user identity, personal data, auth fields, tokens, or secrets are exposed.
+- `2026-05-13 10:33 IST` Added a Response Quality Score section in [`Frontend/admin.html`](d:/AI-Chatbot/Frontend/admin.html) and [`Frontend/admin.js`](d:/AI-Chatbot/Frontend/admin.js), with score card, metric breakdown, period filter, loading state, empty state, and error handling.
+- `2026-05-13 10:33 IST` Kept the feature read-only, did not add export/download actions, and did not refactor chatbot routing logic.
+- `2026-05-13 10:33 IST` Added focused backend/frontend coverage in [`tests/test_auth_flow.py`](d:/AI-Chatbot/tests/test_auth_flow.py) and [`tests/test_frontend_ui_static.py`](d:/AI-Chatbot/tests/test_frontend_ui_static.py).
+
+### Verified
+- `2026-05-13 10:33 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_auth_flow.py::test_admin_quality_score_returns_safe_aggregate_metrics tests\test_frontend_ui_static.py::test_admin_quality_score_ui_is_read_only_and_aggregated_only -q` (`2 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-13 10:33 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_frontend_ui_static.py -q` (`19 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-13 10:33 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_auth_flow.py -q`; the first run timed out at 120 seconds while still printing passing progress, then reran under the 3-minute task rule and completed (`43 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-13 10:33 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\api\routes\admin.py backend\app\services\mongo_session_store.py backend\app\services\storage.py tests\test_auth_flow.py tests\test_frontend_ui_static.py`.
+
+## 2026-05-12
+
+### Admin Fallback Reason Analytics
+- `2026-05-12 17:34 IST` Added protected read-only `GET /admin/analytics/fallback-reasons` in [`backend/app/api/routes/admin.py`](d:/AI-Chatbot/backend/app/api/routes/admin.py) with `24h`, `7d`, and `30d` period filters.
+- `2026-05-12 17:34 IST` Extended [`backend/app/services/mongo_session_store.py`](d:/AI-Chatbot/backend/app/services/mongo_session_store.py) with assistant-metadata-only fallback reason aggregation for `low confidence`, `no relevant authority`, `unsupported output`, `technical failure`, `source insufficient`, `validation failed`, and `other`.
+- `2026-05-12 17:34 IST` Kept fallback reason payloads aggregate-only: no raw messages, message previews, user identity, personal data, auth fields, tokens, or secrets are exposed.
+- `2026-05-12 17:34 IST` Added a Fallback Reasons section in [`Frontend/admin.html`](d:/AI-Chatbot/Frontend/admin.html) and [`Frontend/admin.js`](d:/AI-Chatbot/Frontend/admin.js), with a period filter, bar-style count rows, loading state, empty state, and error handling.
+- `2026-05-12 17:34 IST` Kept the feature read-only, did not add export/download actions, and did not refactor chatbot routing logic.
+- `2026-05-12 17:34 IST` Added focused backend/frontend coverage in [`tests/test_auth_flow.py`](d:/AI-Chatbot/tests/test_auth_flow.py) and [`tests/test_frontend_ui_static.py`](d:/AI-Chatbot/tests/test_frontend_ui_static.py).
+
+### Verified
+- `2026-05-12 17:34 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_auth_flow.py::test_admin_fallback_reasons_returns_safe_aggregate_counts tests\test_frontend_ui_static.py::test_admin_fallback_reasons_ui_is_read_only_and_aggregated_only -q` (`2 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-12 17:34 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_frontend_ui_static.py -q` (`18 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-12 17:34 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_auth_flow.py -q` (`42 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-12 17:34 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\api\routes\admin.py backend\app\services\mongo_session_store.py backend\app\services\storage.py tests\test_auth_flow.py tests\test_frontend_ui_static.py`.
+
+### Admin Top Query Categories Analytics
+- `2026-05-12 17:23 IST` Added protected read-only `GET /admin/analytics/query-categories` in [`backend/app/api/routes/admin.py`](d:/AI-Chatbot/backend/app/api/routes/admin.py) with `24h`, `7d`, and `30d` period filters.
+- `2026-05-12 17:23 IST` Extended [`backend/app/services/mongo_session_store.py`](d:/AI-Chatbot/backend/app/services/mongo_session_store.py) with metadata-only category aggregation for `constitutional`, `criminal`, `consumer`, `cyber fraud`, `property`, `family`, `document/legal notice`, and `other`.
+- `2026-05-12 17:23 IST` Kept query category payloads aggregate-only: no raw user messages, message previews, user names, emails, personal data, auth fields, tokens, or secrets are exposed.
+- `2026-05-12 17:23 IST` Added a Query Categories section in [`Frontend/admin.html`](d:/AI-Chatbot/Frontend/admin.html) and [`Frontend/admin.js`](d:/AI-Chatbot/Frontend/admin.js), with a period filter, bar-style count rows, loading state, empty state, and error handling.
+- `2026-05-12 17:23 IST` Kept the feature read-only, did not add export/download actions, and did not refactor chatbot routing logic.
+- `2026-05-12 17:23 IST` Added focused backend/frontend coverage in [`tests/test_auth_flow.py`](d:/AI-Chatbot/tests/test_auth_flow.py) and [`tests/test_frontend_ui_static.py`](d:/AI-Chatbot/tests/test_frontend_ui_static.py).
+
+### Verified
+- `2026-05-12 17:23 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_auth_flow.py::test_admin_query_categories_returns_safe_aggregate_counts tests\test_frontend_ui_static.py::test_admin_query_categories_ui_is_read_only_and_aggregated_only -q` (`2 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-12 17:23 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_frontend_ui_static.py -q` (`17 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-12 17:23 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_auth_flow.py -q` (`41 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-12 17:23 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\api\routes\admin.py backend\app\services\mongo_session_store.py backend\app\services\storage.py tests\test_auth_flow.py tests\test_frontend_ui_static.py`.
+
+### Admin Analytics Trends
+- `2026-05-12 17:03 IST` Added protected read-only `GET /admin/analytics/trends` in [`backend/app/api/routes/admin.py`](d:/AI-Chatbot/backend/app/api/routes/admin.py) with `7d` and `30d` period filters.
+- `2026-05-12 17:03 IST` Extended [`backend/app/services/mongo_session_store.py`](d:/AI-Chatbot/backend/app/services/mongo_session_store.py) with daily aggregate trend buckets for chats per day, messages per day, fallback count per day, and average confidence per day.
+- `2026-05-12 17:03 IST` Kept trend payloads aggregate-only: no raw messages, message previews, user names, emails, personal data, auth fields, tokens, secrets, or infrastructure values are exposed.
+- `2026-05-12 17:03 IST` Added an Analytics Trends section in [`Frontend/admin.html`](d:/AI-Chatbot/Frontend/admin.html) and [`Frontend/admin.js`](d:/AI-Chatbot/Frontend/admin.js), with a period filter, lightweight bar-style rows, loading state, empty state, and error handling.
+- `2026-05-12 17:03 IST` Added small responsive trend-bar styling in [`Frontend/style.css`](d:/AI-Chatbot/Frontend/style.css), kept the feature read-only, and did not add export/download actions or refactor chatbot routing logic.
+- `2026-05-12 17:03 IST` Added focused backend/frontend coverage in [`tests/test_auth_flow.py`](d:/AI-Chatbot/tests/test_auth_flow.py) and [`tests/test_frontend_ui_static.py`](d:/AI-Chatbot/tests/test_frontend_ui_static.py).
+
+### Verified
+- `2026-05-12 17:03 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_auth_flow.py::test_admin_analytics_trends_returns_safe_daily_aggregates tests\test_frontend_ui_static.py::test_admin_analytics_trends_ui_is_read_only_and_aggregated_only -q` (`2 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-12 17:03 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_frontend_ui_static.py -q` (`16 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-12 17:03 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_auth_flow.py -q` (`40 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-12 17:03 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\api\routes\admin.py backend\app\services\mongo_session_store.py backend\app\services\storage.py tests\test_auth_flow.py tests\test_frontend_ui_static.py`.
+
+### Admin Analytics Overview Dashboard
+- `2026-05-12 16:47 IST` Added protected read-only `GET /admin/analytics/overview` in [`backend/app/api/routes/admin.py`](d:/AI-Chatbot/backend/app/api/routes/admin.py) with `24h`, `7d`, and `30d` period filters.
+- `2026-05-12 16:47 IST` Added aggregate-only analytics in [`backend/app/services/mongo_session_store.py`](d:/AI-Chatbot/backend/app/services/mongo_session_store.py) for total chats, total messages, active users, fallback count, unsupported response count, average confidence, and average response time when rolling samples are available.
+- `2026-05-12 16:47 IST` Kept the analytics payload safe: no raw user messages, message previews, personal data, auth fields, tokens, secrets, or export/download controls are exposed.
+- `2026-05-12 16:47 IST` Added an Analytics Overview section in [`Frontend/admin.html`](d:/AI-Chatbot/Frontend/admin.html) and [`Frontend/admin.js`](d:/AI-Chatbot/Frontend/admin.js), with summary cards, period filter, loading state, empty/degraded copy, and error handling.
+- `2026-05-12 16:47 IST` Logged admin analytics views through existing admin activity as `viewed_analytics_overview` with safe period metadata only, and did not refactor chatbot routing logic.
+- `2026-05-12 16:47 IST` Added focused backend/frontend coverage in [`tests/test_auth_flow.py`](d:/AI-Chatbot/tests/test_auth_flow.py) and [`tests/test_frontend_ui_static.py`](d:/AI-Chatbot/tests/test_frontend_ui_static.py).
+
+### Verified
+- `2026-05-12 16:47 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_auth_flow.py::test_admin_analytics_overview_returns_safe_aggregates_by_period tests\test_frontend_ui_static.py::test_admin_analytics_overview_ui_is_read_only_and_aggregated_only -q` (`2 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-12 16:47 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_frontend_ui_static.py -q` (`15 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-12 16:47 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_auth_flow.py -q` (`39 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-12 16:47 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\api\routes\admin.py backend\app\services\mongo_session_store.py backend\app\services\storage.py tests\test_auth_flow.py tests\test_frontend_ui_static.py`.
+
+### Admin System Health Monitoring Dashboard
+- `2026-05-12 16:34 IST` Added a lightweight [`AdminHealthService`](d:/AI-Chatbot/backend/app/services/admin_health_service.py) that builds safe read-only health metrics for uptime, MongoDB reachability/response time, AI provider configuration availability, rolling chat response-time average, active sessions, memory usage, and summarized CPU usage.
+- `2026-05-12 16:34 IST` Added protected `GET /admin/system/health` in [`backend/app/api/routes/admin.py`](d:/AI-Chatbot/backend/app/api/routes/admin.py), returning only operational fields with `healthy`, `warning`, and `critical` status categories and graceful degraded-state payloads when a subsystem cannot be sampled.
+- `2026-05-12 16:34 IST` Added a small rolling chat timing metric in [`backend/app/main.py`](d:/AI-Chatbot/backend/app/main.py) for `/chat` and `/chat/upload` requests without changing chatbot routing or response behavior.
+- `2026-05-12 16:34 IST` Added a read-only System Health section in [`Frontend/admin.html`](d:/AI-Chatbot/Frontend/admin.html) and [`Frontend/admin.js`](d:/AI-Chatbot/Frontend/admin.js), with status cards, colored indicators, last updated timestamp, manual refresh, and a 30-second auto-refresh toggle.
+- `2026-05-12 16:34 IST` Kept the feature monitoring-only: no restart/shutdown controls, websocket infrastructure, secrets, tokens, raw infrastructure values, or internal paths were exposed.
+- `2026-05-12 16:34 IST` Added focused backend/frontend coverage in [`tests/test_auth_flow.py`](d:/AI-Chatbot/tests/test_auth_flow.py) and [`tests/test_frontend_ui_static.py`](d:/AI-Chatbot/tests/test_frontend_ui_static.py).
+
+### Verified
+- `2026-05-12 16:34 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_auth_flow.py::test_admin_system_health_returns_safe_metrics_and_handles_degraded_database tests\test_frontend_ui_static.py::test_admin_system_health_ui_is_read_only_and_auto_refreshable -q` (`2 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-12 16:34 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_frontend_ui_static.py -q` (`14 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-12 16:34 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_auth_flow.py -q` (`38 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-12 16:34 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\services\admin_health_service.py backend\app\api\routes\admin.py backend\app\main.py tests\test_auth_flow.py tests\test_frontend_ui_static.py`.
+
+### Latest Legal JSON Dataset Batch
+- `2026-05-12 16:24 IST` Extended [`backend/app/services/legal_dataset_service.py`](d:/AI-Chatbot/backend/app/services/legal_dataset_service.py) with explicit authority metadata and aliases for `ARMS.json` and `JUVENILE JUSTICE.json`.
+- `2026-05-12 16:24 IST` Added content-aware metadata inference for newly discovered statute files, including aliases derived from filenames, embedded statute names, underscore/hyphen variants, and simplified parenthesized titles such as `environment protection act`.
+- `2026-05-12 16:24 IST` Normalized top-level overview-style legal JSON objects into topic documents using the same retrievable local dataset document shape, while preserving authority type, statute/title, jurisdiction, section/topic reference, source path, and document title metadata where available.
+- `2026-05-12 16:24 IST` Expanded local dataset logging to show detected/new JSON files, invalid or skipped payloads, skipped item counts, ingestion counts, and extracted authority metadata.
+- `2026-05-12 16:24 IST` Kept routing behavior unchanged: the new datasets flow through the existing local direct-answer path, hybrid grounded retrieval, and CX-assisted fallback without changing practical legal-help routing.
+- `2026-05-12 16:24 IST` Added focused regressions in [`tests/test_legal_dataset_service.py`](d:/AI-Chatbot/tests/test_legal_dataset_service.py) and [`tests/test_chat.py`](d:/AI-Chatbot/tests/test_chat.py) for ARMS, Juvenile Justice, object-style JSON ingestion, simplified aliases, and local fast-path answers.
+
+### Verified
+- `2026-05-12 16:24 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_legal_dataset_service.py tests\test_hybrid_retrieval.py tests\test_chat.py::test_discovered_ni_act_dataset_uses_local_fast_path_without_external_lookup tests\test_chat.py::test_new_bsa_dataset_uses_local_fast_path_without_external_lookup tests\test_chat.py::test_new_arms_dataset_uses_local_fast_path_without_external_lookup tests\test_chat.py::test_bns_query_uses_local_dataset_when_external_sources_fail tests\test_chat.py::test_local_legal_dataset_supports_bare_section_lookup_without_external_lookup -q` (`24 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-12 16:24 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\services\legal_dataset_service.py backend\app\services\legal_hybrid_retrieval.py backend\app\services\chat_service.py tests\test_legal_dataset_service.py tests\test_chat.py`.
+- `2026-05-12 16:24 IST` Ran `git diff --check`; it reported only existing LF-to-CRLF working-copy warnings.
+- `2026-05-12 16:24 IST` Ran a real-dataset smoke check confirming local matches for `section 3 arms act`, `section 3 juvenile justice act`, `section 3 biological diversity act`, `section 5 environment protection act`, `section 11 income tax act`, `section 7 patents act`, and `section 12 wildlife protection act`.
+
+### Admin Navigation Visibility
+- `2026-05-12 15:15 IST` Added a safe frontend auth-user allow-list in [`Frontend/auth.js`](d:/AI-Chatbot/Frontend/auth.js) and [`Frontend/app.js`](d:/AI-Chatbot/Frontend/app.js), preserving only non-sensitive fields such as `id`, `full_name`, `email`, `role`, `status`, `state`, and `created_at`.
+- `2026-05-12 15:15 IST` Added a hidden-by-default `Admin Panel` link in [`Frontend/Index.html`](d:/AI-Chatbot/Frontend/Index.html) and revealed it in [`Frontend/app.js`](d:/AI-Chatbot/Frontend/app.js) only when the authenticated user's role is exactly `admin`.
+- `2026-05-12 15:15 IST` Kept login behavior unchanged so admins still land on and can use the normal chat UI; no admin auto-redirect was added.
+- `2026-05-12 15:15 IST` Kept backend admin protection unchanged and did not alter chatbot routing logic.
+- `2026-05-12 15:15 IST` Added focused static coverage in [`tests/test_frontend_ui_static.py`](d:/AI-Chatbot/tests/test_frontend_ui_static.py) for hidden default navigation, admin-only role reveal logic, safe stored auth fields, and no admin-login redirect.
+
+### Verified
+- `2026-05-12 15:15 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_frontend_ui_static.py -q` (`13 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-12 15:15 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_auth_flow.py::test_signup_defaults_to_user_role_and_ignores_public_admin_role tests\test_auth_flow.py::test_admin_me_blocks_normal_user_and_returns_safe_admin_user -q` (`2 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-12 15:15 IST` Ran `.\venv\Scripts\python.exe -m py_compile tests\test_frontend_ui_static.py`.
+
+### Admin User Status Controls
+- `2026-05-12 15:02 IST` Added MongoDB-backed user `status` handling in [`backend/app/services/mongo_session_store.py`](d:/AI-Chatbot/backend/app/services/mongo_session_store.py), with existing invalid/missing statuses normalized to `active` and new local/Google users created as `active`.
+- `2026-05-12 15:02 IST` Added protected `PATCH /admin/users/{user_id}/status` in [`backend/app/api/routes/admin.py`](d:/AI-Chatbot/backend/app/api/routes/admin.py) for admin-only block/unblock of normal users, rejecting invalid statuses, self-block attempts, and admin-user targets.
+- `2026-05-12 15:02 IST` Updated [`backend/app/api/routes/chat.py`](d:/AI-Chatbot/backend/app/api/routes/chat.py) so `blocked` users receive `403` before chat endpoint work runs, using the existing chat availability gate without refactoring chatbot routing.
+- `2026-05-12 15:02 IST` Added status display plus block/unblock buttons in the admin Users section in [`Frontend/admin.html`](d:/AI-Chatbot/Frontend/admin.html) and [`Frontend/admin.js`](d:/AI-Chatbot/Frontend/admin.js), while keeping sensitive fields hidden and deletion out of scope.
+- `2026-05-12 15:02 IST` Logged status changes in admin activity as `updated_user_status_blocked` and `updated_user_status_active`, with safe user target metadata only.
+- `2026-05-12 15:02 IST` Added focused backend and frontend regressions in [`tests/test_auth_flow.py`](d:/AI-Chatbot/tests/test_auth_flow.py) and [`tests/test_frontend_ui_static.py`](d:/AI-Chatbot/tests/test_frontend_ui_static.py).
+
+### Verified
+- `2026-05-12 15:02 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_auth_flow.py::test_signup_defaults_to_user_role_and_ignores_public_admin_role tests\test_auth_flow.py::test_admin_users_supports_search_pagination_and_hides_sensitive_fields tests\test_auth_flow.py::test_admin_can_block_and_unblock_normal_user_and_activity_is_logged tests\test_auth_flow.py::test_admin_user_status_update_blocks_self_admin_targets_invalid_status_and_normal_users tests\test_frontend_ui_static.py::test_admin_frontend_shell_is_read_only_and_loads_stats tests\test_frontend_ui_static.py::test_admin_navigation_and_responsive_layout_are_polished_without_write_actions tests\test_frontend_ui_static.py::test_admin_users_list_ui_is_read_only_and_uses_safe_fields -q` (`7 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-12 15:02 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_auth_flow.py -q` (`37 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-12 15:02 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_frontend_ui_static.py -q` (`12 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-12 15:02 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\api\routes\admin.py backend\app\api\routes\chat.py backend\app\models\schemas.py backend\app\services\mongo_session_store.py tests\test_auth_flow.py tests\test_frontend_ui_static.py`.
+
+### Expanded Legal JSON Dataset Metadata
+- `2026-05-12 14:48 IST` Extended [`backend/app/services/legal_dataset_service.py`](d:/AI-Chatbot/backend/app/services/legal_dataset_service.py) with explicit statute metadata and lookup aliases for `BSA.json`, `BNSS.json`, `COMPANIES ACT.json`, `consumer laws.json`, `IT.json`, and `SCST.json`.
+- `2026-05-12 14:48 IST` Preserved decimal section references such as `Section 1.1`, kept title-only extracted records retrievable when `content` is empty, and retained authority type, statute name, jurisdiction, source path, section reference, and document title metadata in the local legal dataset document shape.
+- `2026-05-12 14:48 IST` Kept routing behavior unchanged: the new files enter the existing local direct-answer, hybrid grounded retrieval, and Google CX-assisted fallback paths without changing practical legal-help routing.
+- `2026-05-12 14:48 IST` Added focused regressions in [`tests/test_legal_dataset_service.py`](d:/AI-Chatbot/tests/test_legal_dataset_service.py) and [`tests/test_chat.py`](d:/AI-Chatbot/tests/test_chat.py) for BSA-style records, decimal consumer-law sections, and local BSA direct answers.
+
+### Verified
+- `2026-05-12 14:48 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_legal_dataset_service.py tests\test_hybrid_retrieval.py tests\test_chat.py::test_discovered_ni_act_dataset_uses_local_fast_path_without_external_lookup tests\test_chat.py::test_new_bsa_dataset_uses_local_fast_path_without_external_lookup tests\test_chat.py::test_bns_query_uses_local_dataset_when_external_sources_fail tests\test_chat.py::test_local_legal_dataset_supports_bare_section_lookup_without_external_lookup -q` (`19 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-12 14:48 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\services\legal_dataset_service.py backend\app\services\legal_hybrid_retrieval.py backend\app\services\chat_service.py tests\test_legal_dataset_service.py tests\test_chat.py`.
+- `2026-05-12 14:48 IST` Ran a real-dataset smoke check confirming local matches and inventory counts for `section 3 bsa`, `section 35 bnss`, `section 2 companies act`, `section 1.1 consumer laws`, `section 66 it act`, and `section 3 scst`.
+
+### Legal JSON Dataset Auto-Discovery
+- `2026-05-12 11:31 IST` Updated [`backend/app/services/legal_dataset_service.py`](d:/AI-Chatbot/backend/app/services/legal_dataset_service.py) to scan `data/legal_datasets/*.json`, detect new statute datasets such as CPC, CRPC, HMA, IDA, IEA, MVA, and NIA, normalize section/article JSON schemas, and preserve authority type, statute name, jurisdiction, section/article reference, source path, and document title metadata.
+- `2026-05-12 11:31 IST` Added dataset logs for detected JSON files, newly detected files, ingestion counts, skipped non-array payloads, invalid JSON files, and extracted authority metadata.
+- `2026-05-12 11:31 IST` Wired discovered legal JSON records into the same local legal dataset document shape used by grounded retrieval, so they participate in direct provision answers, hybrid grounded retrieval, and Google CX-assisted fallback paths without changing practical legal-help routing.
+- `2026-05-12 11:31 IST` Updated focused coverage in [`tests/test_legal_dataset_service.py`](d:/AI-Chatbot/tests/test_legal_dataset_service.py) and [`tests/test_chat.py`](d:/AI-Chatbot/tests/test_chat.py) for discovered NIA/IEA records and local fast-path answers from newly discovered statute JSON files.
+
+### Verified
+- `2026-05-12 11:31 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_legal_dataset_service.py tests\test_hybrid_retrieval.py tests\test_chat.py::test_discovered_ni_act_dataset_uses_local_fast_path_without_external_lookup tests\test_chat.py::test_bns_query_uses_local_dataset_when_external_sources_fail tests\test_chat.py::test_local_legal_dataset_supports_bare_section_lookup_without_external_lookup -q` (`16 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-12 11:31 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\services\legal_dataset_service.py backend\app\services\legal_hybrid_retrieval.py backend\app\services\chat_service.py`.
+- `2026-05-12 11:31 IST` Ran a real-dataset smoke check confirming local matches for `section 138 ni act`, `section 65 evidence act`, `section 13 hindu marriage act`, `section 166 motor vehicles act`, `section 482 crpc`, and `section 9 cpc`, with nonzero inventory for Constitution, IPC, BNS, CPC, CRPC, HMA, IDA, IEA, MVA, and NIA.
+
+### Admin Maintenance Mode Runtime Write Support
+- `2026-05-12 10:51 IST` Tightened protected `PATCH /admin/config/maintenance` in [`backend/app/api/routes/admin.py`](d:/AI-Chatbot/backend/app/api/routes/admin.py) so clients may send the explicit `maintenance_mode` key while the existing admin UI `enabled` payload remains supported; conflicting values are rejected.
+- `2026-05-12 10:51 IST` Updated focused backend coverage in [`tests/test_auth_flow.py`](d:/AI-Chatbot/tests/test_auth_flow.py) to exercise writing `maintenance_mode` directly, while keeping runtime storage, admin-only access, activity logging, and chat runtime-over-env enforcement scoped to maintenance mode only.
+
+### Verified
+- `2026-05-12 10:51 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_auth_flow.py::test_admin_can_update_maintenance_mode_in_runtime_config_only tests\test_auth_flow.py::test_runtime_maintenance_config_overrides_env_fallback tests\test_auth_flow.py::test_admin_maintenance_config_patch_blocks_normal_user tests\test_auth_flow.py::test_maintenance_mode_blocks_normal_user_from_chat tests\test_auth_flow.py::test_maintenance_mode_allows_admin_user_to_chat tests\test_frontend_ui_static.py::test_admin_config_ui_allows_only_maintenance_mode_write_and_hides_runtime_values -q` (`6 passed`, `1 warning` for `PyPDF2` deprecation).
+
+## 2026-05-11
+
+### Admin Maintenance Mode Runtime Write Support
+- `2026-05-11 17:17 IST` Added MongoDB-backed runtime config storage in [`backend/app/services/mongo_session_store.py`](d:/AI-Chatbot/backend/app/services/mongo_session_store.py) with safe boolean get/set helpers for `maintenance_mode`.
+- `2026-05-11 17:17 IST` Added protected admin-only `PATCH /admin/config/maintenance` in [`backend/app/api/routes/admin.py`](d:/AI-Chatbot/backend/app/api/routes/admin.py), updating only maintenance mode and returning the same safe config payload without secrets or raw env values.
+- `2026-05-11 17:17 IST` Updated chat maintenance enforcement in [`backend/app/api/routes/chat.py`](d:/AI-Chatbot/backend/app/api/routes/chat.py) to read MongoDB runtime config first and fall back to the existing `MAINTENANCE_MODE` setting when no runtime value exists.
+- `2026-05-11 17:17 IST` Logged maintenance changes through existing admin activity as `updated_maintenance_mode` with safe target metadata only.
+- `2026-05-11 17:17 IST` Added a maintenance-mode-only Config section toggle in [`Frontend/admin.js`](d:/AI-Chatbot/Frontend/admin.js) with confirmation before enabling maintenance mode, plus small styling in [`Frontend/style.css`](d:/AI-Chatbot/Frontend/style.css).
+- `2026-05-11 17:17 IST` Kept scope limited: no write controls were added for Google, India Kanoon, OpenAI, feedback, or other config values, and no chatbot routing logic was refactored.
+
+### Verified
+- `2026-05-11 17:17 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_auth_flow.py::test_admin_can_update_maintenance_mode_in_runtime_config_only tests\test_auth_flow.py::test_runtime_maintenance_config_overrides_env_fallback tests\test_auth_flow.py::test_admin_maintenance_config_patch_blocks_normal_user tests\test_auth_flow.py::test_maintenance_mode_blocks_normal_user_from_chat tests\test_auth_flow.py::test_maintenance_mode_allows_admin_user_to_chat tests\test_frontend_ui_static.py::test_admin_config_ui_allows_only_maintenance_mode_write_and_hides_runtime_values -q` (`6 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-11 17:17 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\api\routes\admin.py backend\app\api\routes\chat.py backend\app\services\mongo_session_store.py backend\app\services\storage.py tests\test_auth_flow.py tests\test_frontend_ui_static.py`.
+
+### Admin Maintenance Mode Enforcement
+- `2026-05-11 17:06 IST` Added a narrow maintenance-mode guard in [`backend/app/api/routes/chat.py`](d:/AI-Chatbot/backend/app/api/routes/chat.py) using the existing `MAINTENANCE_MODE` setting.
+- `2026-05-11 17:06 IST` Normal users now receive `503` with `The system is temporarily under maintenance. Please try again later.` when accessing chat endpoints during maintenance mode.
+- `2026-05-11 17:06 IST` Admin users remain allowed through the same chat endpoints, and auth plus admin routes remain available while maintenance mode is enabled.
+- `2026-05-11 17:06 IST` Added focused coverage in [`tests/test_auth_flow.py`](d:/AI-Chatbot/tests/test_auth_flow.py) for normal-user blocking, admin chat access, and auth/admin endpoint availability during maintenance mode.
+- `2026-05-11 17:06 IST` Kept the change backend-only: no UI edit controls, save actions, feature-toggle mutation routes, or chatbot routing refactors were added.
+
+### Verified
+- `2026-05-11 17:06 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_auth_flow.py::test_maintenance_mode_blocks_normal_user_from_chat tests\test_auth_flow.py::test_maintenance_mode_allows_admin_user_to_chat tests\test_auth_flow.py::test_maintenance_mode_keeps_auth_and_admin_endpoints_available tests\test_auth_flow.py::test_admin_config_returns_safe_read_only_feature_toggles -q` (`4 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-11 17:06 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\api\routes\chat.py tests\test_auth_flow.py`.
+
+### Admin Feature Flags And Runtime Toggles
+- `2026-05-11 17:02 IST` Added safe runtime feature-flag support in [`backend/app/core/config.py`](d:/AI-Chatbot/backend/app/core/config.py), including `MAINTENANCE_MODE` as a boolean setting without changing chatbot routing behavior.
+- `2026-05-11 17:02 IST` Added protected read-only `GET /admin/config` in [`backend/app/api/routes/admin.py`](d:/AI-Chatbot/backend/app/api/routes/admin.py), returning only safe operational toggles for Google fallback, India Kanoon retrieval, direct answers, user feedback, and maintenance mode.
+- `2026-05-11 17:02 IST` Kept the config payload free of API keys, tokens, secrets, connection strings, SMTP values, raw environment values, and edit/save actions.
+- `2026-05-11 17:02 IST` Added a read-only Config section in [`Frontend/admin.html`](d:/AI-Chatbot/Frontend/admin.html), wired [`Frontend/admin.js`](d:/AI-Chatbot/Frontend/admin.js) to load `/admin/config`, and added loading, empty, error, and refresh states.
+- `2026-05-11 17:02 IST` Added responsive config toggle-card styling in [`Frontend/style.css`](d:/AI-Chatbot/Frontend/style.css) and focused backend/frontend coverage in [`tests/test_auth_flow.py`](d:/AI-Chatbot/tests/test_auth_flow.py) and [`tests/test_frontend_ui_static.py`](d:/AI-Chatbot/tests/test_frontend_ui_static.py).
+
+### Verified
+- `2026-05-11 17:02 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_frontend_ui_static.py tests\test_auth_flow.py::test_admin_config_returns_safe_read_only_feature_toggles -q` (`13 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-11 17:02 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\api\routes\admin.py backend\app\core\config.py tests\test_auth_flow.py tests\test_frontend_ui_static.py`.
+
+### Admin Frontend Navigation And Responsive Layout
+- `2026-05-11 15:06 IST` Polished the read-only admin sidebar in [`Frontend/admin.html`](d:/AI-Chatbot/Frontend/admin.html) and [`Frontend/admin.js`](d:/AI-Chatbot/Frontend/admin.js) so navigation links cover every existing admin section and update active highlighting on click and scroll.
+- `2026-05-11 15:06 IST` Improved responsive admin layout in [`Frontend/style.css`](d:/AI-Chatbot/Frontend/style.css) with sticky/scrollable desktop navigation, horizontal mobile navigation, compact stat cards, tighter panels, and labeled mobile table rows for users, chats, quality logs, system status, direct-answer content, feedback, and admin activity surfaces.
+- `2026-05-11 15:06 IST` Added frontend static coverage in [`tests/test_frontend_ui_static.py`](d:/AI-Chatbot/tests/test_frontend_ui_static.py) for active-section navigation hooks, mobile table labels, responsive CSS hooks, read-only constraints, and sensitive-field exclusion.
+- `2026-05-11 15:06 IST` Kept the change UI-only: no backend endpoints, admin write actions, exposed sensitive fields, or chatbot routing changes were added.
+
+### Verified
+- `2026-05-11 15:06 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_frontend_ui_static.py -q` (`11 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-11 15:06 IST` Ran `.\venv\Scripts\python.exe -m py_compile tests\test_frontend_ui_static.py`.
+
+### Admin Activity Audit Log Foundation
+- `2026-05-11 15:00 IST` Added MongoDB-backed safe admin activity storage in [`backend/app/services/mongo_session_store.py`](d:/AI-Chatbot/backend/app/services/mongo_session_store.py), recording admin user ID/email, action name, timestamp, and optional safe target type/id only.
+- `2026-05-11 15:00 IST` Added lightweight admin activity recording in [`backend/app/api/routes/admin.py`](d:/AI-Chatbot/backend/app/api/routes/admin.py) for read-only admin views such as users, chats, quality logs, feedback, direct-answer content, dashboard, and system status, without logging secrets, tokens, request bodies, or full chat contents.
+- `2026-05-11 15:00 IST` Added protected read-only `GET /admin/activity` with pagination for recent admin audit events.
+- `2026-05-11 15:00 IST` Added a read-only Admin Activity section in [`Frontend/admin.html`](d:/AI-Chatbot/Frontend/admin.html), wired [`Frontend/admin.js`](d:/AI-Chatbot/Frontend/admin.js) to load `/admin/activity`, and added loading, empty, error, and pagination states.
+- `2026-05-11 15:00 IST` Added compact activity table styling in [`Frontend/style.css`](d:/AI-Chatbot/Frontend/style.css) and focused backend/frontend tests in [`tests/test_auth_flow.py`](d:/AI-Chatbot/tests/test_auth_flow.py) and [`tests/test_frontend_ui_static.py`](d:/AI-Chatbot/tests/test_frontend_ui_static.py). No admin write actions were added.
+
+### Verified
+- `2026-05-11 15:00 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_frontend_ui_static.py tests\test_auth_flow.py::test_admin_activity_logs_safe_read_only_view_events -q` (`11 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-11 15:00 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\api\routes\admin.py backend\app\services\mongo_session_store.py backend\app\services\storage.py tests\test_auth_flow.py tests\test_frontend_ui_static.py`.
+
+### Admin Feedback Filters And Summary
+- `2026-05-11 14:47 IST` Extended protected read-only `GET /admin/feedback` in [`backend/app/api/routes/admin.py`](d:/AI-Chatbot/backend/app/api/routes/admin.py) and [`backend/app/services/mongo_session_store.py`](d:/AI-Chatbot/backend/app/services/mongo_session_store.py) with safe `rating=up|down`, `recent_limit`, pagination, and summary counts.
+- `2026-05-11 14:47 IST` Added feedback summary fields for total feedback, thumbs up, thumbs down, and unchecked count while keeping the admin payload free of user personal data, auth/session tokens, password hashes, OAuth IDs, and provider internals.
+- `2026-05-11 14:47 IST` Updated the read-only admin Feedback section in [`Frontend/admin.html`](d:/AI-Chatbot/Frontend/admin.html) and [`Frontend/admin.js`](d:/AI-Chatbot/Frontend/admin.js) with summary cards, thumbs up/down filters, recent-limit controls, loading, empty, and error states.
+- `2026-05-11 14:47 IST` Added compact feedback summary styling in [`Frontend/style.css`](d:/AI-Chatbot/Frontend/style.css) and focused backend/frontend coverage in [`tests/test_auth_flow.py`](d:/AI-Chatbot/tests/test_auth_flow.py) and [`tests/test_frontend_ui_static.py`](d:/AI-Chatbot/tests/test_frontend_ui_static.py). No resolve, edit, delete, approve, or settings controls were added.
+
+### Verified
+- `2026-05-11 14:47 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_frontend_ui_static.py tests\test_auth_flow.py::test_message_feedback_submission_and_admin_listing_are_safe -q` (`10 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-11 14:47 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\api\routes\admin.py backend\app\services\mongo_session_store.py backend\app\services\storage.py tests\test_auth_flow.py tests\test_frontend_ui_static.py`.
+
+### Admin Feedback Collection Foundation
+- `2026-05-11 12:36 IST` Added optional assistant-message feedback storage in [`backend/app/services/mongo_session_store.py`](d:/AI-Chatbot/backend/app/services/mongo_session_store.py), supporting thumbs up/down ratings, optional short comments, related chat/message IDs, user ownership, and timestamps.
+- `2026-05-11 12:36 IST` Added normal-user `POST /chat/messages/{message_id}/feedback` in [`backend/app/api/routes/chat.py`](d:/AI-Chatbot/backend/app/api/routes/chat.py), restricted feedback to assistant messages owned by the current user's chat session, and added `assistant_message_id` to chat responses so fresh assistant replies can be rated.
+- `2026-05-11 12:36 IST` Added protected read-only `GET /admin/feedback` in [`backend/app/api/routes/admin.py`](d:/AI-Chatbot/backend/app/api/routes/admin.py), returning safe feedback rows with chat ID, message ID, rating, optional comment, and timestamp only.
+- `2026-05-11 12:36 IST` Added simple thumbs up/down buttons to assistant messages in [`Frontend/app.js`](d:/AI-Chatbot/Frontend/app.js) and feedback button styling in [`Frontend/style.css`](d:/AI-Chatbot/Frontend/style.css).
+- `2026-05-11 12:36 IST` Added a read-only admin Feedback section in [`Frontend/admin.html`](d:/AI-Chatbot/Frontend/admin.html), wired [`Frontend/admin.js`](d:/AI-Chatbot/Frontend/admin.js) to load `/admin/feedback`, and added loading, empty, error, and pagination states. No approve, edit, or delete controls were added.
+- `2026-05-11 12:36 IST` Updated focused backend/frontend tests in [`tests/test_auth_flow.py`](d:/AI-Chatbot/tests/test_auth_flow.py) and [`tests/test_frontend_ui_static.py`](d:/AI-Chatbot/tests/test_frontend_ui_static.py) for feedback ownership, admin sanitization, frontend buttons, and read-only admin display.
+
+### Verified
+- `2026-05-11 12:36 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_frontend_ui_static.py tests\test_auth_flow.py::test_message_feedback_submission_and_admin_listing_are_safe -q` (`10 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-11 12:36 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\api\routes\chat.py backend\app\api\routes\admin.py backend\app\models\schemas.py backend\app\services\chat_service.py backend\app\services\mongo_session_store.py backend\app\services\storage.py tests\test_auth_flow.py tests\test_frontend_ui_static.py`.
+
+### Admin Direct-Answer Content Viewer
+- `2026-05-11 12:26 IST` Added protected read-only `GET /admin/content/direct-answers` in [`backend/app/api/routes/admin.py`](d:/AI-Chatbot/backend/app/api/routes/admin.py), returning local direct-answer inventory only.
+- `2026-05-11 12:26 IST` Added `dataset_inventory()` in [`backend/app/services/legal_dataset_service.py`](d:/AI-Chatbot/backend/app/services/legal_dataset_service.py) so the admin endpoint can report Constitution, IPC, BNS, and BNSS availability, counts, file names, and source names without returning provision text or full dataset contents.
+- `2026-05-11 12:26 IST` Included safe direct explainer catalog names and counts for constitutional and general legal explainers without returning answer bodies, legal positions, next steps, or large catalog payloads.
+- `2026-05-11 12:26 IST` Added a read-only Direct Answer Content section in [`Frontend/admin.html`](d:/AI-Chatbot/Frontend/admin.html), wired [`Frontend/admin.js`](d:/AI-Chatbot/Frontend/admin.js) to load `/admin/content/direct-answers`, and added loading, empty, and error states.
+- `2026-05-11 12:26 IST` Added inventory layout styles in [`Frontend/style.css`](d:/AI-Chatbot/Frontend/style.css) and focused backend/frontend tests in [`tests/test_auth_flow.py`](d:/AI-Chatbot/tests/test_auth_flow.py) and [`tests/test_frontend_ui_static.py`](d:/AI-Chatbot/tests/test_frontend_ui_static.py). No content editing controls were added.
+
+### Verified
+- `2026-05-11 12:26 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_frontend_ui_static.py tests\test_auth_flow.py::test_admin_direct_answer_content_returns_inventory_without_dataset_contents -q` (`8 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-11 12:26 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\api\routes\admin.py backend\app\services\legal_dataset_service.py tests\test_auth_flow.py tests\test_frontend_ui_static.py`.
+
+### Admin Quality Logs
+- `2026-05-11 12:19 IST` Added protected read-only `GET /admin/quality/logs` in [`backend/app/api/routes/admin.py`](d:/AI-Chatbot/backend/app/api/routes/admin.py), backed by sanitized assistant-message quality log retrieval in [`backend/app/services/mongo_session_store.py`](d:/AI-Chatbot/backend/app/services/mongo_session_store.py).
+- `2026-05-11 12:19 IST` The endpoint returns recent assistant quality rows with chat ID, timestamp, route type, confidence, fallback reason, validation flags, and source sufficiency only, with pagination plus `fallback_only`, `low_confidence_only`, and `unsupported_output_only` filters.
+- `2026-05-11 12:19 IST` Kept full user personal data, message text, auth/session tokens, OAuth identifiers, password hashes, and provider internals out of the quality-log payload.
+- `2026-05-11 12:19 IST` Added a read-only Quality Logs section in [`Frontend/admin.html`](d:/AI-Chatbot/Frontend/admin.html), wired [`Frontend/admin.js`](d:/AI-Chatbot/Frontend/admin.js) to load `/admin/quality/logs`, and added matching frontend filters, pagination, loading, empty, and error states.
+- `2026-05-11 12:19 IST` Added compact risk-row styling in [`Frontend/style.css`](d:/AI-Chatbot/Frontend/style.css) and focused backend/frontend tests in [`tests/test_auth_flow.py`](d:/AI-Chatbot/tests/test_auth_flow.py) and [`tests/test_frontend_ui_static.py`](d:/AI-Chatbot/tests/test_frontend_ui_static.py).
+
+### Verified
+- `2026-05-11 12:19 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_frontend_ui_static.py tests\test_auth_flow.py::test_admin_quality_logs_returns_safe_paginated_filtered_assistant_metadata -q` (`7 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-11 12:19 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\api\routes\admin.py backend\app\services\mongo_session_store.py tests\test_auth_flow.py tests\test_frontend_ui_static.py`.
+
+### Admin System Status
+- `2026-05-11 12:14 IST` Added protected read-only `GET /admin/system/status` in [`backend/app/api/routes/admin.py`](d:/AI-Chatbot/backend/app/api/routes/admin.py), returning only safe operational booleans for MongoDB reachability and whether India Kanoon, Google Custom Search, OpenAI, and SMTP are configured.
+- `2026-05-11 12:14 IST` Kept the status payload free of API keys, tokens, secrets, SMTP addresses/passwords, environment values, MongoDB URIs, database names, and connection strings.
+- `2026-05-11 12:14 IST` Added a System Status section to [`Frontend/admin.html`](d:/AI-Chatbot/Frontend/admin.html) and wired [`Frontend/admin.js`](d:/AI-Chatbot/Frontend/admin.js) to load `/admin/system/status` on boot and on refresh, with loading/error states.
+- `2026-05-11 12:14 IST` Added green/yellow/red read-only indicators in [`Frontend/style.css`](d:/AI-Chatbot/Frontend/style.css) for reachable/configured, not-configured, and offline states. No settings edit controls were added.
+- `2026-05-11 12:14 IST` Updated focused backend/frontend tests in [`tests/test_auth_flow.py`](d:/AI-Chatbot/tests/test_auth_flow.py) and [`tests/test_frontend_ui_static.py`](d:/AI-Chatbot/tests/test_frontend_ui_static.py) for safe status output, UI loading, indicators, and sensitive-value exclusion.
+
+### Verified
+- `2026-05-11 12:14 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_frontend_ui_static.py tests\test_auth_flow.py::test_admin_system_status_returns_safe_operational_booleans -q` (`6 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-11 12:14 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\api\routes\admin.py tests\test_auth_flow.py tests\test_frontend_ui_static.py`.
+
+### Admin Response Audit UI
+- `2026-05-11 11:54 IST` Added a read-only admin chat inspection surface in [`Frontend/admin.html`](d:/AI-Chatbot/Frontend/admin.html) for loading a user's chat sessions and opening message transcripts from the existing admin APIs.
+- `2026-05-11 11:54 IST` Updated [`Frontend/admin.js`](d:/AI-Chatbot/Frontend/admin.js) to render response-quality metadata when available: route type, confidence, fallback reason, validation flags, disclaimer mode, and source sufficiency.
+- `2026-05-11 11:54 IST` Added read-only message filters for fallback responses, low-confidence responses, and unsupported-output responses, plus visual risk highlighting for fallback/low-confidence/unsupported assistant messages.
+- `2026-05-11 11:54 IST` Expanded sanitized admin metadata in [`backend/app/services/mongo_session_store.py`](d:/AI-Chatbot/backend/app/services/mongo_session_store.py) to preserve only the safe response-quality fields needed by the audit UI, while continuing to exclude auth tokens, password hashes, OAuth IDs, provider internals, and raw retrieval documents.
+- `2026-05-11 11:54 IST` Updated [`tests/test_frontend_ui_static.py`](d:/AI-Chatbot/tests/test_frontend_ui_static.py) and [`tests/test_auth_flow.py`](d:/AI-Chatbot/tests/test_auth_flow.py) to cover the read-only audit UI, filter controls, risk styling hooks, safe metadata fields, and sensitive-field exclusion.
+
+### Verified
+- `2026-05-11 11:54 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_frontend_ui_static.py tests\test_auth_flow.py::test_admin_chat_inspection_allows_admin_and_sanitizes_metadata -q` (`5 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-11 11:54 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\services\mongo_session_store.py tests\test_auth_flow.py tests\test_frontend_ui_static.py`.
+- `2026-05-11 11:54 IST` Ran `git diff --check`; it reported only existing line-ending warnings and no whitespace errors.
+
+## 2026-05-09
+
+### Admin Users List UI
+- `2026-05-09 14:25 IST` Connected [`Frontend/admin.js`](d:/AI-Chatbot/Frontend/admin.js) to `GET /admin/users`, loading the user list after admin verification and rendering only safe fields: name/email, role, created date, and last-active-style values when present.
+- `2026-05-09 14:25 IST` Replaced the users placeholder in [`Frontend/admin.html`](d:/AI-Chatbot/Frontend/admin.html) with a read-only users table, search input, limit selector, and previous/next pagination controls. No edit, delete, block, or promote actions were added.
+- `2026-05-09 14:25 IST` Extended [`Frontend/style.css`](d:/AI-Chatbot/Frontend/style.css) with compact admin user-table, control, and pagination styles while reusing the existing panel/button/input palette.
+- `2026-05-09 14:25 IST` Updated [`tests/test_frontend_ui_static.py`](d:/AI-Chatbot/tests/test_frontend_ui_static.py) to verify the users list shell, `/admin/users` loading, safe-field rendering, and absence of sensitive-field references in the frontend script.
+
+### Verified
+- `2026-05-09 14:25 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_frontend_ui_static.py -q` (`3 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-09 14:25 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_auth_flow.py tests\test_frontend_ui_static.py -q` (`26 passed`, `1 warning` for `PyPDF2` deprecation).
+
+### Read-Only Admin Frontend Shell
+- `2026-05-09 14:04 IST` Added [`Frontend/admin.html`](d:/AI-Chatbot/Frontend/admin.html), a read-only admin shell with a top header, sidebar navigation, dashboard section, users placeholder, and chats placeholder. No edit, delete, block, or other write controls were added.
+- `2026-05-09 14:04 IST` Added [`Frontend/admin.js`](d:/AI-Chatbot/Frontend/admin.js) to verify admin access through `/admin/me` using the existing cookie/session auth flow, then load and render `/admin/stats` totals and recent session activity.
+- `2026-05-09 14:04 IST` Added `GET /admin/me` in [`backend/app/api/routes/admin.py`](d:/AI-Chatbot/backend/app/api/routes/admin.py) and protected `/frontend/admin.html` in [`backend/app/main.py`](d:/AI-Chatbot/backend/app/main.py) behind the existing authenticated frontend guard.
+- `2026-05-09 14:04 IST` Extended [`Frontend/style.css`](d:/AI-Chatbot/Frontend/style.css) with compact admin shell styles that reuse the existing app palette, sidebar, buttons, error banner, and typography patterns.
+- `2026-05-09 14:04 IST` Added focused tests in [`tests/test_auth_flow.py`](d:/AI-Chatbot/tests/test_auth_flow.py) and [`tests/test_frontend_ui_static.py`](d:/AI-Chatbot/tests/test_frontend_ui_static.py) for admin page protection, safe `/admin/me`, stats loading references, and read-only frontend structure.
+
+### Verified
+- `2026-05-09 14:04 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_auth_flow.py tests\test_frontend_ui_static.py -q` (`25 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-09 14:04 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\main.py backend\app\api\routes\admin.py tests\test_auth_flow.py tests\test_frontend_ui_static.py`.
+
+### Admin Chat Inspection API
+- `2026-05-09 12:40 IST` Added protected read-only admin chat inspection endpoints in [`backend/app/api/routes/admin.py`](d:/AI-Chatbot/backend/app/api/routes/admin.py): `GET /admin/users/{user_id}/chats` and `GET /admin/chats/{chat_id}/messages`.
+- `2026-05-09 12:40 IST` Added sanitized MongoDB admin chat inspection helpers in [`backend/app/services/mongo_session_store.py`](d:/AI-Chatbot/backend/app/services/mongo_session_store.py) for per-user chat lists and chat message transcripts, including timestamps plus allowed routing metadata such as `route_type`, `confidence`, and `fallback_reason` while filtering auth/session tokens, password hashes, OAuth IDs, and provider internals.
+- `2026-05-09 12:40 IST` Added focused tests in [`tests/test_auth_flow.py`](d:/AI-Chatbot/tests/test_auth_flow.py) for normal-user blocking, admin access, missing user/chat `404` handling, and message/session metadata sanitization. No admin UI or write actions were added.
+
+### Verified
+- `2026-05-09 12:40 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_auth_flow.py -q` (`21 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-09 12:40 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\api\routes\admin.py backend\app\services\mongo_session_store.py backend\app\services\storage.py tests\test_auth_flow.py`.
+
+### Read-Only Admin API Foundation
+- `2026-05-09 12:33 IST` Added [`backend/app/api/routes/admin.py`](d:/AI-Chatbot/backend/app/api/routes/admin.py) with protected read-only admin endpoints: `GET /admin/stats` and `GET /admin/users`.
+- `2026-05-09 12:33 IST` Mounted the admin router in [`backend/app/main.py`](d:/AI-Chatbot/backend/app/main.py); every admin route uses `require_admin_user()` and no admin UI, delete, block, or edit actions were added.
+- `2026-05-09 12:33 IST` Added sanitized MongoDB admin read helpers in [`backend/app/services/mongo_session_store.py`](d:/AI-Chatbot/backend/app/services/mongo_session_store.py) for total users, chat sessions, messages, recent sessions, and paginated/searchable users without returning password hashes, auth/session tokens, reset tokens, OAuth IDs, or auth-provider internals.
+- `2026-05-09 12:33 IST` Added focused admin endpoint regressions in [`tests/test_auth_flow.py`](d:/AI-Chatbot/tests/test_auth_flow.py) for unauthenticated blocking, normal-user blocking, admin access, search/pagination behavior, and sensitive-field sanitization.
+
+### Verified
+- `2026-05-09 12:33 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_auth_flow.py -q` (`18 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-09 12:33 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\main.py backend\app\api\routes\admin.py backend\app\services\mongo_session_store.py backend\app\services\storage.py tests\test_auth_flow.py`.
+
+### Admin Authorization Foundation
+- `2026-05-09 12:24 IST` Added reusable `require_admin_user()` authorization in [`backend/app/api/auth_utils.py`](d:/AI-Chatbot/backend/app/api/auth_utils.py), layered on the existing session/cookie auth flow: unauthenticated requests keep the existing `401 Authentication required`, while authenticated non-admin users receive `403 Admin access required`.
+- `2026-05-09 12:24 IST` Added focused tests in [`tests/test_auth_flow.py`](d:/AI-Chatbot/tests/test_auth_flow.py) using a test-only probe route to verify unauthenticated blocking, normal-user blocking, and promoted-admin access without adding any production admin API route or UI.
+
+### Verified
+- `2026-05-09 12:24 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_auth_flow.py -q` (`14 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-09 12:24 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\api\auth_utils.py tests\test_auth_flow.py`.
+
+### Admin Role Foundation
+- `2026-05-09 12:10 IST` Added MongoDB user role support in [`backend/app/services/mongo_session_store.py`](d:/AI-Chatbot/backend/app/services/mongo_session_store.py), defaulting new local signup and Google-created users to `role: "user"` while keeping the sanitized public-user boundary free of password hashes, auth providers, Google subject IDs, session tokens, and reset tokens.
+- `2026-05-09 12:10 IST` Added `role` to the safe auth user schema in [`backend/app/models/schemas.py`](d:/AI-Chatbot/backend/app/models/schemas.py) so future admin authorization can identify admins without exposing sensitive fields.
+- `2026-05-09 12:10 IST` Added [`scripts/promote_admin.py`](d:/AI-Chatbot/scripts/promote_admin.py), a local MongoDB-only script that promotes an existing user by email to `role: "admin"`; public signup still ignores any attempted role/admin payload.
+- `2026-05-09 12:10 IST` Updated [`scripts/migrate_sqlite_to_mongo.py`](d:/AI-Chatbot/scripts/migrate_sqlite_to_mongo.py) so any future SQLite-to-Mongo user migration assigns missing roles as `user`.
+- `2026-05-09 12:10 IST` Added focused auth regressions in [`tests/test_auth_flow.py`](d:/AI-Chatbot/tests/test_auth_flow.py) for default user role, ignored public admin role payloads, sensitive-field sanitization, and the admin promotion script.
+
+### Verified
+- `2026-05-09 12:10 IST` Ran `.\venv\Scripts\python.exe -m pytest tests\test_auth_flow.py -q` (`11 passed`, `1 warning` for `PyPDF2` deprecation).
+- `2026-05-09 12:10 IST` Ran `.\venv\Scripts\python.exe -m py_compile backend\app\models\schemas.py backend\app\services\mongo_session_store.py backend\app\services\storage.py scripts\promote_admin.py scripts\migrate_sqlite_to_mongo.py`.
+
 ## 2026-05-07
 
 ### Pre-Deployment Verification Audit

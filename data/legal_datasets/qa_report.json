@@ -1,0 +1,127 @@
+{
+  "dataset_path": "D:\\AI-Chatbot\\data\\legal_datasets\\explainers_new.json",
+  "valid_json": true,
+  "statistics": {
+    "topic_count": 10,
+    "error_count": 0,
+    "warning_count": 0,
+    "duplicate_topic_id_count": 0,
+    "duplicate_alias_count": 0,
+    "risk_level_counts": {
+      "Medium to High, because the report can start a criminal investigation and may lead to arrest depending on the offence and facts.": 1,
+      "Low to High depending on the allegations, because some complaints can become criminal proceedings.": 1,
+      "Low to Medium, but it can become serious if facts show a cognizable offence or if counter-complaints arise.": 1,
+      "High for accused persons because arrest and criminal investigation may follow depending on facts.": 1,
+      "Low to Medium, depending on whether the facts later disclose more serious offences.": 1,
+      "High for accused persons because custody, bail rejection, and criminal trial consequences may be involved.": 1,
+      "High because arrest and custody may be involved.": 1,
+      "High because criminal proceedings, arrest risk, reputation, and High Court litigation may be involved.": 1,
+      "Medium to High because financial loss, privacy harm, reputation harm, and criminal investigation may be involved.": 1,
+      "Medium to High because court process may lead to investigation, summons, or criminal trial.": 1
+    },
+    "jurisdiction_counts": {
+      "India": 10
+    },
+    "last_updated_counts": {
+      "2026-05-13": 10
+    },
+    "primary_source_type_counts": {
+      "statute": 12,
+      "court_case": 2,
+      "constitution": 3,
+      "government_portal": 1
+    },
+    "primary_source_url_count": 17,
+    "primary_source_blank_url_count": 1,
+    "array_field_stats": {
+      "aliases": {
+        "min": 6,
+        "max": 7,
+        "avg": 6.1
+      },
+      "authority_to_contact": {
+        "min": 4,
+        "max": 6,
+        "avg": 5.1
+      },
+      "common_mistakes": {
+        "min": 5,
+        "max": 6,
+        "avg": 5.3
+      },
+      "common_situations": {
+        "min": 5,
+        "max": 7,
+        "avg": 5.8
+      },
+      "documents_needed": {
+        "min": 5,
+        "max": 8,
+        "avg": 6.2
+      },
+      "important_law_references": {
+        "min": 3,
+        "max": 5,
+        "avg": 3.6
+      },
+      "important_points": {
+        "min": 6,
+        "max": 6,
+        "avg": 6.0
+      },
+      "jurisdiction_notes": {
+        "min": 2,
+        "max": 3,
+        "avg": 2.1
+      },
+      "keywords": {
+        "min": 6,
+        "max": 7,
+        "avg": 6.2
+      },
+      "legal_accuracy_notes": {
+        "min": 3,
+        "max": 4,
+        "avg": 3.1
+      },
+      "possible_remedies": {
+        "min": 5,
+        "max": 7,
+        "avg": 6.1
+      },
+      "practical_tips": {
+        "min": 5,
+        "max": 5,
+        "avg": 5.0
+      },
+      "primary_sources": {
+        "min": 1,
+        "max": 3,
+        "avg": 1.8
+      },
+      "related_topics": {
+        "min": 5,
+        "max": 5,
+        "avg": 5.0
+      },
+      "step_by_step_process": {
+        "min": 6,
+        "max": 8,
+        "avg": 6.8
+      },
+      "user_questions": {
+        "min": 6,
+        "max": 6,
+        "avg": 6.0
+      },
+      "when_to_contact_lawyer": {
+        "min": 5,
+        "max": 6,
+        "avg": 5.3
+      }
+    }
+  },
+  "issues": [],
+  "duplicate_aliases": {},
+  "duplicate_topic_ids": {}
+}
